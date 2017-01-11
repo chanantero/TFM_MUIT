@@ -1,6 +1,8 @@
 function [alt] = generate_array()
 % Output arguments:
-% - alt. Generating
+% - alt. 2xN array where N is the number of loudspeakers. The first
+% component of each column contains the x coordinate of the loudspeaker and
+% the second component contains the y coordinate.
 alt(1,1:8)=1.0182-(0.09:0.18:1.35)*cos(45*pi/180);
 alt(2,1:8)=(0.09:0.18:1.35)*cos(45*pi/180);
 alt(1,9:32)=0;

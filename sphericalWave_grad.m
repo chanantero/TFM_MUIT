@@ -1,4 +1,4 @@
-function U = sphericalWave( k, CoefSources, rSources, r )
+function U = sphericalWave_grad( k, CoefSources, rSources, r )
 
 assert(size(rSources, 2) == 3, 'sphericalWave:wrongInput', 'size(rSources, 2) == 3')
 assert(size(r, 2) == 3, 'sphericalWave:wrongInput', 'size(r, 2) == 3')
@@ -11,6 +11,9 @@ if numPoints*numSources > 1e7
 else
     mode = 'array';
 end
+
+% grad_U_plane = A*scaleVector(rPlane_r0, exp(-1i*k*rPlane_r0_mod)./rPlane_r0_mod.^2.*(-1i*k - 1./rPlane_r0_mod));
+
 
 switch mode
     case 'array'
@@ -37,4 +40,3 @@ switch mode
         end
 end
 end
-

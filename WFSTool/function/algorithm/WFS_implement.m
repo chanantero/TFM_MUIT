@@ -18,7 +18,8 @@ for i = 1:nact
     if rn(i) == 0
         data(:,i) = an(i)*y;
     else
-        data(:,i) = [an(parray_act(i))*buffer(pageSize-rn(parray_act(i))+1:pageSize,1);an(parray_act(i)) * y(1:pageSize-rn(parray_act(i)),1)];
+        data(:,i) = [an(parray_act(i))*buffer(pageSize-rn(parray_act(i))+1:pageSize,1);...
+            an(parray_act(i)) * y(1:pageSize-rn(parray_act(i)),1)];
     end
 end
 

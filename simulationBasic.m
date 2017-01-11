@@ -127,9 +127,9 @@ numPoints = 50;
 [r_surface, dS_vec] = prism(Lim, Lim, [50 150], numPoints, numPoints, 100);
 numPointsSurface = size(r_surface, 1);
 dS = modVec(dS_vec);
-n = scaleVector(dS_vec, 1./dS);
 U_surface = sphericalWave(k, A, r0, r_surface);
 
+scatter3(r_surface(:,1), r_surface(:,2), r_surface(:,3), [], [0 0 1])
 
 p = [60, 60, 100];
 
@@ -145,20 +145,25 @@ U_p_kirchhoff = kirchhoffIntegral(k, r_surface, dS_vec, U_surface, grad_U, p);
 U_p_real = sphericalWave(k, A, r0, p);
 
 % Rayleigh integral
-[r_infPlane, n] = plane([-1000, 1000], [-100, 100], 10000, 10000, [], [], [0, 0, 50]);
+[r_infPlane, n] = plane([-100, 100], [-100, 100], 1000, 1000, [], [], [0, 0, 50]);
 numPointsInfPlane = size(r_infPlane, 1);
 dS_infPlane = repmat(n, numPointsInfPlane, 1);
+
 rPlane_r0 = r_infPlane - repmat(r0, numPointsInfPlane, 1);
 rPlane_r0_mod = modVec(rPlane_r0);
-grad_U = A*scaleVector(rPlane_r0, exp(-1i*k*rPlane_r0_mod)./rPlane_r0_mod.^2.*(-1i*k - 1./rPlane_r0_mod));
 
-U_p_rayleigh = rayleighI(k, r_infPlane, dS_infPlane, grad_U, p);
-U_p_rayleighVolume = rayleighI(k, r_surface, dS_vec, grad_U, p);
-U = sphericalWave(k, A, r0, r_infPlane);
-U_p_rayleighII = rayleighII(k, r_infPlane, dS_infPlane, U, p);
+U_plane = sphericalWave(k, A, r0, r_infPlane);
+grad_U_plane = A*scaleVector(rPlane_r0, exp(-1i*k*rPlane_r0_mod)./rPlane_r0_mod.^2.*(-1i*k - 1./rPlane_r0_mod));
 
-U_p_rayleigh/U_p_real
+U_p_rayleighI = rayleighI(k, r_infPlane, dS_infPlane, grad_U_plane, p);
+U_p_rayleighII = rayleighII(k, r_infPlane, dS_infPlane, U_plane, p);
+
+U_p_rayleighI/U_p_real
 U_p_rayleighII/U_p_real
-U_p_rayleighII/U_p_rayleigh
-U_p_rayleigh/U_p_kirchhoff
+U_p_rayleighII/U_p_rayleighI
+U_p_rayleighI/U_p_kirchhoff
 
+U_p_rayleighIVolume = rayleighI(k, r_surface, dS_vec, grad_U, p);
+U_p_rayleighIIVolume = rayleighII(k, r_surface, dS_vec, U_surface, p);
+
+(U_p_rayleighIVolume + U_p_rayleighIIVolume)/2 % Kirchhoff's integral

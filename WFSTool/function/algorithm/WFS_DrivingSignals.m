@@ -49,8 +49,8 @@ H_1=firls(ord,frec_filtro(1:longit)/frec_filtro(longit),abs(vector)); % H_1 cont
 %% Coordenadas x,y de las posiciones de los altavoces (el eje x sería paralelo a la pared larga) 
 %% x=0 se corresponde con la línea larga de los altavoces en la pared de enfrente de la puerta
 %% y=0 se corresponde con la línea corta de altavoces en la pared del lado de la sala de control
-alt = generate_array();
-nalt=96; % number of loudspeakers in the array
+[alt, tecta] = generate_array_PosOrient();
+nalt = size(alt, 2); %96; % number of loudspeakers in the array
 
 %FUENTE (la posisicón es arbitraria)
 %fte=[3.8;3.2]; %fte 1
@@ -60,28 +60,38 @@ nfte=1;  % number of fte
 
 % Si se quiere representar la distribución de las fuentes y altavoces, hay
 % que descomentear la línea siguiente. 
-%figure;plot(alt(1,:),alt(2,:),'*'); hold on; plot(fte(1),fte(2),'+'); 
+% figure;plot(alt(1,:),alt(2,:),'*'); hold on; plot(fte(1),fte(2),'+'); 
 
 % Datos de los angulos de orientación de cada array lineal (en este caso 6 grupos de 8 altavoces y 2 grupos de 24 altavoces)
 % Tomamos como 0 ?el que est?arriba, sobre el eje X orientado hacia
 % valores negativos de X. Lo escribimos en grados.
-
-tecta=[ones(1,8)*135,ones(1,24)*90,ones(1,8)*45,ones(1,8)*0,ones(1,8)*-45,ones(1,24)*-90,ones(1,8)*-135,ones(1,8)*180];
 
 fuente=fte;
 x = fuente(1);
 y = fuente(2);
 
 %Cálculo del angulo relativo fte-altavoz (para determinar si un determinado altavoz debería activarse o no dependiendo de donde est?la fuente que quiere sintenizar)
+% Un altavoz se activa si la línea que une la fuente virtual con el altavoz y
+% la dirección principal en la que el altavoz emite ("broadside") forman un
+% ángulo menor a 90º
+% Particular para el caso 2D
 difX = alt(1,:)-x; % Distancia en la coordenada x
 difY = alt(2,:)-y; % % Distancia en la coordenada y
-alfa = atan2(difY,difX);      % Mariz con los ángulos de relativos en radianes de cada altavoz con la fuente
-alfa=(alfa.*180/pi)+90-tecta; % Matriz con los ángulos anteriores en grados ocn la corrección de la orientación de cada altavoz
-[parray,pos]=find(((alfa<90)&(alfa>-90))|((alfa<450)&(alfa>270))); % Buscamos los altavoces que debería estar activos
-parray_act=pos;   % esta variable contiene el identificador de cada altavoz de los que estarán activos y de los que hay que calcular las señales que lo alimentan 
+alfa = atan2d(difY,difX) - tecta; % Matriz con los ángulos anteriores en grados con la corrección de la orientación de cada altavoz 
+parray_act = find(((alfa<90)&(alfa>-90))|((alfa<450)&(alfa>270))); % Buscamos los altavoces que debería estar activos. % esta variable contiene el identificador de cada altavoz de los que estarán activos y de los que hay que calcular las señales que lo alimentan
+
+% Caso 3D
+[coord3D, orient] = generate_array_3D(); % Posición y orientación de altavoces
+fuente3D = [x, y, 0];
+relPos = coord3D - repmat(fuente3D, nalt, 1); % Posición relativa respecto a la fuente
+r = sqrt(sum(relPos.^2, 2));
+normOrient = sqrt(sum(orient.^2, 2)); % Ideally 1
+cosAlfa = dot(relPos, orient, 2)./(r.*normOrient); % Coseno del ángulo entre la línea que une la fuente virtual con cada altavoz y
+% la dirección principal en la que el altavoz emite ("broadside")
+parray_act3D = find(cosAlfa > 0)'; % Buscamos los altavoces que debería estar activos. % esta variable contiene el identificador de cada altavoz de los que estarán activos y de los que hay que calcular las señales que lo alimentan
 
 %Cálculo de la distancia fte-altavoz
-r = sqrt(difX.^2 + difY.^2);                      % Distancia entre la fuente y cada altavoz
+r = sqrt(difX.^2 + difY.^2);  % Distancia entre la fuente y cada altavoz
 %alfa=difX./cos(tecta-pi/2)./r;
 %Amplitud
 % Para la distancia entre el altavoz y la línea imaginaria interior. Vamos

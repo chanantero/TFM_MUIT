@@ -1,16 +1,28 @@
 function [playDeviceID,chanList] = select_play(device_select)
+% Original code: YU Bofei. Part of her Undergraduate Project "Software tool
+% for Spatial Audio reproduction systems"
+% Modified by Rubén Chuliá Mena (rchulia@outlook.com) on 22/10/2016.
+
 a = 0;
 device_list = playrec('getDevices');
 
-if device_select == 1
-    str = '¶ú»ú (Cirrus Logic CS4208 (AB 1';
+if ischar(device_select)
+    str = device_select;
+elseif isnumeric(device_select)
+    switch device_select
+        case 1
+%             str = '¶ú»ú (Cirrus Logic CS4208 (AB 1';
+            str = 'Asignador de sonido Microsoft - Output';
+        otherwise
+            str = 'MOTU PCI ASIO';
+    end
 else
-    str = 'MOTU PCI ASIO';
+    error('select_play:wrongInput', 'Input must be of type char or numeric') 
 end
 
  for i = 1:size(device_list,2);
     if strcmp(device_list(i).name,str)
-        playDeviceID = device_list(i).deviceID
+        playDeviceID = device_list(i).deviceID;
         chanList = 1:device_list(i).outputChans;
         a = 1;
         break;

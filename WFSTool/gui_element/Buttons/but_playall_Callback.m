@@ -26,8 +26,8 @@ pageSize = check_pageSize(pageSize);
 %end
 
 if playDeviceID ~= -1
-    device_init(Fs,playDeviceID,chanList);
-    [endPoint,music] = read_music_file(namelist);
+    device_init(Fs,playDeviceID,chanList); % Initialize playrec configuration
+    [endPoint,music] = read_music_file(namelist); % Read audio files
     t = 2 * size(music,2) * pageSize / Fs;
     t = round(t,3) - 0.14 * size(music,2);
     set(playTimer,'period',t);
