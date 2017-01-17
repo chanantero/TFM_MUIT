@@ -1,6 +1,7 @@
 classdef processSignal < matlab.System & matlab.system.mixin.FiniteSource
     
     % Completar para que la salida tenga varios canales
+    % Completar el forward to backward delay
     
     % Public, tunable properties
     properties
@@ -8,7 +9,8 @@ classdef processSignal < matlab.System & matlab.system.mixin.FiniteSource
     end
     
     properties(DiscreteState)
-        count
+        countFrames
+        countSamples
         numStoredSamples
     end
     
@@ -16,6 +18,8 @@ classdef processSignal < matlab.System & matlab.system.mixin.FiniteSource
         Fs
         frameSize % only matters if 'variable' is false
         numStoredFrames % % only matters if 'variable' is false
+        delayType
+        numChannels
     end
     
     properties(Nontunable, Logical)
@@ -25,13 +29,30 @@ classdef processSignal < matlab.System & matlab.system.mixin.FiniteSource
     % Pre-computed constants
     properties(Access = private)
         storedSamples
+        storedDelayBackward
+        storedDelayForward
     end
     
     methods
-        function obj = processSignal(~)
-            obj.Fs = 44100;
-            obj.frameSize = 1024;
-            obj.numStoredFrames = 1;
+        function obj = processSignal(varargin)
+            p = inputParser;
+            
+            addParameter(p, 'Fs', 44100);
+            addParameter(p, 'frameSize', 1024);
+            addParameter(p, 'numStoredFrames', 1);
+            addParameter(p, 'variable', false);
+            addParameter(p, 'delayType', 'backward')
+            addParameter(p, 'numChannels', 'backward')
+            
+            parse(p, varargin{:})
+            
+            obj.Fs = p.Results.Fs;
+            obj.frameSize = p.Results.frameSize;
+            obj.numStoredFrames = p.Results.numStoredFrames;
+            obj.variable = p.Results.variable;
+            obj.delayType = delayTypes(p.Results.delayType);
+            obj.numChannels = p.Results.numChannels;
+
         end
     end
     
@@ -40,8 +61,7 @@ classdef processSignal < matlab.System & matlab.system.mixin.FiniteSource
         function r = stepImpl(obj, s, delay)
             
             % Calculate output r
-            numChannels = size(delay, 2);
-            delaySamples = round(delay*obj.Fs);
+            numChann = obj.numChannels;
             
 %             if obj.variable
                 numSamples = numel(s);
@@ -49,21 +69,43 @@ classdef processSignal < matlab.System & matlab.system.mixin.FiniteSource
 %                 numSamples = obj.frameSize;
 %             end
             
-            indices = obj.numStoredSamples + repmat((1:numSamples)', 1, numChannels) - delaySamples;
+            if obj.delayType % delay is the backward delay
+                delaySamples = round(delay*obj.Fs);                
+            else % delay is the forward delay
+                % Calculate the backward delay
+                storedBackDelay = obj.storedDelayBackward;
+                numBackDelay = numel(storedBackDelay);
+                firstSample = numBackDelay;
+                lastSample = numel(delay) + floor(delay(end)*obj.Fs); % With the floor(...) we make sure each interpolated point is calculated with 2 point at each side
+                forwDelay = [obj.storedDelayForward(end); delay];
+                backDelay = forward2BackwardDelay( delay, obj.Fs, firstSample, lastSample );
+                backDelay = [storedBackDelay; backDelay];
+                
+                % Take the delay from the previously calculated delay
+                % Backward
+                delaySamples = backDelay(1:numSamples);
+                obj.delayBackward = backDelay(numSamples+1:end);
+            end
+            
+
+            
+            indices = obj.numStoredSamples + repmat((1:numSamples)', 1, numChann) - delaySamples;
             valid = indices > 0;
             validInd = indices(valid);
             
             availableSignal = [obj.storedSamples; s];
             
-            r = zeros(numSamples, 1);
+            r = zeros(numSamples, numChann);
             r(valid) = availableSignal(validInd);
             
             % Liberate non-useful samples
             if obj.variable
-                obj.storedSamples = availableSignal(validInd(1):end);
-                obj.numStoredSamples = numel(obj.storedSamples);
+                obj.storedSamples = availableSignal(validInd(1):end, :);
+                obj.numStoredSamples = size(obj.storedSamples, 1);
+                obj.countSamples = obj.countSamples + numSamples;
             else
-                obj.storedSamples = availableSignal(numSamples + 1:end); % Remove one frame and add the new one
+                obj.storedSamples = availableSignal(numSamples + 1:end, :); % Remove one frame and add the new one
+                obj.countSamples = obj.countSamples + obj.frameSize;
             end
             % For when the frame size is fixed but the number of stored
             % frames is variable
@@ -71,7 +113,7 @@ classdef processSignal < matlab.System & matlab.system.mixin.FiniteSource
             %             obj.storedSamples = availableSignal((firstNeededToken - 1)*numSamples + 1:end);
             
             % Increment counter
-            obj.count = obj.count + 1;
+            obj.countFrames = obj.countFrames + 1;
         end
         
         function setupImpl(obj)
@@ -82,7 +124,7 @@ classdef processSignal < matlab.System & matlab.system.mixin.FiniteSource
         end
         
         function resetImpl(obj)
-            obj.count = 0;
+            obj.countFrames = 0;
             if obj.variable
                 obj.numStoredSamples = 0;
                 obj.storedSamples = [];

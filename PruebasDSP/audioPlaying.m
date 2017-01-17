@@ -23,10 +23,18 @@ classdef audioPlaying < matlab.System
     end
 
     methods
-        function obj = audioPlaying(~)
-            obj.Fs = 44100;
-            obj.frameSize = 1024;
-            obj.numChannels = 2;
+        function obj = audioPlaying(varargin)   
+            p = inputParser;
+            
+            addParameter(p, 'Fs', 44100);
+            addParameter(p, 'frameSize', 1024);
+            addParameter(p, 'numChannels', 2);
+            
+            parse(p, varargin{:});
+            
+            obj.Fs = p.Results.Fs;
+            obj.frameSize = p.Results.frameSize;
+            obj.numChannels = p.Results.numChannels;
         end
     end
     
@@ -39,9 +47,8 @@ classdef audioPlaying < matlab.System
 
         function stepImpl(obj, signal)
             stored = [obj.storedSamples; signal];
-            obj.storedSamples = stored;
             frSize = obj.frameSize;
-            numFrames = floor(numel(stored)/frSize);
+            numFrames = floor(size(stored, 1)/frSize);
             if numFrames > 0 % Send it for the reproduction
                 for k = 1:numFrames
                     sampleIndices = (k-1)*frSize+1:k*frSize;
@@ -49,17 +56,20 @@ classdef audioPlaying < matlab.System
                     play(obj.deviceWriter, frame);
                     obj.count = obj.count + 1;
                 end
+                stored = stored(sampleIndices(end)+1:end, :);
             end            
+            obj.storedSamples = stored;
         end
 
         function resetImpl(obj)
             % Initialize / reset discrete-state properties
             obj.count = 0;
+            obj.storedSamples = double.empty(0, obj.numChannels);
         end
 
         function releaseImpl(obj)
             % Release resources, such as file handles
-            release(deviceWriter);
+            release(obj.deviceWriter);
         end
         
         
