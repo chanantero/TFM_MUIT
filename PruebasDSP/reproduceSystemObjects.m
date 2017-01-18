@@ -10,7 +10,7 @@ frameSizeReading = Fs;
 fileReader = dsp.AudioFileReader(fileName , 'SamplesPerFrame', frameSizeReading);
 
 % Processing object
-procObj = processSignal('Fs', Fs, 'variable', true);
+procObj = processSignal('Fs', Fs, 'variable', true, 'numChannels', numOutputChannels, 'delayType', 'forward');
 
 % Writing object
 frameSizePlaying = Fs;
@@ -23,6 +23,7 @@ while ~isDone(fileReader) && frameCount < 20
     audioInput = step(fileReader);
     audioInput = mean(audioInput, 2); % From Stereo to Mono
     delays = zeros(frameSizeReading, numOutputChannels);
+    delays(:, 1) = 0.5;
     audioOutput = step(procObj, audioInput, delays);
     step(playObj, audioOutput);
 end
