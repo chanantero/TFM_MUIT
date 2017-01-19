@@ -76,26 +76,16 @@ classdef processSignal < matlab.System & matlab.system.mixin.FiniteSource
                 % Each time a frame arrives, the backward delay is
                 % calculated and appended to the already stored backward
                 % delay.
-                % storedDelayBackward must be initialized to empty array.
-                % storedDelayForward must be initialized to -Inf.
-                % Mirar si en vez de un cell array puedo usar una matriz,
-                % sería más rápido seguramente
-                forwDelay = [obj.storedDelayForward(end, :); delay];
+                % storedDelayBackward must be initialized to cell array
+                % storedDelayForward must be initialized to empty array
+                storedForwDelay = obj.storedDelayForward;
+                forwDelay = [storedForwDelay; delay];
                 obj.storedDelayForward = forwDelay(end, :);
-                
                 delaySamples = zeros(numSamples, numChann);
                 
                 for k = 1:numChann
-                    storedBackDelay = obj.storedDelayBackward{k};
-                    delay_thisChann = delay(:, k);
-                    numBackDelay = size(storedBackDelay, 1);
-                    firstSample = numBackDelay + 1;
-                    lastSample = numel(delay_thisChann) + floor(delay_thisChann(end)*obj.Fs); % With the floor(...) we make sure each interpolated point is calculated with one point at each side
-                    backDelay = forward2BackwardDelay( forwDelay(:, k), obj.Fs, firstSample+1, lastSample+1 ); % +1 because we have appended to forwDelay the last stored forward delay
-                    backDelay = [storedBackDelay; backDelay];
-                    % Take the delay from the previously calculated delay
-                    % Backward
-                    delaySamples(:, k) = backDelay(1:numSamples);
+                    backDelay = BackFromForwDelay(storedForwDelay(:, k), delay(:, k), obj.storedDelayBackward{k}, obj.Fs);
+                    delaySamples(:, k) = round(backDelay(1:numSamples)*obj.Fs);
                     obj.storedDelayBackward{k} = backDelay(numSamples+1:end);
                 end
                 
@@ -143,8 +133,16 @@ classdef processSignal < matlab.System & matlab.system.mixin.FiniteSource
             else
                 obj.storedSamples = zeros(obj.numStoredSamples, 1);
             end
-            obj.storedDelayForward = -Inf(1, obj.numChannels);
-            obj.storedDelayBackward = double.empty(0, obj.numChannels);
+            
+%             if ~obj.delayType
+                obj.storedDelayForward = double.empty(0, obj.numChannels);
+                obj.storedDelayBackward = cell(obj.numChannels, 1);
+%             end
+        end
+
+        function releaseImpl(obj)
+            % Release resources, such as file handles
+            reset(obj);
         end
         
     end

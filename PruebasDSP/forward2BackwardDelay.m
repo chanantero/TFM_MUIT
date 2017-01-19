@@ -12,12 +12,12 @@ function [ backDelay ] = forward2BackwardDelay( forwDelay, Fs, firstSample, last
 % - backDelay. Backward delay. Vector of N elements, each one corresponding
 % to one sample.
 
-forwardTime = (0:numel(forwDelay)-1)'/Fs;
+forwardTime = (1:numel(forwDelay))'/Fs;
 backwardTime = forwardTime + forwDelay;
 
 queryBackwardTime = (firstSample:lastSample)/Fs;
 
-backDelay = interp1(backwardTime, forwDelay, queryBackwardTime, 'nearest');
+backDelay = interp1(backwardTime, forwDelay, queryBackwardTime, 'nearest', 'extrap');
 
 end
 
