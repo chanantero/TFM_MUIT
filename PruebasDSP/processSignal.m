@@ -102,7 +102,7 @@ classdef processSignal < matlab.System & matlab.system.mixin.FiniteSource
             
             % Liberate non-useful samples
             if obj.variable
-                obj.storedSamples = availableSignal(validInd(1):end, :);
+                obj.storedSamples = availableSignal(max(min(indices), 1):end, :);
                 obj.numStoredSamples = size(obj.storedSamples, 1);
                 obj.countSamples = obj.countSamples + numSamples;
             else
@@ -127,11 +127,12 @@ classdef processSignal < matlab.System & matlab.system.mixin.FiniteSource
         
         function resetImpl(obj)
             obj.countFrames = 0;
+            obj.countSamples = 0;
             if obj.variable
                 obj.numStoredSamples = 0;
                 obj.storedSamples = [];
             else
-                obj.storedSamples = zeros(obj.numStoredSamples, 1);
+                obj.storedSamples = zeros(obj.numStoredSamples, obj.numChannels);
             end
             
 %             if ~obj.delayType

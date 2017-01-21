@@ -2,9 +2,7 @@ classdef WFSTool2 < handle
     
     properties
         fig
-        fileReader
-        processor
-        playObj
+        player
     end
     
     methods
@@ -16,19 +14,18 @@ classdef WFSTool2 < handle
             numOutputChannels = 2;
 
             % Reading object
-            frameSizeReading = Fs;
-            obj.fileReader = dsp.AudioFileReader(fileName, 'SamplesPerFrame', frameSizeReading);
+            obj.fileReader = dsp.AudioFileReader();
             
             % Processing object
-            obj.procObj = processSignal('Fs', Fs, 'variable', true, 'numChannels', numOutputChannels, 'delayType', 'forward');
+            obj.processor = processSignal('Fs', Fs, 'variable', true, 'numChannels', numOutputChannels, 'delayType', 'forward');
             
             % Writing object
             frameSizePlaying = Fs;
-            obj.playObj = audioPlayer('Fs', Fs, 'numChannels', numOutputChannels, 'frameSize', frameSizePlaying);
+            obj.player = audioPlayer('Fs', Fs, 'numChannels', numOutputChannels, 'frameSize', frameSizePlaying);
             
             % Modify original callbacks
             butTest = findobj(obj.fig.Children, 'Tag', 'but_test');
-            butTest.Callback = @(hObject, eventdata) but_test_Callback(obj.playObj, Fs);
+            butTest.Callback = @(hObject, eventdata) obj.callback(); %@(hObject, eventdata) but_test_Callback(obj.playObj, Fs);
             
             butImportWav = findobj(obj.fig.Children, 'Tag', 'file');
             table = findobj(obj.fig.Children, 'Tag', 'table');
@@ -45,23 +42,39 @@ classdef WFSTool2 < handle
             
             % Reading object
             frameSizeReading = Fs;
-            fileReader = dsp.AudioFileReader(fileName , 'SamplesPerFrame', frameSizeReading);
-            
-            % Processing object
-            procObj = processSignal('Fs', Fs, 'variable', true, 'numChannels', numOutputChannels, 'delayType', 'forward');
-                   
+            obj.fileReader.Filename = fileName;
+                               
             % Reproduce
             frameCount = 0;
-            while ~isDone(fileReader) && frameCount < 20
+            while ~isDone(obj.fileReader) %&& frameCount < 20
                 frameCount = frameCount + 1;
-                audioInput = step(fileReader);
-                audioInput = mean(audioInput, 2); % From Stereo to Mono
-                delays = zeros(frameSizeReading, numOutputChannels);
-                delays(:, 1) = 0.5;
-                audioOutput = step(procObj, audioInput, delays);
-                step(playObj, audioOutput);
+                delay = zeros(numOutputChannels, 2);
+                step(player, delay);
+                pause(0.001)
             end
+            release(obj.fileReader);
+            release(obj.processor);
+            release(obj.player);
             fprintf('Finished\n')
+        end
+       
+        function executeOrder(obj, order)
+            switch state
+                case 'playing'
+                    switch order
+                        case 'stop'
+                            obj.s
+                        case 'play'
+                        case 'resume'
+                        case 'pause'
+                            
+                    end
+                    
+                case 'stopped'
+                    
+                case 'paused'
+                    
+            end
         end
         
     end
