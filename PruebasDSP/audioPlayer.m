@@ -1,4 +1,4 @@
-classdef audioPlaying < matlab.System
+classdef audioPlayer < matlab.System
     % When the stored data is big enough, it sends it to be reproduced.
 
     % Public, tunable properties
@@ -23,7 +23,7 @@ classdef audioPlaying < matlab.System
     end
 
     methods
-        function obj = audioPlaying(varargin)   
+        function obj = audioPlayer(varargin)   
             p = inputParser;
             
             addParameter(p, 'Fs', 44100);

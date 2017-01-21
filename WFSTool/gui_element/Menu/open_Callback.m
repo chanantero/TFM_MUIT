@@ -1,4 +1,5 @@
-function open_Callback(hObject, eventdata, handles)
+function open_Callback(table)
+% Modified by Rubén Chuliá Mena
 % hObject    handle to open (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
@@ -10,10 +11,10 @@ if isempty(strfind(filename,'wav')) == 1
     uicontrol('parent',h,'style','pushbutton','string','OK','position',[75 5 50 30],'callback','delete(gcbf)');
     return;  
 end
-filelist = get(handles.table,'data');
+filelist = get(table, 'data');
 if isempty(filelist)
     filelist = {filename 0 0 true};
 else
     filelist(end + 1,:) = {filename 0 0 true};
 end
-set(handles.table,'data',filelist);
+set(table,'data',filelist);

@@ -14,7 +14,7 @@ procObj = processSignal('Fs', Fs, 'variable', true, 'numChannels', numOutputChan
 
 % Writing object
 frameSizePlaying = Fs;
-playObj = audioPlaying('Fs', Fs, 'numChannels', numOutputChannels, 'frameSize', frameSizePlaying);
+playObj = audioPlayer('Fs', Fs, 'numChannels', numOutputChannels, 'frameSize', frameSizePlaying);
 
 % Reproduce
 frameCount = 0;
