@@ -3,16 +3,23 @@ classdef reproductionPanel < handle
     properties
         panel
         list
+        orderCallback
+    end
+    
+    properties(SetAccess = private)
+        selectedTrack
+        activeTrack
     end
     
     methods
         
-        function obj = reproductionPanel(parent)
-            obj.panel = obj.createPanel(parent);
+        function obj = reproductionPanel(parent, orderCallback)
+            obj.panel = obj.createPanel(parent, buttonCallback);
             obj.list = findobj(obj.panel, 'Tag', 'list');
+            obj.orderCallback = orderCallback;
         end
         
-        function panel = createPanel(~, parent)
+        function panel = createPanel(~, parent, buttonCallback, listCallback)
             panel = uipanel(parent, 'BackgroundColor','white', 'Units', 'normalized', 'Position', [0.05, 0.5, 0.4, 0.4]);
             list = uitable(panel, 'Units', 'Normalized', 'Position', [0.05, 0.2, 0.9, 0.7], ...
                 'ColumnName',{'Name'}, 'ColumnFormat', {'char'}, 'Tag', 'list');
@@ -28,15 +35,15 @@ classdef reproductionPanel < handle
             nextPos = [0.65, y0, w, h];
             
             playButton = uicontrol(panel, 'Style', 'pushbutton',...
-                'Units', 'normalized', 'Position', playPos, 'Callback', @(hObject, eventData) obj.computeOrder('play', obj.getState(), obj.getCurrentSong()));
+                'Units', 'normalized', 'Position', playPos, 'Callback', @(hObject, eventData) buttonCallback(struct('action', 'play')));
             stopButton = uicontrol(panel, 'Style', 'pushbutton',...
-                'Units', 'normalized', 'Position', stopPos, 'Callback', @(hObject, eventData) obj.computeOrder('stop', obj.getState()));
+                'Units', 'normalized', 'Position', stopPos, 'Callback', @(hObject, eventData) buttonCallback(struct('action', 'stop')));
             pauseButton = uicontrol(panel, 'Style', 'pushbutton',...
-                'Units', 'normalized', 'Position', pausePos, 'Callback', @(hObject, eventData) obj.computeOrder('pause', obj.getState()));
+                'Units', 'normalized', 'Position', pausePos, 'Callback', @(hObject, eventData) buttonCallback(struct('action', 'pause')));
             nextButton = uicontrol(panel, 'Style', 'pushbutton',...
-                'Units', 'normalized', 'Position', nextPos, 'Callback', @(hObject, eventData) obj.computeOrder('next', obj.getState(), obj.getCurrentSong()));
+                'Units', 'normalized', 'Position', nextPos, 'Callback', @(hObject, eventData) buttonCallback(struct('action', 'next')));
             prevButton = uicontrol(panel, 'Style', 'pushbutton',...
-                'Units', 'normalized', 'Position', prevPos, 'Callback', @(hObject, eventData) obj.computeOrder('previous', obj.getState(), obj.getCurrentSong()));
+                'Units', 'normalized', 'Position', prevPos, 'Callback', @(hObject, eventData) buttonCallback(struct('action', 'previous')));
             
             
             buttons = [addButton, playButton, stopButton, pauseButton, nextButton, prevButton];
@@ -65,58 +72,13 @@ classdef reproductionPanel < handle
             end
         end
         
-        function state = getState(obj)
+        function setSelectedTrack(~, trackName)
+            
+            obj.selectedTrack = trackName;
         end
         
-        function currentSong = getCurrentSong(obj)
-        end
-        
-        function [order, varargout] = computeOrder(obj, action, state, varargin)
-            persistent click;
-            if isempty(click)
-                click = 0;
-            end
-            switch state
-                case playingStateClass('playing')
-                    switch action
-                        case 'play'
-                            % Start song again
-                            order = 'play';
-                        case 'stop'
-                            
-                        case 'pause'
-                        case 'next'
-                        case 'previous'
-                        case 'click'
-                            if click == 0
-                                pause(0.5);
-                                click = 0;
-                            else click == 1
-                                % Double click
-                                order = play;
-                                song = 
-                            end
-                                
-                    end
-                case playingStateClass('stopped')
-                    switch action
-                        case 'play'
-                        case 'stop'
-                        case 'pause'
-                        case 'next'
-                        case 'previous'
-                        case 'doubleClick'  
-                    end
-                case playingStateClass('paused')
-                    switch action
-                        case 'play'
-                        case 'stop'
-                        case 'pause'
-                        case 'next'
-                        case 'previous'
-                        case 'doubleClick'
-                    end
-            end
+        function setActiveTrack(~, trackName)
+            
         end
         
     end

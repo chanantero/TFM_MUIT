@@ -3,7 +3,6 @@ classdef reproductor < matlab.System
     properties(Nontunable)
         frameSizeReading
         frameSizeWriting
-        audioFileName
         driver
         device
     end
@@ -16,7 +15,8 @@ classdef reproductor < matlab.System
     end
 
     properties(SetAccess = private)
-            playingState
+        playingState
+        audioFileName            
     end
 
     properties(Access = private)
@@ -116,15 +116,21 @@ classdef reproductor < matlab.System
             
         end
                 
-        function executeOrder(obj, order, varargin)
+        function executeOrder(obj, order)
+            % 'order' is a structure with 1 or 2 fields.
+            % The field 'action' is mandatory
+            % The field 'fileName' is not mandatory. It refers to the
+            % active track
             p = inputParser;
+            addParameter(p, 'action', '');
             addParameter(p, 'fileName', '');
-            parse(p, varargin{:});
+            parse(p, order);
             
+            action = p.Results.action;
             
             switch obj.playingState
                 case playingStateClass('playing')
-                    switch order
+                    switch action
                         case 'stop'
                             release(obj);
                         case 'play'
@@ -135,7 +141,6 @@ classdef reproductor < matlab.System
                                 % First, stop but without allowing the tuning
                                 % of anything, i.e., don't release the objects
                                 reset(obj);
-                                obj.reproduce();
                                 % Then, it will play again sincee the state
                                 % hasn't been changed
                             else
@@ -143,26 +148,38 @@ classdef reproductor < matlab.System
                                 % First, stop
                                 release(obj);
                                 % Then, assign the new file name
-                                obj.fileName = p.Results.fileName;
+                                obj.audioFileName = p.Results.fileName;
                                 % Then, play again
                                 obj.playingState = playingStateClass('playing');
+                                setup(obj, []);
                             end
                         case 'resume'
                             % Do nothing
                         case 'pause'
                             % Change state. The rest is left the same way
                             obj.playingState = playingStateClass('pause');
+                        case 'assignTrack'
+                            % Play a new audio file
+                            % First, stop
+                            release(obj);
+                            % Then, assign the new file name
+                            obj.audioFileName = p.Results.fileName;
+                            % Then, play again
+                            obj.playingState = playingStateClass('playing');
+                            setup(obj, []);
+                        case ''
+                            % Null action
                     end
                     
                 case playingStateClass('stopped')
-                    switch order
+                    switch action
                         case 'play'
                             % Two possibilities. Play the same song (reset)
                             % or play a new song
                             if ~ismember('fileName', p.UsingDefaults)
                                 % Play a new audio file
                                 % Assign the new file name
-                                obj.fileName = p.Results.fileName;
+                                obj.audioFileName = p.Results.fileName;
                             end
                             setup(obj, []);
                             obj.playingState = playingStateClass('playing');
@@ -177,10 +194,15 @@ classdef reproductor < matlab.System
                             % Do nothing
                         case 'pause'
                             % Do nothing
+                        case 'assignTrack'
+                            % Assign the new file name
+                            obj.audioFileName = p.Results.fileName;
+                        case ''
+                            % Null action
                     end
                     
                 case playingStateClass('paused')
-                    switch order
+                    switch action
                         case 'play'
                             % Start current song from the begginging
                             % First, stop but without allowing the tuning
@@ -199,6 +221,15 @@ classdef reproductor < matlab.System
                         case 'stop'
                             % Completely release
                             release(obj);
+                        case 'assignTrack'
+                            % New audio file, but don't start reproducing
+                            % First, stop
+                            release(obj);
+                            % Then, assign the new file name
+                            obj.audioFileName = p.Results.fileName;
+                            obj.playingState = playingStateClass('stopped');
+                        case ''
+                            % Null action
                     end
                 
                 otherwise
