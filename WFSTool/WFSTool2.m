@@ -29,8 +29,7 @@ classdef WFSTool2 < handle
             
             
         end
-        
-        
+             
         function playMusic(obj)
             % Audio file information
             fileName = 'Dangerous Woman.mp3';
@@ -40,18 +39,21 @@ classdef WFSTool2 < handle
             obj.player.executeOrder('play');        
         end
         
-        function orderCallback(obj, action)
+        function orderCallback(obj, order)
+            % order is a structure with the information of the order the
+            % user has specified when interacting with the reproduction
+            % panel
             
+            % Based on the user order and the state of the player, a
+            % command for the player is created
+            state = obj.player.playingState;
+            command = obj.createCommand(order, state);
+            
+            % Send command to the player
+            obj.player.executeOrder(command);
         end
        
-        function command = createCommand(obj, order, state, activeTrack)
-            persistent click lastClickedSong;
-            if isempty(click)
-                click = 0;
-            end
-            if isempty(lastClickedSong)
-                lastClickedSong = '';
-            end
+        function command = createCommand(obj, order, state)
             
             p = inputParser;
             addParameter(p, 'action', '')
@@ -61,123 +63,58 @@ classdef WFSTool2 < handle
             action = p.Results.action;
             fileName = p.Results.fileName;
             
-            switch state
-                case playingStateClass('playing')
-                    switch action
-                        case 'play'
-                            % Start track again
-                            command.action = 'play';
-                        case 'stop'
-                            % Stop
-                            command.action = 'stop';
-                        case 'pause'
-                            % Pause
-                            command.action = 'pause';
-                        case 'next'
-                            % Next track
-                            % Get list of tracks
-                            list = obj.reprodPanel.list.Data;
-                            % Find index of current track
-                            [~, index] = ismember(activeTrack, list);
-                            % Increase it by one and check it doesn't fall
-                            % out of range
-                            N = size(list, 1);
-                            index = mod(index, N) + 1;
-                            % Get new track
-                            activeTrack = list{index};
-                            % Create order structure
-                            command.action = 'play';
-                            command.fileName = activeTrack;
-                        case 'previous'
-                            % Previous track
-                            % Get list of tracks
-                            list = obj.reprodPanel.list.Data;
-                            % Find index of current track
-                            [~, index] = ismember(activeTrack, list);
-                            % Decrease it by one and check it doesn't fall
-                            % out of range
-                            N = size(list, 1);
-                            index = mod(index - 2, N) + 1;
-                            % Get new track
-                            activeTrack = list{index};
-                            % Create order structure
-                            command.action = 'play';
-                            command.fileName = activeTrack;
-                        case 'doubleClick'
-                            % Play other song
-                            command.action = 'play';
-                            command.fileName = fileName;
-%                             if click == 0
-%                                 click = 1;
-%                                 pause(0.5);
-%                                 click = 0;
-%                             else click == 1
-%                                 % Double click
-%                                 % Get The file
-%                                 order.action = play;
-%                                 order.fileName = stop;
-%                             end
-                                
-                    end
-                case playingStateClass('stopped')
-                    switch action
-                        case 'play'
-                            % Play active track
-                            command.action = 'play';
-                        case 'stop'
-                            % Stop (do nothing)
-                            command.action = 'stop';
-                        case 'pause'
-                            % Pause (do nothing)
-                            command.action = 'pause';
-                        case 'next'
-                            % Next track
-                            % Get list of tracks
-                            list = obj.reprodPanel.list.Data;
-                            % Find index of current track
-                            [~, index] = ismember(activeTrack, list);
-                            % Increase it by one and check it doesn't fall
-                            % out of range
-                            N = size(list, 1);
-                            index = mod(index, N) + 1;
-                            % Get new track
-                            activeTrack = list{index};
-                            % Create order structure                           
-                            command.action = 'assignTrack';
-                            command.fileName = activeTrack;                         
-                        case 'previous'
-                            % Previous track
-                            % Get list of tracks
-                            list = obj.reprodPanel.list.Data;
-                            % Find index of current track
-                            [~, index] = ismember(activeTrack, list);
-                            % Decrease it by one and check it doesn't fall
-                            % out of range
-                            N = size(list, 1);
-                            index = mod(index - 2, N) + 1;
-                            % Get new track
-                            activeTrack = list{index};
-                            % Create order structure
-                            command.action = 'assignTrack';
-                            command.fileName = activeTrack;
-                        case 'doubleClick'
-                            % Play other song
-                            command.action = 'play';
-                            command.fileName = fileName;
-                    end
-                case playingStateClass('paused')
-                    switch action
-                        case 'play'
-                        case 'stop'
-                        case 'pause'
-                        case 'next'
-                        case 'previous'
-                        case 'doubleClick'
-                            % Play other song
-                            command.action = 'play';
-                            command.fileName = fileName;
-                    end
+            switch action
+                case 'play'
+                    % Start track again
+                    command.action = 'play';
+                case 'stop'
+                    % Stop
+                    command.action = 'stop';
+                case 'pause'
+                    % Pause
+                    command.action = 'pause';
+                case 'next'
+                    % Next track
+                    % Get list of tracks
+                    list = obj.reprodPanel.list.Data;
+                    % Find index of current track
+                    [~, index] = ismember(fileName, list);
+                    % Increase it by one and check it doesn't fall
+                    % out of range
+                    N = size(list, 1);
+                    index = mod(index, N) + 1;
+                    % Get new track
+                    activeTrack = list{index};
+                case 'previous'
+                    % Previous track
+                    % Get list of tracks
+                    list = obj.reprodPanel.list.Data;
+                    % Find index of current track
+                    [~, index] = ismember(fileName, list);
+                    % Decrease it by one and check it doesn't fall
+                    % out of range
+                    N = size(list, 1);
+                    index = mod(index - 2, N) + 1;
+                    % Get new track
+                    activeTrack = list{index};                
+                case 'doubleClick'
+                    % Play other song
+                    command.action = 'play';
+                    command.fileName = fileName;
             end
+            
+            if ismember(action, {'next', 'previous'})
+                switch state
+                    case playingStateClass('playing')
+                        command.action = 'play';
+                    case playingStateClass('stopped')
+                        command.action = 'assignTrack';
+                    case playingStateClass('paused')
+                        command.action = 'assignTrack';
+                end
+                command.fileName = activeTrack;
+            end
+            
         end
         
     end

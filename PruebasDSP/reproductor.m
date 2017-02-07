@@ -103,7 +103,8 @@ classdef reproductor < matlab.System
         function obj = reproductor()
             obj.setDefaultProperties();
             obj.playingState = playingStateClass('stopped');
-            obj.givenControl = false;
+            obj.givenControl = false; % What is this??
+            obj.audioFileName = '';
             
             % Reading object
             obj.fileReader = dsp.AudioFileReader();
