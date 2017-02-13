@@ -21,6 +21,7 @@ classdef reproductionPanel < handle
                 @() obj.addTrackCallback());
             obj.list = findobj(obj.panel, 'Tag', 'list');
             obj.orderCallback = orderCallback;
+            obj.activeTrack = '';
         end
         
         function panel = createPanel(~, parent, buttonCallback, listButtonDownCallback, listSelectionCallback, addButtonCallback)
@@ -90,10 +91,10 @@ classdef reproductionPanel < handle
                     order.action = 'pause';
                 case 'next'
                     order.action = 'next';
-                    order.fileName = 'activeTrack';
+                    order.fileName = obj.activeTrack;
                 case 'previous'
                     order.action = 'previous';
-                    order.fileName = 'activeTrack';
+                    order.fileName = obj.activeTrack;
             end
             
             % Send order structure to the callback
@@ -110,19 +111,16 @@ classdef reproductionPanel < handle
             end
             
             if click == 0
-                % Single click.
+                % Single right click
                 click = 1;
-                obj.list.Enable = 'innactive';
                 pause(0.5);
                 click = 0;
-                obj.list.Enable = 'on';
             else
-                % Double click                
+                % Double right click
                 % Create order structure
-                order.action = 'play';
-                order.fileName = obj.selectedTrack;
+                order.action = 'doubleClick';
+                order.fileName = [obj.list.UserData.paths{obj.selectedTrack}, obj.list.Data{obj.selectedTrack, 1}];
                 click = 0;
-                obj.list.Enable = 'on';
                
                 % Send order structure to the callback
                 obj.orderCallback(order);
@@ -131,11 +129,7 @@ classdef reproductionPanel < handle
         end
         
         function changeSelection(obj, eventdata)
-            obj.selectedTrack = obj.list.Data{eventdata.Indices(1)};
-        end
-        
-        function setSelectedTrack(obj, trackName)
-            obj.selectedTrack = trackName;
+            obj.selectedTrack = eventdata.Indices(1);
         end
         
         function setActiveTrack(obj, trackName)

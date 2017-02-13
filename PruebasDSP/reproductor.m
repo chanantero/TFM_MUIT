@@ -1,6 +1,6 @@
 classdef reproductor < matlab.System
      
-    properties(Nontunable)
+    properties(Nontunable, SetAccess = private)
         frameSizeReading
         frameSizeWriting
         driver
@@ -8,22 +8,27 @@ classdef reproductor < matlab.System
     end
     
     properties
-        givenControl
+        getDelayFun
+        getAttenFun
     end
     
     properties(DiscreteState)
     end
+    
+    properties(SetAccess = private, SetObservable, AbortSet)
+        playingState
+        numChannels % Current number of output channels. It will be set each time the writing device changes
+    end
 
     properties(SetAccess = private)
-        playingState
-        audioFileName            
+        audioFileName     
+        fileReader % This propertie should be private
     end
 
     properties(Access = private)
-        fileReader
+
         processor
-        player
-        numChannels % Current number of output channels. It will be set during the setup
+        player      
     end
     
     methods(Access = protected)
@@ -42,12 +47,6 @@ classdef reproductor < matlab.System
             obj.player.Fs = Fs;
             obj.processor.Fs = Fs;
             
-            % The number of channels will depend on the maximum number of
-            % channels of the writing device
-            aux = audioDeviceWriter('Device', obj.device);
-            inf = info(aux);
-            numChann = inf.MaximumOutputChannels;
-            obj.numChannels = numChann;
             obj.processor.numChannels = numChann;
         end
         
@@ -80,31 +79,77 @@ classdef reproductor < matlab.System
     end
     
     methods(Access = private)
-        function delays = getDelay(obj)
-            delays = zeros(obj.numChannels, 1);
+        
+        function updateNumOutputChannels(obj)
+            % The number of channels is the maximum number of
+            % channels of the writing device
+            aux = audioDeviceWriter('Device', obj.device);
+            inf = info(aux);
+            numChann = inf.MaximumOutputChannels;
+            
+            obj.numChannels = numChann;
         end
-    end
-    
-    methods(Access = public)
+        
+        function setProps(obj, frameSize, device, driver)
+            if obj.playingState == playingStateClass('stopped')
+                obj.frameSizeReading = frameSize;
+                obj.frameSizeWriting = frameSize;
+                obj.device = device;
+                obj.driver = driver;
+            end
+        end
+        
+        function stop(obj)
+            release(obj.fileReader);
+            release(obj.processor);
+            release(obj.player);
+            obj.playingState = playingStateClass('stopped');
+        end
+        
+        function setDefaultProperties(obj)
+            obj.frameSizeReading = 1024*10;
+            obj.frameSizeWriting = 1024*10;
+            obj.driver = 'DirectSound';
+            obj.device = 'Default';
+        end
         
         function reproduce(obj)
-            while ~isDone(obj.fileReader)
-                % Only reproduce if it is playing
-                if strcmp(obj.playingState, 'playing')
-                    delay = obj.getDelay();
+            % Timing control
+            margin = 0.01;
+            counter = 0;
+            minBufferDepletionTime = 0;
+            t0 = tic;
+            
+            while strcmp(obj.playingState, 'playing') && ~isDone(obj.fileReader) % Only reproduce if it is playing
+                t = toc(t0);
+                
+                if t >= minBufferDepletionTime
+                    delay = obj.getDelayFun();
                     step(obj, delay);
-                    pause(0.01)
+                    
+                    % Timing control
+                    counter = counter + 1;
+                    minBufferDepletionTime = counter*obj.frameSizeReading/obj.player.Fs - margin;
+                    t = toc(t0);
+                    pause(minBufferDepletionTime - t);
                 else
-                    return;
+                    pause(0.01)
                 end
             end
         end
         
-        function obj = reproductor()
+    end
+        
+    methods(Access = public)
+        
+        function obj = reproductor(fig, position)
+            obj.propPanel = propertiesPanel(obj, fig, position, obj.setFrameSize, obj.setDevice, obj.setDriver);
+            
             obj.setDefaultProperties();
             obj.playingState = playingStateClass('stopped');
-            obj.givenControl = false; % What is this??
             obj.audioFileName = '';
+            
+            obj.getDelayFun = @() obj.getDelay();
             
             % Reading object
             obj.fileReader = dsp.AudioFileReader();
@@ -122,6 +167,8 @@ classdef reproductor < matlab.System
             % The field 'action' is mandatory
             % The field 'fileName' is not mandatory. It refers to the
             % active track
+            if isempty(order);   return;     end
+            
             p = inputParser;
             addParameter(p, 'action', '');
             addParameter(p, 'fileName', '');
@@ -210,13 +257,14 @@ classdef reproductor < matlab.System
                             % of anything, i.e., don't release the objects,
                             % only reset it
                             reset(obj);
-                            obj.playingState = playingStateclass('playing');
+                            obj.playingState = playingStateClass('playing');
                             obj.reproduce();
                             % Then, it will play again sincee the state
                             % hasn't been changed
                         case 'resume'
                             % Continue song
                             obj.playingState = playingStateClass('playing');
+                            obj.reproduce();
                         case 'pause'
                             % Do nothing
                         case 'stop'
@@ -238,20 +286,31 @@ classdef reproductor < matlab.System
             end
                     
         end      
-                
-        function stop(obj)
-            release(obj.fileReader);
-            release(obj.processor);
-            release(obj.player);
-            obj.playingState = playingStateClass('stopped');
+        
+        function setDriver(obj, driver)
+            % Get devices for the new driver
+            aux = audioDeviceWriter('Driver', driver);
+            audioDevices = getAudioDevices(aux);
+            
+            obj.setProps(obj.frameSizeReading, audioDevices{1}, driver);
+            obj.updateNumOutputChannels();
         end
         
-        function setDefaultProperties(obj)
-            obj.frameSizeReading = 1024;
-            obj.frameSizeWriting = 1024;
-            obj.driver = 'DirectSound';
-            obj.device = 'Default';
+        function setDevice(obj, device)
+            obj.setProps(obj.frameSizeReading, device, obj.driver);
+            obj.updateNumOutputChannels();
         end
+        
+        function setFrameSize(obj, frameSize)
+            obj.setProps(frameSize, obj.device, obj.driver);
+        end
+        
+        function devices = getWritingDevices(obj)
+            aux = audioDeviceWriter('Driver', obj.driver);
+            devices = getAudioDevices(aux);
+            % devices = obj.player.getAvailableDevices();
+        end
+        
     end
     
 end

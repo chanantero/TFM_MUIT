@@ -52,6 +52,10 @@ classdef audioPlayer < matlab.System
 
             obj.deviceWriter = audioDeviceWriter;
         end
+        
+        function devices = getAvailableDevices(obj)
+            devices = getAudioDevices(obj.deviceWriter);
+        end
     end
     
     methods(Access = protected)
@@ -97,7 +101,6 @@ classdef audioPlayer < matlab.System
             % Release resources, such as file handles
             release(obj.deviceWriter);
         end
-        
-        
+                
     end
 end

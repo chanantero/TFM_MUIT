@@ -4,39 +4,21 @@ classdef WFSTool2 < handle
         fig
         player
         reprodPanel
+        scenarioObj
     end
     
     methods
         
         function obj = WFSTool2()
-            obj.player = reproductor();
-            obj.fig = obj.createFigure();
-%             obj.fig = openfig('WFSTool.fig');
-%             
-%             % Modify original callbacks
-%             butTest = findobj(obj.fig.Children, 'Tag', 'but_test');
-%             butTest.Callback = @(hObject, eventdata) obj.callback(); %@(hObject, eventdata) but_test_Callback(obj.playObj, Fs);
-%             
-%             butImportWav = findobj(obj.fig.Children, 'Tag', 'file');
-%             table = findobj(obj.fig.Children, 'Tag', 'table');
-%             butImportWav.Callback = @(hObject, eventdata) open_Callback(table);
-        end
-        
-        function fig = createFigure(obj)
             fig = figure;
+            obj.fig = fig;
             
             obj.reprodPanel = reproductionPanel(fig, @(action) obj.orderCallback(action));
+            obj.scenarioObj = scenario(fig);
+            obj.player = reproductor(fig, [0.05 0.1 0.4 0.2]);
+            obj.player.getDelayFun = @() obj.scenarioObj.delays;
             
-            
-        end
-             
-        function playMusic(obj)
-            % Audio file information
-            fileName = 'Dangerous Woman.mp3';
-            obj.player.audioFileName = fileName;
-           
-            % Reproduce
-            obj.player.executeOrder('play');        
+            addListener(obj.player, 'numChannels', 'PostSet', @(~, eventData) changeScenario(eventData.AffectedObject.numChannels));
         end
         
         function orderCallback(obj, order)
@@ -72,7 +54,16 @@ classdef WFSTool2 < handle
                     command.action = 'stop';
                 case 'pause'
                     % Pause
-                    command.action = 'pause';
+                    switch state
+                        case playingStateClass('playing')
+                            command.action = 'pause';
+                        case playingStateClass('stopped')
+                            % Do nothing
+                            command = [];
+                        case playingStateClass('paused')
+                            % Resume
+                            command.action = 'resume';
+                    end
                 case 'next'
                     % Next track
                     % Get list of tracks
@@ -101,6 +92,8 @@ classdef WFSTool2 < handle
                     % Play other song
                     command.action = 'play';
                     command.fileName = fileName;
+                    % Update panel
+                    obj.reprodPanel.setActiveTrack(fileName);
             end
             
             if ismember(action, {'next', 'previous'})
@@ -113,10 +106,47 @@ classdef WFSTool2 < handle
                         command.action = 'assignTrack';
                 end
                 command.fileName = activeTrack;
+                % Update panel
+                obj.reprodPanel.setActiveTrack(activeTrack);
             end
             
         end
         
+    end
+    
+    methods(Access = private)
+        function changeScenario(obj, numChannels)
+            switch numChannels
+                case 2;
+                    sourcePosition = [0 1 0];
+                    loudspeakersPosition = [-1 0 0; 1 0 0]; 
+                    roomPosition = [-2, -2, 4, 4];
+                    obj.scenarioObj.setScenario(sourcePosition, loudspeakersPosition, roomPosition);
+                    
+                case 96;                    
+                    d = 0.18; % Separation between two contiguous loudspeakers. Size of one loudspeaker
+                    nb = 8; % Bottom and upper sides of the octogon
+                    nd = 8; % Diagonal sides of the octogon (4 sides)
+                    nl = 24; % Lateral side of the octogon (2 sides)
+                    betabd = 45; % Deviation angle between bottom/upper and diagonal sides
+                    
+                    [ x, y ] = octogon(d, nb, nd, nl, betabd);
+                    z = zeros(numel(x), 1);
+                    loudspeakersPosition = [x, y, z];
+                    
+                    sourcePosition = [0, 0, 0];
+                    
+                    xmin = min(x); xmax = max(x); ymin = min(y); ymax = max(y);
+                    xDim = xmax - xmin; yDim = ymax - ymin;
+                    xmargin = 1.2 * xDim; ymargin = 1.2 * yDim;
+                    roomPosition = [xmin - xmargin, ymin - ymargin, xDim + xmargin, yDim + ymargin];
+                    
+                    obj.scenarioObj.setScenario(sourcePosition, loudspeakersPosition, roomPosition);
+                    
+                otherwise
+                    warning('Wrong number of output channels. There is not possible scenario for that case')
+            end
+        end
     end
     
 end

@@ -102,7 +102,7 @@ classdef processSignal < matlab.System & matlab.system.mixin.FiniteSource
             
             % Liberate non-useful samples
             if obj.variable
-                obj.storedSamples = availableSignal(max(min(indices), 1):end, :);
+                obj.storedSamples = availableSignal(max(min(indices(:)), 1):end, :);
                 obj.numStoredSamples = size(obj.storedSamples, 1);
                 obj.countSamples = obj.countSamples + numSamples;
             else
