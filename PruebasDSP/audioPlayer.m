@@ -62,8 +62,8 @@ classdef audioPlayer < matlab.System
         function setupImpl(obj)
             % Perform one-time calculations, such as computing constants
             obj.deviceWriter.SampleRate = obj.Fs;
-            obj.deviceWriter.Device = obj.device;
             obj.deviceWriter.Driver = obj.driver;
+            obj.deviceWriter.Device = obj.device;
 
             if obj.DefaultNumChannels
                 inf = info(obj.deviceWriter);
@@ -72,7 +72,7 @@ classdef audioPlayer < matlab.System
                 numChann = obj.numChannels;
             end
             
-            setup(obj.deviceWriter, zeros(obj.frameSize, obj.numChannels));
+            setup(obj.deviceWriter, zeros(obj.frameSize, numChann));
         end
 
         function stepImpl(obj, signal)

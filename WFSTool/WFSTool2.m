@@ -17,8 +17,9 @@ classdef WFSTool2 < handle
             obj.scenarioObj = scenario(fig);
             obj.player = reproductor(fig, [0.05 0.1 0.4 0.2]);
             obj.player.getDelayFun = @() obj.scenarioObj.delays;
+            obj.player.getAttenFun = @() obj.scenarioObj.attenuations;
             
-            addListener(obj.player, 'numChannels', 'PostSet', @(~, eventData) changeScenario(eventData.AffectedObject.numChannels));
+            addlistener(obj.player, 'numChannels', 'PostSet', @(~, eventData) obj.changeScenario(eventData.AffectedObject.numChannels));
         end
         
         function orderCallback(obj, order)
@@ -117,12 +118,16 @@ classdef WFSTool2 < handle
     methods(Access = private)
         function changeScenario(obj, numChannels)
             switch numChannels
+                case 0;
+                    sourcePosition = [0 0 0];
+                    loudspeakersPosition = double.empty(0,3);
+                    roomPosition = [0 0 1 1];
+                    obj.scenarioObj.setScenario(sourcePosition, loudspeakersPosition, roomPosition);
                 case 2;
                     sourcePosition = [0 1 0];
                     loudspeakersPosition = [-1 0 0; 1 0 0]; 
                     roomPosition = [-2, -2, 4, 4];
-                    obj.scenarioObj.setScenario(sourcePosition, loudspeakersPosition, roomPosition);
-                    
+                    obj.scenarioObj.setScenario(sourcePosition, loudspeakersPosition, roomPosition); 
                 case 96;                    
                     d = 0.18; % Separation between two contiguous loudspeakers. Size of one loudspeaker
                     nb = 8; % Bottom and upper sides of the octogon
@@ -138,8 +143,8 @@ classdef WFSTool2 < handle
                     
                     xmin = min(x); xmax = max(x); ymin = min(y); ymax = max(y);
                     xDim = xmax - xmin; yDim = ymax - ymin;
-                    xmargin = 1.2 * xDim; ymargin = 1.2 * yDim;
-                    roomPosition = [xmin - xmargin, ymin - ymargin, xDim + xmargin, yDim + ymargin];
+                    xmargin = 0.2 * xDim; ymargin = 0.2 * yDim;
+                    roomPosition = [xmin - xmargin, ymin - ymargin, xDim + 2*xmargin, yDim + 2*ymargin];
                     
                     obj.scenarioObj.setScenario(sourcePosition, loudspeakersPosition, roomPosition);
                     

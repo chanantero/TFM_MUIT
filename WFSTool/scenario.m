@@ -4,6 +4,7 @@ classdef scenario < handle
         panel
         sourcePosition
         loudspeakersPosition
+        activeLoudspeakers
         delays
         attenuations
     end
@@ -58,10 +59,12 @@ classdef scenario < handle
             loudspeakers.XData = loudspeakersPosition(:, 1);
             loudspeakers.YData = loudspeakersPosition(:, 2);
             loudspeakers.ZData = loudspeakersPosition(:, 3);
+            loudspeakers.CData = repmat([0 0 1], size(loudspeakersPosition, 1), 1);
             
             % Other variable
             obj.sourcePosition = sourcePosition;
             obj.loudspeakersPosition = loudspeakersPosition;
+            obj.activeLoudspeakers = true(size(loudspeakersPosition, 1), 1);
             
             obj.updateDelaysAndAttenuations();
         end
@@ -70,7 +73,7 @@ classdef scenario < handle
     
     methods(Access = private)
         
-        function panel = createGraphics(~, parent, callback)
+        function panel = createGraphics(obj, parent, callback)
             panel = uipanel(parent, 'BackgroundColor','white', 'Units', 'normalized', 'Position', [0.55 0.05 0.4 0.9]);
             
             ax = axes(panel, 'Units', 'normalized', 'Position', [0.05 0.05 0.9 0.8],...
@@ -82,8 +85,9 @@ classdef scenario < handle
             source = scatter(ax, 0, 0, 'b');
             source.Tag = 'source';
             
-            loudspeakers = scatter(ax, 0, 1, 'k');
+            loudspeakers = scatter(ax, 0, 1, 'k', 'MarkerEdgeColor', [0 0 0], 'MarkerFaceColor', 'flat');
             loudspeakers.Tag = 'loudspeakers';
+            loudspeakers.ButtonDownFcn = @(hObj, ~) obj.loudspeakersCallback(hObj);
             
             ax.XLim = [-1 1];
             ax.YLim = [-1 1];
@@ -104,6 +108,20 @@ classdef scenario < handle
             obj.updateDelaysAndAttenuations();
         end
         
+        function loudspeakersCallback(obj, scat)
+            axes = scat.Parent;
+            point = axes.CurrentPoint;
+            
+            % Which is the closest loudspeaker to the current point?
+            [~, ind] = min(sum((repmat(point(1,:), size(obj.loudspeakersPosition, 1), 1) - obj.loudspeakersPosition).^2, 2));
+            obj.activeLoudspeakers(ind) = ~obj.activeLoudspeakers(ind);
+            if obj.activeLoudspeakers(ind)
+                scat.CData(ind, :) = [0 0 1];
+            else
+                scat.CData(ind, :) = [1 1 1];
+            end
+        end
+        
         function updateDelaysAndAttenuations(obj)
             % Each row is a 3 element vector with the 3D position
             N = size(obj.loudspeakersPosition, 1);
@@ -115,11 +133,9 @@ classdef scenario < handle
             obj.attenuations = obj.calcAttenuation(dist);
         end
         
-    end
-    
-    methods(Static)
-        function attenuation = calcAttenuation(dist)
-            attenuation = zeros(size(dist));
+        function attenuation = calcAttenuation(obj, dist)
+            attenuation = ones(size(dist));
+            attenuation(~obj.activeLoudspeakers) = 0;
         end
     end
     

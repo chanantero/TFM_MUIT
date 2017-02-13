@@ -15,7 +15,7 @@ classdef reproductor < matlab.System
     properties(DiscreteState)
     end
     
-    properties(SetAccess = private, SetObservable, AbortSet)
+    properties(SetAccess = private, SetObservable)%, AbortSet)
         playingState
         numChannels % Current number of output channels. It will be set each time the writing device changes
     end
@@ -26,7 +26,7 @@ classdef reproductor < matlab.System
     end
 
     properties(Access = private)
-
+        propPanel
         processor
         player      
     end
@@ -47,7 +47,7 @@ classdef reproductor < matlab.System
             obj.player.Fs = Fs;
             obj.processor.Fs = Fs;
             
-            obj.processor.numChannels = numChann;
+            obj.processor.numChannels = obj.numChannels;
         end
         
         function stepImpl(obj, delay)
@@ -83,7 +83,7 @@ classdef reproductor < matlab.System
         function updateNumOutputChannels(obj)
             % The number of channels is the maximum number of
             % channels of the writing device
-            aux = audioDeviceWriter('Device', obj.device);
+            aux = audioDeviceWriter('Device', obj.device, 'Driver', obj.driver);
             inf = info(aux);
             numChann = inf.MaximumOutputChannels;
             
@@ -110,10 +110,11 @@ classdef reproductor < matlab.System
             obj.frameSizeReading = 1024*10;
             obj.frameSizeWriting = 1024*10;
             obj.driver = 'DirectSound';
-            obj.device = 'Default';
+            obj.device = 'Default'; 
+            obj.updateNumOutputChannels();
         end
         
-        function reproduce(obj)
+        function reproduce(obj)                
             % Timing control
             margin = 0.01;
             counter = 0;
@@ -125,7 +126,16 @@ classdef reproductor < matlab.System
                 
                 if t >= minBufferDepletionTime
                     delay = obj.getDelayFun();
-                    step(obj, delay);
+%                     attenuation = obj.getAttenuationFun();
+                    
+                    try
+                        step(obj, delay);
+                    catch
+                        warning('There was some error with the step function of reproductor')
+                        order.action = 'stop';
+                        executeOrder(obj, order);
+                        return;
+                    end
                     
                     % Timing control
                     counter = counter + 1;
@@ -135,7 +145,7 @@ classdef reproductor < matlab.System
                 else
                     pause(0.01)
                 end
-            end
+            end   
         end
         
     end
@@ -143,10 +153,9 @@ classdef reproductor < matlab.System
     methods(Access = public)
         
         function obj = reproductor(fig, position)
-            obj.propPanel = propertiesPanel(obj, fig, position, obj.setFrameSize, obj.setDevice, obj.setDriver);
             
-            obj.setDefaultProperties();
             obj.playingState = playingStateClass('stopped');
+            obj.setDefaultProperties();
             obj.audioFileName = '';
             
             obj.getDelayFun = @() obj.getDelay();
@@ -155,11 +164,12 @@ classdef reproductor < matlab.System
             obj.fileReader = dsp.AudioFileReader();
             
             % Processing object
-            obj.processor = processSignal('variable', true, 'delayType', 'forward');
+            obj.processor = processSignal('variable', true, 'delayType', 'forward', 'frameSize', obj.frameSizeReading);
             
             % Writing object
             obj.player = audioPlayer;
             
+            obj.propPanel = propertiesPanel(obj, fig, position, @obj.setFrameSize, @obj.setDevice, @obj.setDriver);
         end
                 
         function executeOrder(obj, order)
