@@ -109,17 +109,19 @@ classdef scenario < handle
         end
         
         function loudspeakersCallback(obj, scat)
-            axes = scat.Parent;
-            point = axes.CurrentPoint;
+            point = scat.Parent.CurrentPoint;
             
             % Which is the closest loudspeaker to the current point?
             [~, ind] = min(sum((repmat(point(1,:), size(obj.loudspeakersPosition, 1), 1) - obj.loudspeakersPosition).^2, 2));
             obj.activeLoudspeakers(ind) = ~obj.activeLoudspeakers(ind);
+            obj.updateDelaysAndAttenuations();
+
             if obj.activeLoudspeakers(ind)
                 scat.CData(ind, :) = [0 0 1];
             else
                 scat.CData(ind, :) = [1 1 1];
             end
+
         end
         
         function updateDelaysAndAttenuations(obj)

@@ -58,7 +58,7 @@ classdef processSignal < matlab.System & matlab.system.mixin.FiniteSource
     
     methods(Access = protected)
         
-        function r = stepImpl(obj, s, delay)
+        function r = stepImpl(obj, s, delay, attenuation)
             
             % Calculate output r
             numChann = obj.numChannels;
@@ -90,7 +90,7 @@ classdef processSignal < matlab.System & matlab.system.mixin.FiniteSource
                 end
                 
             end
-            
+                        
             indices = obj.numStoredSamples + repmat((1:numSamples)', 1, numChann) - delaySamples;
             valid = indices > 0;
             validInd = indices(valid);
@@ -99,6 +99,7 @@ classdef processSignal < matlab.System & matlab.system.mixin.FiniteSource
             
             r = zeros(numSamples, numChann);
             r(valid) = availableSignal(validInd);
+            r = r.*attenuation;
             
             % Liberate non-useful samples
             if obj.variable

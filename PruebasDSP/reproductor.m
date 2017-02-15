@@ -50,7 +50,7 @@ classdef reproductor < matlab.System
             obj.processor.numChannels = obj.numChannels;
         end
         
-        function stepImpl(obj, delay)
+        function stepImpl(obj, delay, attenuation)
             
             % Read form file
             audioInput = step(obj.fileReader);
@@ -58,7 +58,8 @@ classdef reproductor < matlab.System
             
             % Process
             delays = repmat(delay', obj.frameSizeReading, 1);
-            audioOutput = step(obj.processor, audioInput, delays);
+            attenuations = repmat(attenuation', obj.frameSizeReading, 1);
+            audioOutput = step(obj.processor, audioInput, delays, attenuations);
             
             % Write to audio device buffer
             step(obj.player, audioOutput);
@@ -126,10 +127,10 @@ classdef reproductor < matlab.System
                 
                 if t >= minBufferDepletionTime
                     delay = obj.getDelayFun();
-%                     attenuation = obj.getAttenuationFun();
+                    attenuation = obj.getAttenFun();
                     
                     try
-                        step(obj, delay);
+                        step(obj, delay, attenuation);
                     catch
                         warning('There was some error with the step function of reproductor')
                         order.action = 'stop';
@@ -209,7 +210,7 @@ classdef reproductor < matlab.System
                                 obj.audioFileName = p.Results.fileName;
                                 % Then, play again
                                 obj.playingState = playingStateClass('playing');
-                                setup(obj, []);
+                                setup(obj, [], []);
                             end
                         case 'resume'
                             % Do nothing
@@ -224,7 +225,7 @@ classdef reproductor < matlab.System
                             obj.audioFileName = p.Results.fileName;
                             % Then, play again
                             obj.playingState = playingStateClass('playing');
-                            setup(obj, []);
+                            setup(obj, [], []);
                         case ''
                             % Null action
                     end
@@ -239,13 +240,13 @@ classdef reproductor < matlab.System
                                 % Assign the new file name
                                 obj.audioFileName = p.Results.fileName;
                             end
-                            setup(obj, []);
+                            setup(obj, [], []);
                             obj.playingState = playingStateClass('playing');
                             obj.reproduce();
                         case 'resume'
                             % The same as play if there was no song
                             % specified
-                            setup(obj, []);
+                            setup(obj, [], []);
                             obj.playingState = playingStateClass('playing');
                             obj.reproduce();
                         case 'stop'
