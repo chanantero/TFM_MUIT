@@ -50,7 +50,7 @@ classdef reproductor < matlab.System
             obj.processor.numChannels = obj.numChannels;
         end
         
-        function stepImpl(obj, delay, attenuation)
+        function numUnderrun = stepImpl(obj, delay, attenuation)
             
             % Read form file
             audioInput = step(obj.fileReader);
@@ -62,7 +62,7 @@ classdef reproductor < matlab.System
             audioOutput = step(obj.processor, audioInput, delays, attenuations);
             
             % Write to audio device buffer
-            step(obj.player, audioOutput);
+            numUnderrun = step(obj.player, audioOutput);
             
         end
 
@@ -124,14 +124,14 @@ classdef reproductor < matlab.System
             t0 = tic;
             
             while strcmp(obj.playingState, 'playing') && ~isDone(obj.fileReader) % Only reproduce if it is playing
-                t = toc(t0);
+                t = tic;
                 
-                if t >= minBufferDepletionTime
+                if toc(t0) >= minBufferDepletionTime
                     delay = obj.getDelayFun();
                     attenuation = obj.getAttenFun();
                     
                     try
-                        step(obj, delay, attenuation);
+                        numUnderrun = step(obj, delay, attenuation);
                     catch
                         warning('There was some error with the step function of reproductor')
                         order.action = 'stop';
@@ -140,10 +140,15 @@ classdef reproductor < matlab.System
                     end
                     
                     % Timing control
+                    if numUnderrun > 0
+                        % Interruption in the reproduction. Reset timer
+                        t0 = t;
+                        counter = 0;
+                    end
+                                           
                     counter = counter + 1;
                     minBufferDepletionTime = counter*obj.frameSizeReading/obj.player.Fs - margin;
-                    t = toc(t0);
-                    pause(max(minPause, minBufferDepletionTime - t));
+                    pause(max(minPause, minBufferDepletionTime - toc(t0)));
                 else
                     pause(minPause);
                 end
