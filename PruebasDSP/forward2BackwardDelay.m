@@ -1,4 +1,4 @@
-function [ backDelay ] = forward2BackwardDelay( forwDelay, Fs, firstSample, lastSample )
+function [ backDelay ] = forward2BackwardDelay( forwDelay, magnitude, Fs, firstSample, lastSample )
 % Input arguments:
 % - forwDelay. Forward delay. Vector of N elements, each one corresponding to
 % one sample.
@@ -17,7 +17,7 @@ backwardTime = forwardTime + forwDelay;
 
 queryBackwardTime = (firstSample:lastSample)/Fs;
 
-backDelay = interp1(backwardTime, forwDelay, queryBackwardTime, 'nearest', 'extrap');
+backDelay = interp1(backwardTime, magnitude, queryBackwardTime, 'nearest', 'extrap');
 
 end
 

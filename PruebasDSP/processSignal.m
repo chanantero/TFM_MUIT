@@ -31,6 +31,8 @@ classdef processSignal < matlab.System & matlab.system.mixin.FiniteSource
         storedSamples
         storedDelayBackward
         storedDelayForward
+        storedAttenBackward
+        storedAttenForward
     end
     
     methods
@@ -83,10 +85,21 @@ classdef processSignal < matlab.System & matlab.system.mixin.FiniteSource
                 obj.storedDelayForward = forwDelay(end, :);
                 delaySamples = zeros(numSamples, numChann);
                 
+                storedForwAtten = obj.storedAttenForward;
+                forwAtten = [storedForwAtten; attenuation];
+                obj.storedAttenForward = forwAtten(end, :);
+                atten = zeros(numSamples, numChann);
+                
                 for k = 1:numChann
+                    % Delay
                     backDelay = BackFromForwDelay(storedForwDelay(:, k), delay(:, k), obj.storedDelayBackward{k}, obj.Fs);
                     delaySamples(:, k) = round(backDelay(1:numSamples)*obj.Fs);
                     obj.storedDelayBackward{k} = backDelay(numSamples+1:end);
+                    
+                    % Attenuation
+                    backAtten = BackFromForwAtten(storedForwDelay(:, k), delay(:, k), storedForwAtten(:, k), attenuation(:,k), obj.storedAttenBackward{k}, obj.Fs);
+                    atten(:, k) = backAtten(1:numSamples);
+                    obj.storedAttenBackward{k} = backAtten(numSamples+1:end);
                 end
                 
             end
@@ -99,7 +112,7 @@ classdef processSignal < matlab.System & matlab.system.mixin.FiniteSource
             
             r = zeros(numSamples, numChann);
             r(valid) = availableSignal(validInd);
-            r = r.*attenuation;
+            r = r.*atten;
             
             % Liberate non-useful samples
             if obj.variable
@@ -139,6 +152,8 @@ classdef processSignal < matlab.System & matlab.system.mixin.FiniteSource
 %             if ~obj.delayType
                 obj.storedDelayForward = double.empty(0, obj.numChannels);
                 obj.storedDelayBackward = cell(obj.numChannels, 1);
+                obj.storedAttenForward = double.empty(0, obj.numChannels);
+                obj.storedAttenBackward = cell(obj.numChannels, 1);
 %             end
         end
 

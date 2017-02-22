@@ -15,7 +15,7 @@ classdef scenario < handle
             
             % Default
             sourcePosition = [0 1 0];
-            loudspeakersPosition = [-1 0 0; 1 0 0]; 
+            loudspeakersPosition = [-0.1 0 0; 0.1 0 0]; 
             roomPosition = [-2, -2, 4, 4];
             
             obj.panel = obj.createGraphics(parent, @(ax) obj.mouseClickCallback(ax));
@@ -78,7 +78,8 @@ classdef scenario < handle
             
             ax = axes(panel, 'Units', 'normalized', 'Position', [0.05 0.05 0.9 0.8],...
                 'ButtonDownFcn', @(hObject, ~) callback(hObject), 'Box', 'on',...
-                'XTick', [], 'XTickMode', 'manual', 'YTick', [], 'YTickMode', 'manual');
+                'XTick', [], 'XTickMode', 'manual', 'YTick', [], 'YTickMode', 'manual',...
+                'DataAspectRatio', [1 1 1], 'DataAspectRatioMode', 'manual');
             
             ax.NextPlot = 'Add';
             

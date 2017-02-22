@@ -119,6 +119,7 @@ classdef reproductor < matlab.System
             % Timing control
             margin = 0.01;
             counter = 0;
+            minPause = 0.01;
             minBufferDepletionTime = 0;
             t0 = tic;
             
@@ -142,9 +143,9 @@ classdef reproductor < matlab.System
                     counter = counter + 1;
                     minBufferDepletionTime = counter*obj.frameSizeReading/obj.player.Fs - margin;
                     t = toc(t0);
-                    pause(minBufferDepletionTime - t);
+                    pause(max(minPause, minBufferDepletionTime - t));
                 else
-                    pause(0.01)
+                    pause(minPause);
                 end
             end   
         end
@@ -240,9 +241,11 @@ classdef reproductor < matlab.System
                                 % Assign the new file name
                                 obj.audioFileName = p.Results.fileName;
                             end
-                            setup(obj, [], []);
-                            obj.playingState = playingStateClass('playing');
-                            obj.reproduce();
+                            if ~isempty(obj.audioFileName)
+                                setup(obj, [], []);
+                                obj.playingState = playingStateClass('playing');
+                                obj.reproduce();
+                            end
                         case 'resume'
                             % The same as play if there was no song
                             % specified

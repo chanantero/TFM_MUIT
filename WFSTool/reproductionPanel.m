@@ -129,7 +129,11 @@ classdef reproductionPanel < handle
         end
         
         function changeSelection(obj, eventdata)
-            obj.selectedTrack = eventdata.Indices(1);
+            if ~isempty(eventdata.Indices)
+                obj.selectedTrack = eventdata.Indices(1);
+            else
+                obj.selectedTrack = [];
+            end
         end
         
         function setActiveTrack(obj, trackName)
@@ -139,14 +143,16 @@ classdef reproductionPanel < handle
         function addTrackCallback(obj)
             [FileName, PathName, ~] = uigetfile({'*.wav', 'WAV File'; '*.mp3', 'MP3 File'}, 'Select audio track', 'MultiSelect', 'on');
             
-            if ~iscell(FileName)
-                FileName = {FileName};
-                PathName = {PathName};
-            end
-            
-            for k = 1:numel(FileName)
-                obj.list.Data = [obj.list.Data; FileName(k)];
-                obj.list.UserData.paths = [obj.list.UserData.paths; PathName(k)];
+            if FileName ~= 0
+                if ~iscell(FileName)
+                    FileName = {FileName};
+                    PathName = {PathName};
+                end
+                
+                for k = 1:numel(FileName)
+                    obj.list.Data = [obj.list.Data; FileName(k)];
+                    obj.list.UserData.paths = [obj.list.UserData.paths; PathName(k)];
+                end
             end
         end
         

@@ -20,22 +20,11 @@ classdef WFSTool2 < handle
             obj.player.getAttenFun = @() obj.scenarioObj.attenuations;
             
             addlistener(obj.player, 'numChannels', 'PostSet', @(~, eventData) obj.changeScenario(eventData.AffectedObject.numChannels));
-        end
+        end       
         
-        function orderCallback(obj, order)
-            % order is a structure with the information of the order the
-            % user has specified when interacting with the reproduction
-            % panel
-            
-            % Based on the user order and the state of the player, a
-            % command for the player is created
-            state = obj.player.playingState;
-            command = obj.createCommand(order, state);
-            
-            % Send command to the player
-            obj.player.executeOrder(command);
-        end
-       
+    end
+    
+    methods(Access = private)
         function command = createCommand(obj, order, state)
             
             p = inputParser;
@@ -113,9 +102,20 @@ classdef WFSTool2 < handle
             
         end
         
-    end
-    
-    methods(Access = private)
+        function orderCallback(obj, order)
+            % order is a structure with the information of the order the
+            % user has specified when interacting with the reproduction
+            % panel
+            
+            % Based on the user order and the state of the player, a
+            % command for the player is created
+            state = obj.player.playingState;
+            command = obj.createCommand(order, state);
+            
+            % Send command to the player
+            obj.player.executeOrder(command);
+        end
+              
         function changeScenario(obj, numChannels)
             switch numChannels
                 case 0;
@@ -125,7 +125,7 @@ classdef WFSTool2 < handle
                     obj.scenarioObj.setScenario(sourcePosition, loudspeakersPosition, roomPosition);
                 case 2;
                     sourcePosition = [0 1 0];
-                    loudspeakersPosition = [-1 0 0; 1 0 0]; 
+                    loudspeakersPosition = [-0.1 0 0; 0.1 0 0]; 
                     roomPosition = [-2, -2, 4, 4];
                     obj.scenarioObj.setScenario(sourcePosition, loudspeakersPosition, roomPosition); 
                 case 96;                    
