@@ -1,5 +1,6 @@
 WFSTool/playrec/
-WFSTool/images/
+WFSTool_Rub/images/
+*/image
 *.fig
 *.JPG
 *.mp3

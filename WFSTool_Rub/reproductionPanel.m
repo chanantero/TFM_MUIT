@@ -119,11 +119,12 @@ classdef reproductionPanel < handle
                 % Double right click
                 % Create order structure
                 order.action = 'doubleClick';
-                order.fileName = [obj.list.UserData.paths{obj.selectedTrack}, obj.list.Data{obj.selectedTrack, 1}];
+                order.fileName = obj.getTrackName(obj.selectedTrack);
                 click = 0;
                
                 % Send order structure to the callback
                 obj.orderCallback(order);
+                obj.activeTrack = obj.selectedTrack;
             end       
             
         end
@@ -136,8 +137,27 @@ classdef reproductionPanel < handle
             end
         end
         
+        function trackName = getActiveTrackName(obj)
+            trackName = obj.getTrackName(obj.activeTrack);
+        end
+        
+        function trackName = getTrackName(obj, ind)
+            trackNames = obj.getTrackNames();
+            trackName = trackNames{ind};
+        end
+        
+        function trackNames = getTrackNames(obj)
+            trackNames = cell(numel(obj.list.Data), 1);
+            for k = 1:numel(obj.list.Data)
+                trackNames{k} = [obj.list.UserData.paths{k}, obj.list.Data{k}];
+            end
+        end
+        
         function setActiveTrack(obj, trackName)
-            obj.activeTrack = trackName;
+            [~, ind] = ismember(trackName, obj.getTrackNames());
+            if ind > 0
+                obj.activeTrack = ind;
+            end
         end
         
         function addTrackCallback(obj)
