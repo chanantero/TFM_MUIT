@@ -69,6 +69,9 @@ classdef scenario < handle
             obj.updateDelaysAndAttenuations();
         end
              
+        function setActiveLoudspeakers(obj, active)
+            obj.activeLoudspeakers = active;
+        end
     end
     
     methods(Access = private)

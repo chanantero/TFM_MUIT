@@ -56,28 +56,22 @@ classdef WFSTool2 < handle
                     end
                 case 'next'
                     % Next track
-                    % Get list of tracks
-                    list = obj.reprodPanel.list.Data;
-                    % Find index of current track
-                    [~, index] = ismember(fileName, list);
-                    % Increase it by one and check it doesn't fall
-                    % out of range
-                    N = size(list, 1);
-                    index = mod(index, N) + 1;
-                    % Get new track
-                    activeTrack = list{index};
+%                     % Get list of tracks
+%                     list = obj.reprodPanel.getTrackNames();
+%                     % Find index of current track
+%                     [~, index] = ismember(fileName, list);
+%                     % Increase it by one and check it doesn't fall
+%                     % out of range
+%                     N = size(list, 1);
+%                     index = mod(index, N) + 1;
+%                     % Get new track
+%                     activeTrack = list{index};
+                    % Based in the active track registered in the
+                    % reproduction panel object
+                    activeTrack = obj.reprodPanel.getNextTrackName();
                 case 'previous'
                     % Previous track
-                    % Get list of tracks
-                    list = obj.reprodPanel.list.Data;
-                    % Find index of current track
-                    [~, index] = ismember(fileName, list);
-                    % Decrease it by one and check it doesn't fall
-                    % out of range
-                    N = size(list, 1);
-                    index = mod(index - 2, N) + 1;
-                    % Get new track
-                    activeTrack = list{index};                
+                    activeTrack = obj.reprodPanel.getPreviousTrackName();       
                 case 'doubleClick'
                     % Play other song
                     command.action = 'play';
@@ -114,6 +108,7 @@ classdef WFSTool2 < handle
             
             % Send command to the player
             obj.player.executeOrder(command);
+            disp('OrderCallback Finished\n')
         end
               
         function changeScenario(obj, numChannels)

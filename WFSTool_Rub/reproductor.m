@@ -149,6 +149,7 @@ classdef reproductor < matlab.System
                     counter = counter + 1;
                     minBufferDepletionTime = counter*obj.frameSizeReading/obj.player.Fs - margin;
                     pause(max(minPause, minBufferDepletionTime - toc(t0)));
+%                     fprintf(max(minPause, minBufferDepletionTime - toc(t0)))
                 else
                     pause(minPause);
                 end

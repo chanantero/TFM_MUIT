@@ -23,7 +23,53 @@ classdef reproductionPanel < handle
             obj.orderCallback = orderCallback;
             obj.activeTrack = '';
         end
+         
+        function trackName = getActiveTrackName(obj)
+            trackName = obj.getTrackName(obj.activeTrack);
+        end
         
+        function trackName = getNextTrackName(obj)
+            trackName = obj.nJumpsTrackName(1);
+        end
+        
+        function trackName = getPreviousTrackName(obj)
+            trackName = obj.nJumpsTrackName(-1);
+        end
+        
+        function trackName = getTrackName(obj, ind)
+            trackNames = obj.getTrackNames();
+            trackName = trackNames{ind};
+        end
+        
+        function trackNames = getTrackNames(obj)
+            trackNames = cell(numel(obj.list.Data), 1);
+            for k = 1:numel(obj.list.Data)
+                trackNames{k} = [obj.list.UserData.paths{k}, obj.list.Data{k}];
+            end
+        end
+        
+        function setActiveTrack(obj, trackName)
+            [~, ind] = ismember(trackName, obj.getTrackNames());
+            if ind > 0
+                obj.activeTrack = ind;
+            end
+        end
+        
+        function addTrack(obj, FileName, PathName)
+            if ~iscell(FileName)
+                FileName = {FileName};
+                PathName = {PathName};
+            end
+            
+            for k = 1:numel(FileName)
+                obj.list.Data = [obj.list.Data; FileName(k)];
+                obj.list.UserData.paths = [obj.list.UserData.paths; PathName(k)];
+            end
+        end
+              
+    end
+    
+    methods(Access = private)
         function panel = createPanel(~, parent, buttonCallback, listButtonDownCallback, listSelectionCallback, addButtonCallback)
             panel = uipanel(parent, 'BackgroundColor','white', 'Units', 'normalized', 'Position', [0.05, 0.5, 0.4, 0.4]);
             list = uitable(panel, 'Units', 'Normalized', 'Position', [0.05, 0.2, 0.9, 0.7], ...
@@ -137,46 +183,25 @@ classdef reproductionPanel < handle
             end
         end
         
-        function trackName = getActiveTrackName(obj)
-            trackName = obj.getTrackName(obj.activeTrack);
+        function addTrackCallback(obj)
+            musicDirectory = 'C:\Users\Rubén\Music\Varias\';
+            [FileName, PathName, ~] = uigetfile({'*.wav', 'WAV File'; '*.mp3', 'MP3 File'}, 'Select audio track', 'MultiSelect', 'on', musicDirectory);
+            
+            if FileName ~= 0
+                obj.addTrack(FileName, PathName);
+            end
         end
         
-        function trackName = getTrackName(obj, ind)
+        function trackName = nJumpsTrackName(obj, n)
             trackNames = obj.getTrackNames();
+            N = numel(trackNames);
+            ind = obj.activeTrack + n;
+            ind = mod(ind - 1, N) + 1;
             trackName = trackNames{ind};
         end
         
-        function trackNames = getTrackNames(obj)
-            trackNames = cell(numel(obj.list.Data), 1);
-            for k = 1:numel(obj.list.Data)
-                trackNames{k} = [obj.list.UserData.paths{k}, obj.list.Data{k}];
-            end
-        end
-        
-        function setActiveTrack(obj, trackName)
-            [~, ind] = ismember(trackName, obj.getTrackNames());
-            if ind > 0
-                obj.activeTrack = ind;
-            end
-        end
-        
-        function addTrackCallback(obj)
-            [FileName, PathName, ~] = uigetfile({'*.wav', 'WAV File'; '*.mp3', 'MP3 File'}, 'Select audio track', 'MultiSelect', 'on');
-            
-            if FileName ~= 0
-                if ~iscell(FileName)
-                    FileName = {FileName};
-                    PathName = {PathName};
-                end
-                
-                for k = 1:numel(FileName)
-                    obj.list.Data = [obj.list.Data; FileName(k)];
-                    obj.list.UserData.paths = [obj.list.UserData.paths; PathName(k)];
-                end
-            end
-        end
-        
     end
+   
     
 end
 
