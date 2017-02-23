@@ -4,9 +4,15 @@ classdef scenario < handle
         panel
         sourcePosition
         loudspeakersPosition
+        loudspeakersOrientation
         activeLoudspeakers
+        activeLoudspeakersUserChoice
         delays
         attenuations
+    end
+    
+    properties (Constant)
+        c = 343;
     end
     
     methods
@@ -15,11 +21,12 @@ classdef scenario < handle
             
             % Default
             sourcePosition = [0 1 0];
-            loudspeakersPosition = [-0.1 0 0; 0.1 0 0]; 
+            loudspeakersPosition = [-0.1 0 0; 0.1 0 0];
+            loudspeakersOrientation = [1 0 0; -1 0 0];
             roomPosition = [-2, -2, 4, 4];
             
             obj.panel = obj.createGraphics(parent, @(ax) obj.mouseClickCallback(ax));
-            obj.setScenario(sourcePosition, loudspeakersPosition, roomPosition);
+            obj.setScenario(sourcePosition, loudspeakersPosition, loudspeakersOrientation, roomPosition);
             
         end         
         
@@ -43,7 +50,7 @@ classdef scenario < handle
             obj.sourcePosition = sourcePosition;
         end
         
-        function setScenario(obj, sourcePosition, loudspeakersPosition, roomPosition)
+        function setScenario(obj, sourcePosition, loudspeakersPosition, loudspeakersOrientation, roomPosition)
             % Graphics
             ax = findobj(obj.panel, 'Type', 'Axes');
             source = findobj(obj.panel, 'Tag', 'source');
@@ -64,13 +71,16 @@ classdef scenario < handle
             % Other variable
             obj.sourcePosition = sourcePosition;
             obj.loudspeakersPosition = loudspeakersPosition;
+            obj.loudspeakersOrientation = loudspeakersOrientation;
             obj.activeLoudspeakers = true(size(loudspeakersPosition, 1), 1);
+            obj.activeLoudspeakersUserChoice = true(size(loudspeakersPosition, 1), 1);
             
             obj.updateDelaysAndAttenuations();
         end
              
         function setActiveLoudspeakers(obj, active)
             obj.activeLoudspeakers = active;
+            obj.updateLoudspeakersColor();
         end
     end
     
@@ -117,15 +127,24 @@ classdef scenario < handle
             
             % Which is the closest loudspeaker to the current point?
             [~, ind] = min(sum((repmat(point(1,:), size(obj.loudspeakersPosition, 1), 1) - obj.loudspeakersPosition).^2, 2));
-            obj.activeLoudspeakers(ind) = ~obj.activeLoudspeakers(ind);
+            obj.activeLoudspeakersUserChoice(ind) = ~obj.activeLoudspeakersUserChoice(ind);
             obj.updateDelaysAndAttenuations();
 
-            if obj.activeLoudspeakers(ind)
-                scat.CData(ind, :) = [0 0 1];
-            else
-                scat.CData(ind, :) = [1 1 1];
-            end
+            obj.updateLoudspeakersColor();
 
+        end
+        
+        function updateLoudspeakersColor(obj)
+            N = numel(obj.activeLoudspeakers);
+            
+            activeState = 2*ones(N, 1);
+            activeState(obj.activeLoudspeakers) = 3;
+            activeState(~obj.activeLoudspeakersUserChoice) = 1;
+            
+            colors = [1 1 1; 0 0 0.5; 0 0 1];
+            
+            scat = findobj(obj.panel, 'Tag', 'loudspeakers');
+            scat.CData = colors(activeState, :);
         end
         
         function updateDelaysAndAttenuations(obj)
@@ -134,14 +153,24 @@ classdef scenario < handle
             relPos = obj.loudspeakersPosition - repmat(obj.sourcePosition, N, 1);
             dist = sqrt(sum(relPos.^2, 2));
                         
-            c = 340; % m/s
-            obj.delays = dist/c;
+            % Calculate distances
+            obj.delays = dist/obj.c;
+            
+            % Calculate active loudspeakers
+            normOrient = modVec(obj.loudspeakersOrientation); % Ideally 1 if the orientations are normalized
+            cosAlfa = dot(relPos, obj.loudspeakersOrientation, 2)./(dist.*normOrient); % Coseno del ángulo entre la línea que une la fuente virtual con cada altavoz y
+            % la dirección principal en la que el altavoz emite ("broadside")
+            obj.activeLoudspeakers = cosAlfa > 0; % Buscamos los altavoces que debería estar activos
+            obj.updateLoudspeakersColor();
+            
+            % Calculate attenuations
             obj.attenuations = obj.calcAttenuation(dist);
+            
         end
         
         function attenuation = calcAttenuation(obj, dist)
             attenuation = ones(size(dist));
-            attenuation(~obj.activeLoudspeakers) = 0;
+            attenuation(~obj.activeLoudspeakers | ~obj.activeLoudspeakersUserChoice) = 0;
         end
     end
     

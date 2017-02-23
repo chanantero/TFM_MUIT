@@ -108,7 +108,6 @@ classdef WFSTool2 < handle
             
             % Send command to the player
             obj.player.executeOrder(command);
-            disp('OrderCallback Finished\n')
         end
               
         function changeScenario(obj, numChannels)
@@ -116,23 +115,26 @@ classdef WFSTool2 < handle
                 case 0;
                     sourcePosition = [0 0 0];
                     loudspeakersPosition = double.empty(0,3);
+                    loudspeakersOrientation = double.empty(0,3);
                     roomPosition = [0 0 1 1];
-                    obj.scenarioObj.setScenario(sourcePosition, loudspeakersPosition, roomPosition);
+                    obj.scenarioObj.setScenario(sourcePosition, loudspeakersPosition, loudspeakersOrientation, roomPosition);
                 case 2;
                     sourcePosition = [0 1 0];
-                    loudspeakersPosition = [-0.1 0 0; 0.1 0 0]; 
+                    loudspeakersPosition = [-0.1 0 0; 0.1 0 0];
+                    loudspeakersOrientation = [1 0 0; -1 0 0];
                     roomPosition = [-2, -2, 4, 4];
-                    obj.scenarioObj.setScenario(sourcePosition, loudspeakersPosition, roomPosition); 
+                    obj.scenarioObj.setScenario(sourcePosition, loudspeakersPosition, loudspeakersOrientation, roomPosition);
                 case 96;                    
                     d = 0.18; % Separation between two contiguous loudspeakers. Size of one loudspeaker
-                    nb = 8; % Bottom and upper sides of the octogon
+                    nb = 8; % Bottom and upper sides of the octogon (2 sides)
                     nd = 8; % Diagonal sides of the octogon (4 sides)
                     nl = 24; % Lateral side of the octogon (2 sides)
                     betabd = 45; % Deviation angle between bottom/upper and diagonal sides
                     
-                    [ x, y ] = octogon(d, nb, nd, nl, betabd);
+                    [ x, y, alfa ] = octogon(d, nb, nd, nl, betabd);
                     z = zeros(numel(x), 1);
                     loudspeakersPosition = [x, y, z];
+                    loudspeakersOrientation = [cosd(alfa), sind(alfa), zeros(numel(alfa), 1)];
                     
                     sourcePosition = [0, 0, 0];
                     
@@ -141,7 +143,7 @@ classdef WFSTool2 < handle
                     xmargin = 0.2 * xDim; ymargin = 0.2 * yDim;
                     roomPosition = [xmin - xmargin, ymin - ymargin, xDim + 2*xmargin, yDim + 2*ymargin];
                     
-                    obj.scenarioObj.setScenario(sourcePosition, loudspeakersPosition, roomPosition);
+                    obj.scenarioObj.setScenario(sourcePosition, loudspeakersPosition, loudspeakersOrientation, roomPosition);
                     
                 otherwise
                     warning('Wrong number of output channels. There is not possible scenario for that case')
