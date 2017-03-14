@@ -10,7 +10,7 @@ classdef WFSTool2 < handle
     methods
         
         function obj = WFSTool2()
-            fig = figure;
+            fig = figure('Units', 'pixels', 'Position', [0 50 1200 600]);
             obj.fig = fig;
             
             obj.reprodPanel = reproductionPanel(fig, @(action) obj.orderCallback(action));

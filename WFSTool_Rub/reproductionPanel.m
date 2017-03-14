@@ -101,7 +101,7 @@ classdef reproductionPanel < handle
             
             
             buttons = [addButton, playButton, stopButton, pauseButton, nextButton, prevButton];
-            iconNames = {'images/addIcon.png', 'images/playIcon.png', 'images/stopIcon.png', 'images/pauseIcon.jpg', 'images/nextIcon.jpg', 'images/prevIcon.png'};
+            iconNames = {'images/addIcon.bmp', 'images/playIcon.bmp', 'images/stopIcon.bmp', 'images/pauseIcon.jpg', 'images/nextIcon.bmp', 'images/prevIcon.bmp'};
             
             for k = 1:numel(buttons)
                 button = buttons(k);
@@ -113,7 +113,7 @@ classdef reproductionPanel < handle
                 height = button.Position(4);
                 % Set image as icon
                 icon = imread(imName); % Read image
-                icon = imresize(icon, [height, width]); % Resize
+                icon = imresize_Rub(icon, [height, width]); % Resize
                 % Convert to binary image
                 if size(icon, 3) == 3
                     icon = rgb2gray(icon);
