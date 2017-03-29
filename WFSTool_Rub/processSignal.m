@@ -3,23 +3,18 @@ classdef processSignal < matlab.System & matlab.system.mixin.FiniteSource
     % Completar para que la salida tenga varios canales
     % Completar el forward to backward delay
     
-    % Public, tunable properties
-    properties
-        
-    end
-    
     properties(DiscreteState)
-        countFrames
-        countSamples
-        numStoredSamples
+        countFrames % Number of times that the step method has been called
+        countSamples % Number of samples that have been returned by the step method
+        numStoredSamples % Number of samples that are currently stored
     end
     
     properties(Nontunable)
-        Fs
-        frameSize % only matters if 'variable' is false
-        numStoredFrames % % only matters if 'variable' is false
-        delayType
-        numChannels
+        Fs % Sampling frequency of the input signal
+        frameSize % only matters if 'variable' is false. Size of each input frame.
+        numStoredFrames % only matters if 'variable' is false. Number of input frames that are stored during the processing.
+        delayType % Forward (real) or backward (approximation)
+        numChannels % Number of channels
     end
     
     properties(Nontunable, Logical)
@@ -61,15 +56,14 @@ classdef processSignal < matlab.System & matlab.system.mixin.FiniteSource
     methods(Access = protected)
         
         function r = stepImpl(obj, s, delay, attenuation)
+            % The size of the inputs delay and attenuation must have obj.numChannels columns and
+            % as many rows as input samples.
+            % s is a vector with as many elements as input samples.
             
             % Calculate output r
             numChann = obj.numChannels;
             
-%             if obj.variable
-                numSamples = numel(s);
-%             else
-%                 numSamples = obj.frameSize;
-%             end
+            numSamples = numel(s); % If ~obj.variable, numSamples must be obj.frameSize
             
             if obj.delayType % delay is the backward delay
                 delaySamples = round(delay*obj.Fs);                
@@ -108,9 +102,8 @@ classdef processSignal < matlab.System & matlab.system.mixin.FiniteSource
             valid = indices > 0;
             validInd = indices(valid);
             
-            availableSignal = [obj.storedSamples; s];
-            
             r = zeros(numSamples, numChann);
+            availableSignal = [obj.storedSamples; s];
             r(valid) = availableSignal(validInd);
             r = r.*atten;
             

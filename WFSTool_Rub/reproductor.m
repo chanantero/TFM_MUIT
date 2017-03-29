@@ -1,53 +1,53 @@
 classdef reproductor < matlab.System
-     
+    
+    % The user can set this properties when the object is not locked, i.e,
+    % when playingState is stopped
     properties(Nontunable, SetAccess = private)
-        frameSizeReading
-        frameSizeWriting
+        audioFileName
         driver
         device
-    end
-    
-    properties
+        frameSize     
         getDelayFun
         getAttenFun
     end
-    
+       
     properties(DiscreteState)
     end
     
+    % The user cannot set this properties directly, but are useful information that
+    % can be viewed by other objects
     properties(SetAccess = private, SetObservable)%, AbortSet)
         playingState
         numChannels % Current number of output channels. It will be set each time the writing device changes
     end
 
-    properties(SetAccess = private)
-        audioFileName     
-        fileReader % This propertie should be private
-    end
-
     properties(Access = private)
-        propPanel
+        fileReader
         processor
-        player      
+        player
+        
+        frameSizeReading
+        frameSizeWriting
     end
     
     methods(Access = protected)
         
         function setupImpl(obj)
+            Fs = obj.fileReader.SampleRate;
+            
+            % Set propertties for the fileReader
             obj.fileReader.Filename = obj.audioFileName;
             obj.fileReader.SamplesPerFrame = obj.frameSizeReading;
             
+            % Set properties for the processor
+            obj.processor.Fs = Fs;
+            obj.processor.numChannels = obj.numChannels;
+            
+            % Set properties for the player
             obj.player.frameSize = obj.frameSizeWriting;
             obj.player.driver = obj.driver;
             obj.player.device = obj.device;
-            
-            % The sampling frequency will depend on the sampling frequency
-            % of the original file
-            Fs = obj.fileReader.SampleRate;
             obj.player.Fs = Fs;
-            obj.processor.Fs = Fs;
-            
-            obj.processor.numChannels = obj.numChannels;
         end
         
         function numUnderrun = stepImpl(obj, delay, attenuation)
@@ -76,7 +76,17 @@ classdef reproductor < matlab.System
             obj.stop();
         end
         
-        
+        function validatePropertiesImpl(obj)
+            % Check that the audioFileName exists
+            a = dir(obj.audioFileName);
+            assert(numel(a) > 0, 'reproductor:wrongProperty', 'The property audioFileName must specify an audio file that exists')
+            
+            % Check that the audioFileName has the right extension
+            [~, ~, ext] = fileparts(obj.audioFileName);
+            extensions = {'.wav', '.mp3'};
+            assert(ismember(ext, extensions), 'reproductor:wrongProperty', ['The property audioFileName must have one of the next extensions: ', strjoin(extensions, ', ')])
+            
+        end
     end
     
     methods(Access = private)
@@ -93,6 +103,7 @@ classdef reproductor < matlab.System
         
         function setProps(obj, frameSize, device, driver)
             if obj.playingState == playingStateClass('stopped')
+                obj.frameSize = frameSize;
                 obj.frameSizeReading = frameSize;
                 obj.frameSizeWriting = frameSize;
                 obj.device = device;
@@ -108,6 +119,8 @@ classdef reproductor < matlab.System
         end
         
         function setDefaultProperties(obj)
+            obj.audioFileName = '';
+            obj.frameSize = 1024*10;
             obj.frameSizeReading = 1024*10;
             obj.frameSizeWriting = 1024*10;
             obj.driver = 'DirectSound';
@@ -160,14 +173,11 @@ classdef reproductor < matlab.System
         
     methods(Access = public)
         
-        function obj = reproductor(fig, position)
+        function obj = reproductor()
             
             obj.playingState = playingStateClass('stopped');
             obj.setDefaultProperties();
-            obj.audioFileName = '';
-            
-            obj.getDelayFun = @() obj.getDelay();
-            
+                        
             % Reading object
             obj.fileReader = dsp.AudioFileReader();
             
@@ -177,7 +187,6 @@ classdef reproductor < matlab.System
             % Writing object
             obj.player = audioPlayer;
             
-            obj.propPanel = propertiesPanel(obj, fig, position, @obj.setFrameSize, @obj.setDevice, @obj.setDriver);
         end
                 
         function executeOrder(obj, order)
@@ -323,6 +332,14 @@ classdef reproductor < matlab.System
         
         function setFrameSize(obj, frameSize)
             obj.setProps(frameSize, obj.device, obj.driver);
+        end
+        
+        function set_getDelayFun(obj, getDelayFun)
+            obj.getDelayFun = getDelayFun;
+        end
+        
+        function set_getAttenFun(obj, getAttenFun)
+            obj.getAttenFun = getAttenFun;
         end
         
         function devices = getWritingDevices(obj)
