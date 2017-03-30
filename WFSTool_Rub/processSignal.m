@@ -54,7 +54,8 @@ classdef processSignal < matlab.System & matlab.system.mixin.FiniteSource
             numSamples = numel(s);
             
             if obj.delayType % delay is the backward delay
-                delaySamples = round(delay*obj.Fs);                
+                delaySamples = round(delay*obj.Fs);
+                atten = attenuation;
             else % delay is the forward delay
                 % Calculate the backward delay
                 % Each time a frame arrives, the backward delay is
@@ -64,12 +65,12 @@ classdef processSignal < matlab.System & matlab.system.mixin.FiniteSource
                 % storedDelayForward must be initialized to empty array
                 storedForwDelay = obj.storedDelayForward;
                 forwDelay = [storedForwDelay; delay];
-                obj.storedDelayForward = forwDelay(end, :);
+                obj.storedDelayForward = forwDelay(end, :); % Keep only the forward delay of the last sample
                 delaySamples = zeros(numSamples, numChann);
                 
                 storedForwAtten = obj.storedAttenForward;
                 forwAtten = [storedForwAtten; attenuation];
-                obj.storedAttenForward = forwAtten(end, :);
+                obj.storedAttenForward = forwAtten(end, :); % Keep only the forward attenuation of the last sample
                 atten = zeros(numSamples, numChann);
                 
                 for k = 1:numChann
@@ -85,22 +86,24 @@ classdef processSignal < matlab.System & matlab.system.mixin.FiniteSource
                 end
                 
             end
-                        
+            
+            % Apply Delay
             indices = obj.numStoredSamples + repmat((1:numSamples)', 1, numChann) - delaySamples;
             valid = indices > 0;
-            validInd = indices(valid);
             
             r = zeros(numSamples, numChann);
             availableSignal = [obj.storedSamples; s];
-            r(valid) = availableSignal(validInd);
+            r(valid) = availableSignal(indices(valid));
+            
+            % Apply Attenuation
             r = r.*atten;
             
             % Liberate non-useful samples
             obj.storedSamples = availableSignal(max(min(indices(:)), 1):end, :);
+            
+            % Update discrete state
             obj.numStoredSamples = size(obj.storedSamples, 1);
             obj.countSamples = obj.countSamples + numSamples;
-            
-            % Increment counter
             obj.countFrames = obj.countFrames + 1;
         end
         
@@ -114,19 +117,13 @@ classdef processSignal < matlab.System & matlab.system.mixin.FiniteSource
         function resetImpl(obj)
             obj.countFrames = 0;
             obj.countSamples = 0;
-            if obj.variable
-                obj.numStoredSamples = 0;
-                obj.storedSamples = [];
-            else
-                obj.storedSamples = zeros(obj.numStoredSamples, obj.numChannels);
-            end
+            obj.numStoredSamples = 0;
+            obj.storedSamples = [];
             
-%             if ~obj.delayType
-                obj.storedDelayForward = double.empty(0, obj.numChannels);
-                obj.storedDelayBackward = cell(obj.numChannels, 1);
-                obj.storedAttenForward = double.empty(0, obj.numChannels);
-                obj.storedAttenBackward = cell(obj.numChannels, 1);
-%             end
+            obj.storedDelayForward = double.empty(0, obj.numChannels);
+            obj.storedDelayBackward = cell(obj.numChannels, 1);
+            obj.storedAttenForward = double.empty(0, obj.numChannels);
+            obj.storedAttenBackward = cell(obj.numChannels, 1);
         end
 
         function releaseImpl(obj)
