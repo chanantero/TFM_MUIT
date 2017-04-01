@@ -185,7 +185,7 @@ classdef reproductionPanel < handle
         
         function addTrackCallback(obj)
             musicDirectory = 'C:\Users\Rubén\Music\Varias\';
-            [FileName, PathName, ~] = uigetfile({'*.wav', 'WAV File'; '*.mp3', 'MP3 File'}, 'Select audio track', 'MultiSelect', 'on', musicDirectory);
+            [FileName, PathName, ~] = uigetfile({'*.mp3', 'MP3 File'; '*.wav', 'WAV File'}, 'Select audio track', 'MultiSelect', 'on', musicDirectory);
             
             if FileName ~= 0
                 obj.addTrack(FileName, PathName);

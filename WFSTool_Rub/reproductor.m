@@ -21,7 +21,7 @@ classdef reproductor < matlab.System
         numChannels % Current number of output channels. It will be set each time the writing device changes
     end
 
-    properties(Access = private)
+    properties(SetAccess = private)
         fileReader
         processor
         player
@@ -33,12 +33,12 @@ classdef reproductor < matlab.System
     methods(Access = protected)
         
         function setupImpl(obj)
-            Fs = obj.fileReader.SampleRate;
             
             % Set propertties for the fileReader
             obj.fileReader.Filename = obj.audioFileName;
             obj.fileReader.SamplesPerFrame = obj.frameSizeReading;
-            
+            Fs = obj.fileReader.SampleRate;
+    
             % Set properties for the processor
             obj.processor.Fs = Fs;
             obj.processor.numChannels = obj.numChannels;
@@ -50,15 +50,15 @@ classdef reproductor < matlab.System
             obj.player.Fs = Fs;
         end
         
-        function numUnderrun = stepImpl(obj, delay, attenuation)
+        function numUnderrun = stepImpl(obj, delays, attenuations)
             
             % Read form file
             audioInput = step(obj.fileReader);
             audioInput = mean(audioInput, 2); % From Stereo to Mono
             
             % Process
-            delays = repmat(delay', obj.frameSizeReading, 1);
-            attenuations = repmat(attenuation', obj.frameSizeReading, 1);
+%             delays = repmat(delay', obj.frameSizeReading, 1);
+%             attenuations = repmat(attenuation', obj.frameSizeReading, 1);
             audioOutput = step(obj.processor, audioInput, delays, attenuations);
             
             % Write to audio device buffer
@@ -136,15 +136,18 @@ classdef reproductor < matlab.System
             minBufferDepletionTime = 0;
             t0 = tic;
             
-            while strcmp(obj.playingState, 'playing') && ~isDone(obj.fileReader) % Only reproduce if it is playing
+            finish = false;
+            while ~finish % Only reproduce if it is playing
                 t = tic;
                 
                 if toc(t0) >= minBufferDepletionTime
                     delay = obj.getDelayFun();
                     attenuation = obj.getAttenFun();
+                    delayMat = repmat(delay', obj.frameSizeReading, 1);
+                    attenuationMat = repmat(attenuation', obj.frameSizeReading, 1);
                     
                     try
-                        numUnderrun = step(obj, delay, attenuation);
+                        numUnderrun = step(obj, delayMat, attenuationMat);
                     catch
                         warning('There was some error with the step function of reproductor')
                         order.action = 'stop';
@@ -166,7 +169,17 @@ classdef reproductor < matlab.System
                 else
                     pause(minPause);
                 end
-            end   
+                
+                % Finish condition
+                if ~strcmp(obj.playingState, 'playing')
+                    finish = true;
+                elseif isDone(obj.fileReader)
+                    finish = true;
+                    obj.playingState = playingStateClass('stopped');
+                end
+                
+            end
+            
         end
         
     end
@@ -207,7 +220,7 @@ classdef reproductor < matlab.System
                 case playingStateClass('playing')
                     switch action
                         case 'stop'
-                            release(obj);
+                            release(obj); % It only executes if obj is locked. Make sure that always that the state is playing, the obect is locked
                         case 'play'
                             % Two possibilities. Play the same song (reset)
                             % or play a new song
@@ -348,6 +361,50 @@ classdef reproductor < matlab.System
             % devices = obj.player.getAvailableDevices();
         end
         
+        function reproduceNoRealTime(obj, t, delay, attenuation)
+            if ~strcmp(obj.playingState, 'stopped'),  return;  end
+            setup(obj, [], []);
+            obj.playingState = playingStateClass('playing');
+            
+            Fs = obj.fileReader.SampleRate;
+            numChann = obj.numChannels;
+            numSamp = obj.frameSize;
+            
+            % Calculate samples where delay and attenuation changes
+            t_Samp = ceil(t*Fs) + 1; % Samples were the position should change
+            [t_Samp, ind] = unique(t_Samp); % Eliminate redundant information
+            delay = delay(ind, :);
+            attenuation = attenuation(ind, :);
+            
+            countSamples = 0;
+            while ~isDone(obj.fileReader)
+               
+                % Find out which samples of change we need
+                t_ind = find(t_Samp >= (countSamples + 1) & t_Samp <= (countSamples + numSamp));
+                keySamples = [t_Samp(t_ind) - countSamples; numSamp + 1];
+                if keySamples(1) > 1
+                    keySamples = [1; keySamples];
+                    prevInd = find(t_Samp < countSamples + 1, 1, 'last');
+                    t_ind = [prevInd; t_ind];
+                end
+                
+                % Give the delays and attenuations the convenient format for the processor
+                % object
+                delays = zeros(numSamp, numChann);
+                attenuations = zeros(numSamp, numChann);
+                for k = 1:numel(keySamples) - 1
+                    currInd = keySamples(k):keySamples(k+1)-1;
+                    delays(currInd, :) = repmat(delay(t_ind(k), :), numel(currInd), 1);
+                    attenuations(currInd, :) = repmat(attenuation(t_ind(k), :), numel(currInd), 1);
+                end
+                
+                step(obj, delays, attenuations);
+                
+                countSamples = countSamples + numSamp;
+            end
+            
+            release(obj);
+        end
     end
     
 end

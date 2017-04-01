@@ -24,6 +24,24 @@ classdef WFSTool2 < handle
             addlistener(obj.player, 'numChannels', 'PostSet', @(~, eventData) obj.changeScenario(eventData.AffectedObject.numChannels));
         end       
         
+        function noRealTimeReproduction(obj, t, positions)
+            % Calculate the delays and attenuations for each position
+            % Use scenario object
+            numChann = obj.player.numChannels;
+            delay = zeros(numel(t), numChann);
+            attenuation = zeros(numel(t), numChann);
+            for k = 1:numel(t)
+                % Set scenario
+                obj.scenarioObj.setSourcePosition(positions(k, :));
+                
+                % Get delay and attenuation of the different channels
+                delay(k, :) = obj.scenarioObj.getDelays();
+                attenuation(k, :) = obj.scenarioObj.getAttenuations();
+            end
+            
+            obj.player.reproduceNoRealTime(t, delay, attenuation);
+        end
+         
     end
     
     methods(Access = private)

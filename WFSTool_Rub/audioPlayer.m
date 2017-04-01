@@ -64,6 +64,7 @@ classdef audioPlayer < matlab.System
             obj.deviceWriter.SampleRate = obj.Fs;
             obj.deviceWriter.Driver = obj.driver;
             obj.deviceWriter.Device = obj.device;
+%             obj.deviceWriter.SupportVariableSizeInput = true; % Por qué no va sin esto?
 
             if obj.DefaultNumChannels
                 inf = info(obj.deviceWriter);

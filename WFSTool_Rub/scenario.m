@@ -5,8 +5,9 @@ classdef scenario < handle
         sourcePosition
         loudspeakersPosition
         loudspeakersOrientation
-        activeLoudspeakers
-        activeLoudspeakersUserChoice
+        loudspeakersState % Logical. True is enabled, false is disabled
+        forcedEnabledLoudspeakers
+        forcedDisabledLoudspeakers % Priority over enabled loudspeakers
         delays
         attenuations
     end
@@ -48,6 +49,9 @@ classdef scenario < handle
             
             % Other variables
             obj.sourcePosition = sourcePosition;
+            
+            obj.updateDelaysAndAttenuations();
+
         end
         
         function setScenario(obj, sourcePosition, loudspeakersPosition, loudspeakersOrientation, roomPosition)
@@ -72,15 +76,19 @@ classdef scenario < handle
             obj.sourcePosition = sourcePosition;
             obj.loudspeakersPosition = loudspeakersPosition;
             obj.loudspeakersOrientation = loudspeakersOrientation;
-            obj.activeLoudspeakers = true(size(loudspeakersPosition, 1), 1);
-            obj.activeLoudspeakersUserChoice = true(size(loudspeakersPosition, 1), 1);
+            obj.loudspeakersState = true(size(loudspeakersPosition, 1), 1);
+            obj.forcedDisabledLoudspeakers = false(size(loudspeakersPosition, 1), 1);
+            obj.forcedEnabledLoudspeakers = false(size(loudspeakersPosition, 1), 1);
             
             obj.updateDelaysAndAttenuations();
         end
-             
-        function setActiveLoudspeakers(obj, active)
-            obj.activeLoudspeakers = active;
-            obj.updateLoudspeakersColor();
+            
+        function setForcedEnabledLoudspeakers(obj, enabled)
+            obj.forcedEnabledLoudspeakers = enabled(:);
+        end
+        
+        function setForcedDisabledLoudspeakers(obj, enabled)
+            obj.forcedDisabledLoudspeakers = enabled(:);
         end
     end
     
@@ -127,7 +135,7 @@ classdef scenario < handle
             
             % Which is the closest loudspeaker to the current point?
             [~, ind] = min(sum((repmat(point(1,:), size(obj.loudspeakersPosition, 1), 1) - obj.loudspeakersPosition).^2, 2));
-            obj.activeLoudspeakersUserChoice(ind) = ~obj.activeLoudspeakersUserChoice(ind);
+            obj.forcedDisabledLoudspeakers(ind) = ~obj.forcedDisabledLoudspeakers(ind);
             obj.updateDelaysAndAttenuations();
 
             obj.updateLoudspeakersColor();
@@ -135,11 +143,11 @@ classdef scenario < handle
         end
         
         function updateLoudspeakersColor(obj)
-            N = numel(obj.activeLoudspeakers);
+            N = numel(obj.loudspeakersState);
             
             activeState = 2*ones(N, 1);
-            activeState(obj.activeLoudspeakers) = 3;
-            activeState(~obj.activeLoudspeakersUserChoice) = 1;
+            activeState(obj.loudspeakersState | obj.forcedEnabledLoudspeakers) = 3;
+            activeState(obj.forcedDisabledLoudspeakers) = 1;
             
             colors = [1 1 1; 0 0 0.5; 0 0 1];
             
@@ -160,7 +168,7 @@ classdef scenario < handle
             normOrient = modVec(obj.loudspeakersOrientation); % Ideally 1 if the orientations are normalized
             cosAlfa = dot(relPos, obj.loudspeakersOrientation, 2)./(dist.*normOrient); % Coseno del ángulo entre la línea que une la fuente virtual con cada altavoz y
             % la dirección principal en la que el altavoz emite ("broadside")
-            obj.activeLoudspeakers = cosAlfa > 0; % Buscamos los altavoces que debería estar activos
+            obj.loudspeakersState = cosAlfa > 0; % Buscamos los altavoces que debería estar activos
             obj.updateLoudspeakersColor();
             
             % Calculate attenuations
@@ -168,9 +176,13 @@ classdef scenario < handle
             
         end
         
+        function ind = getEnabledLoudspeakers(obj)
+            ind = (obj.loudspeakersState | obj.forcedEnabledLoudspeakers) & ~obj.forcedDisabledLoudspeakers;
+        end
+        
         function attenuation = calcAttenuation(obj, dist)
             attenuation = ones(size(dist));
-            attenuation(~obj.activeLoudspeakers | ~obj.activeLoudspeakersUserChoice) = 0;
+            attenuation(~obj.getEnabledLoudspeakers()) = 0;
         end
     end
     

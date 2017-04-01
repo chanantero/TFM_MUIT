@@ -107,13 +107,6 @@ classdef processSignal < matlab.System & matlab.system.mixin.FiniteSource
             obj.countFrames = obj.countFrames + 1;
         end
         
-        function setupImpl(obj)
-            % Perform one-time calculations, such as computing constants
-            if ~obj.variable
-                obj.numStoredSamples = obj.frameSize * obj.numStoredFrames;
-            end
-        end
-        
         function resetImpl(obj)
             obj.countFrames = 0;
             obj.countSamples = 0;
