@@ -18,8 +18,6 @@ classdef audioPlayer < matlab.System
         driver
     end
     
-    
-
     properties(DiscreteState)
         count
     end
@@ -56,6 +54,16 @@ classdef audioPlayer < matlab.System
         function devices = getAvailableDevices(obj)
             devices = getAudioDevices(obj.deviceWriter);
         end
+        
+        function numChannels = get.numChannels(obj)
+            if obj.DefaultNumChannels
+                inf = info(obj.deviceWriter);
+                numChannels = inf.MaximumOutputChannels;
+            else
+                numChannels = obj.numChannels;
+            end
+        end
+        
     end
     
     methods(Access = protected)
@@ -64,16 +72,10 @@ classdef audioPlayer < matlab.System
             obj.deviceWriter.SampleRate = obj.Fs;
             obj.deviceWriter.Driver = obj.driver;
             obj.deviceWriter.Device = obj.device;
-%             obj.deviceWriter.SupportVariableSizeInput = true; % Por qué no va sin esto?
-
-            if obj.DefaultNumChannels
-                inf = info(obj.deviceWriter);
-                numChann = inf.MaximumOutputChannels;
-            else
-                numChann = obj.numChannels;
-            end
+%             obj.deviceWriter.SupportVariableSizeInput = true; % Por qué
+%             no iba sin esto y ahora sí que va?
             
-            setup(obj.deviceWriter, zeros(obj.frameSize, numChann));
+            setup(obj.deviceWriter, zeros(obj.frameSize, obj.numChannels));
         end
 
         function numUnderrun = stepImpl(obj, signal)
