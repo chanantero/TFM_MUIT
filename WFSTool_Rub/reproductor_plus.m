@@ -9,14 +9,15 @@ classdef reproductor_plus < matlab.System
         getDelayFun % Cell array of functions with as many elements as players
         getAttenFun % Cell array of functions with as many elements as players
         comMatrix % Commutation matrix. numReaders x numPlayers.
-        frameSizeReading % Array with as many elements as fileReaders 
+        frameSizeReading % Array with as many elements as fileReaders
         frameSizeWriting % Array with as many elements as players
     end
-       
+    
     properties(DiscreteState)
         count
     end
     
+    % Reading properties
     % The user cannot set this properties directly, but are useful information that
     % can be viewed by other objects
     properties(SetAccess = private, SetObservable)%, AbortSet)
@@ -26,7 +27,7 @@ classdef reproductor_plus < matlab.System
         numPlayers
         numLinks
     end
-
+    
     % Private properties
     properties(SetAccess = private)
         fileReader % Cell Array
@@ -38,7 +39,7 @@ classdef reproductor_plus < matlab.System
         
         function setupImpl(obj)
             numRead = obj.numReaders;
-            numPlay = obj.numPlayers;            
+            numPlay = obj.numPlayers;
             indCom = find(obj.comMatrix ~= 0);
             [indReader, indPlayer] = ind2sub([numRead, numPlay], indCom);
             
@@ -94,7 +95,7 @@ classdef reproductor_plus < matlab.System
             audioProcFs = cell(numLink, 1);
             for k = 1:numLink
                 Fs_reader = obj.processor{indReader(k)}.Fs;
-                Fs_player = obj.player{indPlayer(k)}.Fs; 
+                Fs_player = obj.player{indPlayer(k)}.Fs;
                 [P, Q] = rat(Fs_player/Fs_reader);
                 audioProcFs = resample(audioProc{k}, P, Q);
             end
@@ -119,11 +120,11 @@ classdef reproductor_plus < matlab.System
             % Update discrete state
             obj.count = obj.count + 1;
         end
-
+        
         function resetImpl(obj)
             obj.reset_priv();
         end
-
+        
         function releaseImpl(obj)
             obj.stop();
         end
@@ -143,11 +144,11 @@ classdef reproductor_plus < matlab.System
     
     methods % Getters and setters
         function numPlayers = get.numPlayers(obj)
-            numPlayers = numel(obj.players);
+            numPlayers = numel(obj.player);
         end
         
         function numReaders = get.numReaders(obj)
-            numReaders = numel(obj.fileReaders);
+            numReaders = numel(obj.fileReader);
         end
         
         function numLinks = get.numLinks(obj)
@@ -158,7 +159,7 @@ classdef reproductor_plus < matlab.System
     
     methods(Access = private)
         
-        function setPropertiesFileReaders(obj, index)            
+        function setPropertiesFileReaders(obj, index)
             if nargin == 1
                 index = 1:obj.numReaders;
             end
@@ -186,10 +187,10 @@ classdef reproductor_plus < matlab.System
             if nargin == 1
                 index = 1:obj.numPlayers;
             end
-                        
+            
             numChann = zeros(numel(index), 1);
             for k = index
-                numChann(k) = obj.players{k}.numChannels;
+                numChann(k) = obj.player{k}.numChannels;
             end
             
             obj.numChannels(index) = numChann;
@@ -207,7 +208,7 @@ classdef reproductor_plus < matlab.System
             for k = 1:obj.numPlayers
                 release(obj.players{k})
             end
-           
+            
             obj.playingState = playingStateClass('stopped');
         end
         
@@ -224,25 +225,92 @@ classdef reproductor_plus < matlab.System
                 reset(obj.players{k})
             end
             
-            count = 0;
+            obj.count = 0;
         end
         
         function setDefaultProperties(obj)
+            
             for k = 1:obj.numReaders
-                obj.audioFileName{k} = '';
-                obj.frameSizeReading{k} = 1024*10;
+                obj.setProps('audioFileName', '', k);
+                obj.setProps('frameSizeReading', 1024*10, k);
             end
             
-            for k = 1:obj.numWriters
-                obj.frameSizeWriting{k} = 1024*10;
-                obj.driver{k} = 'DirectSound';
-                obj.device{k} = 'Default'; 
+            for k = 1:obj.numPlayers
+                obj.setProps('frameSizeWriting', 1024*10, k);
+                obj.setProps('driver', 'DirectSound', k);
+                obj.setProps('device', 'Default', k);
+            end
+
+            obj.setProps('comMatrix', eye(obj.numReaders, obj.numPlayers));
+            
+            [readInd, playInd] = obj.getLinkSubInd();
+            for k = 1:obj.numLinks
+                ind = [readInd(k), playInd(k)];
+                obj.setProps('getDelayFun', [], ind);
+                obj.setProps('getAttenFun', [], ind);
             end
             
-            obj.updateNumOutputChannels();
         end
         
-        function reproduce(obj)                
+        function setCommutationMatrix(obj, comMat)
+            obj.comMatrix = comMat;
+            [numReader, numPlayer] = size(comMat);
+            
+            if obj.numReaders ~= numReader
+                if obj.numReaders < numReader
+                    % Increase the number of readers
+                    obj.fileReader = [obj.fileReader; cell(numReader - obj.numReaders, 1)];
+                else
+                    % Decrease the number of readers
+                    obj.fileReader = obj.fileReader(1:numReader);
+                end
+            end
+            
+            if obj.numPlayers ~= numPlayer
+                if obj.numPlayer < numPlayer
+                    % Increase the number of readers
+                    obj.player = [obj.player; cell(numPlayer - obj.numPlayers, 1)];
+                else
+                    % Decrease the number of readers
+                    obj.player = obj.player(1:numPlayer);
+                end
+            end
+            
+            % Adjust comMat to have at least the dimensions of the old
+            % comMat            
+            comMat = [comMat; zeros(max(0, obj.numReaders - numReader), size(comMat, 2))];
+            comMat = [comMat, zeros(size(comMat, 1), max(0, obj.numPlayers - numPlayer))];
+            
+            oldLinkInd = obj.getLinkAbsInd();
+            newLinkInd = find(comMat);
+            [keptLinkInd, destKeptLinkInd] = ismember(oldLinkInd, newLinkInd); % Old link indices that are kept in the new version
+            newProc = cell(numel(newLinkInd), 1);
+            newProc(destKeptLinkInd) = obj.processor(keptLinkInd);
+            
+            % Terminar
+        end
+        
+        function indices = getLinkAbsInd(obj)
+            indices = find(obj.comMatrix);
+        end
+        
+        function [readerIndex, playerIndex] = getLinkSubInd(obj)
+            absLinkInd = obj.getLinkAbsInd();
+            [readerIndex, playerIndex] = ind2sub(size(obj.comMatrix), absLinkInd);
+        end
+        
+        function indices = sub2LinkAbs(obj, readerIndex, playerIndex)
+            absInd = sub2ind(size(obj.comMatrix), readerIndex, playerIndex);
+            absLinkInd = getLinkAbsInd(obj.comMatrix);
+            [~, indices] = ismember(absInd, absLinkInd);
+        end
+             
+        function [readerIndex, playerIndex] = linkAbs2Sub(obj, index)
+            absInd = obj.getLinkAbsInd();
+            [readerIndex, playerIndex] = ind2sub(size(obj.comMatrix), absInd(index));
+        end
+        
+        function reproduce(obj)
             % Timing control
             margin = 0.01;
             counter = 0;
@@ -275,11 +343,11 @@ classdef reproductor_plus < matlab.System
                         t0 = t;
                         counter = 0;
                     end
-                                           
+                    
                     counter = counter + 1;
                     minBufferDepletionTime = counter*obj.frameSizeReading/obj.player.Fs - margin;
                     pause(max(minPause, minBufferDepletionTime - toc(t0)));
-%                     fprintf(max(minPause, minBufferDepletionTime - toc(t0)))
+                    %                     fprintf(max(minPause, minBufferDepletionTime - toc(t0)))
                 else
                     pause(minPause);
                 end
@@ -297,26 +365,26 @@ classdef reproductor_plus < matlab.System
         end
         
     end
-        
+    
     methods(Access = public)
         
         function obj = reproductor_plus()
             
             obj.playingState = playingStateClass('stopped');
-                        
+            
             % Reading object
-            obj.fileReaders = dsp.AudioFileReader();
+            obj.fileReader = {dsp.AudioFileReader()};
             
             % Processing object
-            obj.processors = processSignal('delayType', 'forward');
+            obj.processor = {processSignal('delayType', 'forward')};
             
             % Writing object
-            obj.players = audioPlayer;
+            obj.player = {audioPlayer};
             
             obj.setDefaultProperties();
             
         end
-                
+        
         function executeOrder(obj, order)
             % 'order' is a structure with 1 or 2 fields.
             % The field 'action' is mandatory
@@ -437,59 +505,81 @@ classdef reproductor_plus < matlab.System
                         case ''
                             % Null action
                     end
-                
+                    
                 otherwise
                     error('reproductor:nonValidPlayingState', 'The playing state is not valid')
             end
-                    
+            
         end
         
-        function setProps(obj, parameter, value, index )
+        function setProps(obj, parameters, values, indices )
             if obj.playingState == playingStateClass('stopped')
                 
-                switch parameter
-                    case 'audioFileName'
-                        obj.(parameter){index} = value;
-                    case 'driver'
-                        obj.(parameter){index} = value;
-                        
-                        % Set the value on the correspondent player and do
-                        % the setup and release
-                        player_this = obj.player{index};
-                        player_this.driver = value;
-                        setup(player_this, []);
-                        release(player_this);
-                        
-                        % Get devices for the new driver
-                        audioDevices = player_this.getAvailableDevices();
-                        obj.setProps('device', audioDevices{1}, index);
-                        
-                    case 'device'
-                        obj.(parameter){index} = value;
-                        
-                        % Set the value on the correspondent player and do
-                        % the setup and release
-                        player_this = obj.player{index};
-                        player_this.device = value;
-                        setup(player_this, []);
-                        release(player_this);
-                        
-                        % Update the number of channels for that device
-                        obj.updateNumOutputChannels(index);
-                    case 'getDelayFun'
-                        obj.(parameter){index} = value;
-                    case 'getAttenFun'
-                        obj.(parameter){index} = value;
-                    case 'comMatrix'
-                        obj.(parameter){index} = value;
-                    case 'frameSizeReading'
-                        obj.(parameter){index} = value;
-                    case 'frameSizeWriting'
-                        obj.(parameter){index} = value;
-                    otherwise
-                        error('reproductor_plus:setProps', 'The first argument must be the name of an existing parameter')
+                % Parse inputs
+                if ~iscell(parameters)
+                    parameters = {parameters};
+                    values = {values};
+                    
+                    if nargin < 4
+                        indices = {};
+                    else
+                        indices = {indices};
+                    end
                 end
                 
+                % Set parameters
+                for k = 1:numel(parameters)
+                    
+                    parameter = parameters{k};
+                    value = values{k};
+                    index = indices{k};
+                    
+                    switch parameter
+                        case 'audioFileName'
+                            obj.(parameter){index} = value;
+                        case 'driver'
+                            obj.(parameter){index} = value;
+                            
+                            % Set the value on the correspondent player and do
+                            % the setup and release
+                            player_this = obj.player{index};
+                            player_this.driver = value;
+                            setup(player_this, []);
+                            release(player_this);
+                            
+                            % Get devices for the new driver and set it
+                            audioDevices = player_this.getAvailableDevices();
+                            obj.setProps('device', audioDevices{1}, index);
+                            
+                        case 'device'
+                            obj.(parameter){index} = value;
+                            
+                            % Set the value on the correspondent player and do
+                            % the setup and release
+                            player_this = obj.player{index};
+                            player_this.device = value;
+                            setup(player_this, []);
+                            release(player_this);
+                            
+                            % Update the number of channels for that device
+                            obj.updateNumOutputChannels(index);
+                        case 'getDelayFun'                            
+                            ind = obj.sub2LinkAbs(index(1), index(2));
+                            obj.(parameter){ind} = value;
+                        case 'getAttenFun'
+                            ind = obj.sub2LinkAbs(index(1), index(2));
+                            obj.(parameter){ind} = value;
+                        case 'comMatrix'
+                            obj.(parameter) = value;
+                        case 'frameSizeReading'
+                            obj.(parameter){index} = value;
+                        case 'frameSizeWriting'
+                            obj.(parameter){index} = value;
+                        otherwise
+                            error('reproductor_plus:setProps', 'The first argument must be the name of an existing parameter')
+                    end
+                    
+                end
             end
         end
         
@@ -510,7 +600,7 @@ classdef reproductor_plus < matlab.System
             
             countSamples = 0;
             while ~isDone(obj.fileReader)
-               
+                
                 % Find out which samples of change we need
                 t_ind = find(t_Samp >= (countSamples + 1) & t_Samp <= (countSamples + numSamp));
                 keySamples = [t_Samp(t_ind) - countSamples; numSamp + 1];
@@ -538,43 +628,43 @@ classdef reproductor_plus < matlab.System
             release(obj);
         end
         
-%         function setFrameSizeReading(obj, frameSize, index)
-%             if nargin < 3
-%                 index = 1;
-%             end
-%             
-%             obj.setProps('frameSizeReading', frameSize, index);
-%         end
-%         
-%         function setFrameSizeWriting(obj, frameSize, index)
-%             if nargin < 3
-%                 index = 1;
-%             end
-%             
-%             obj.setProps('frameSizeWriting', frameSize, index);
-%         end
-%         
-%         function set_getDelayFun(obj, getDelayFun, index)
-%             if nargin < 3
-%                 index = 1;
-%             end
-%             
-%             obj.setProps('getDelayFun', getDelayFun, index);
-%         end
-%         
-%         function set_getAttenFun(obj, getAttenFun)
-%             if nargin < 3
-%                 index = 1;
-%             end
-%             
-%             obj.setProps('getAttenFun', getAttenFun, index);
-%         end
-%         
-%         function devices = getWritingDevices(obj)
-%             aux = audioDeviceWriter('Driver', obj.driver);
-%             devices = getAudioDevices(aux);
-%             % devices = obj.player.getAvailableDevices();
-%         end
+        %         function setFrameSizeReading(obj, frameSize, index)
+        %             if nargin < 3
+        %                 index = 1;
+        %             end
+        %
+        %             obj.setProps('frameSizeReading', frameSize, index);
+        %         end
+        %
+        %         function setFrameSizeWriting(obj, frameSize, index)
+        %             if nargin < 3
+        %                 index = 1;
+        %             end
+        %
+        %             obj.setProps('frameSizeWriting', frameSize, index);
+        %         end
+        %
+        %         function set_getDelayFun(obj, getDelayFun, index)
+        %             if nargin < 3
+        %                 index = 1;
+        %             end
+        %
+        %             obj.setProps('getDelayFun', getDelayFun, index);
+        %         end
+        %
+        %         function set_getAttenFun(obj, getAttenFun)
+        %             if nargin < 3
+        %                 index = 1;
+        %             end
+        %
+        %             obj.setProps('getAttenFun', getAttenFun, index);
+        %         end
+        %
+        %         function devices = getWritingDevices(obj)
+        %             aux = audioDeviceWriter('Driver', obj.driver);
+        %             devices = getAudioDevices(aux);
+        %             % devices = obj.player.getAvailableDevices();
+        %         end
         
         
     end
