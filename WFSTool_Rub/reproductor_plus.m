@@ -3,13 +3,29 @@ classdef reproductor_plus < matlab.System
     % The user can set this properties when the object is not locked, i.e,
     % when playingState is stopped
     properties(Nontunable, SetAccess = private)
+        frameDuration % In seconds
+        
+        % Reader settings
         audioFileName % Cell string array with as many elements as fileReaders
-        driver % Cell string array with as many elements as players
-        device % Cell string array with as many elements as players
+        
+        % Processor settings
         getDelayFun % Cell array of functions with as many elements as players
         getAttenFun % Cell array of functions with as many elements as players
         comMatrix % Commutation matrix. numReaders x numPlayers.
+        
+        % Player settings
+        driver % Cell string array with as many elements as players
+        device % Cell string array with as many elements as players
+        Fs_player
+    end
+    
+    % Derivated properties from Non-Tunnable properties that are used to
+    % set up the properties of the reader, processor and player objects
+    properties(SetAccess = private)
+        % Reader settings
         frameSizeReading % Array with as many elements as fileReaders
+        
+        % Player settings
         frameSizeWriting % Array with as many elements as players
     end
     
@@ -23,12 +39,13 @@ classdef reproductor_plus < matlab.System
     properties(SetAccess = private, SetObservable)%, AbortSet)
         playingState
         numChannels % Current number of output channels. It will be set each time a writing device changes
+        Fs_reader % Sampling frequency of readers.
         numReaders
         numPlayers
         numLinks
     end
     
-    % Private properties
+    % Private properties: objects
     properties(SetAccess = private)
         fileReader % Cell Array
         processor % Cell Array as non-null elements of comMatrix
@@ -38,36 +55,20 @@ classdef reproductor_plus < matlab.System
     methods(Access = protected)
         
         function setupImpl(obj)
-            numRead = obj.numReaders;
-            numPlay = obj.numPlayers;
-            indCom = find(obj.comMatrix ~= 0);
-            [indReader, indPlayer] = ind2sub([numRead, numPlay], indCom);
             
-            % Set propertties for the fileReaders
-            Fs_reader = zeros(numRead, 1);
-            for k = 1:numRead
-                obj.fileReader{k}.Filename = obj.audioFileName(k);
-                obj.fileReader{k}.SamplesPerFrame = obj.frameSizeReading(k);
-                Fs_reader(k) = obj.fileReader{k}.SampleRate;
-            end
+%             % Calculate Fs_player automatically
+%             firstPlayer = zeros(obj.numPlayers, 1);
+%             for k = 1:obj.numPlayers
+%                 firstPlayer(k) = find(obj.comMatrix(:, k), 1, 'first');
+%             end
+%             obj.Fs_player(k) = obj.Fs_reader(firstPlayer(k));
             
-            % Set properties for the processors
-            for k = 1:obj.numLinks
-                obj.processor{k}.Fs = Fs_reader(indReader(k));
-                obj.processor{k}.numChannels = obj.numChannels(indPlayer(k));
-            end
+            obj.setPropertiesFileReaders();
             
-            % Set properties for the players
-            Fs_players = zeros(numPlay, 1);
-            for k = 1:numPlay
-                Fs_players(k) = find(obj.comMatrix(:, k), 1, 'first');
-            end
-            for k = 1:numPlay
-                obj.player{k}.frameSize = obj.frameSizeWriting(k);
-                obj.player{k}.driver = obj.driver(k);
-                obj.player{k}.device = obj.device(k);
-                obj.player{k}.Fs = Fs_players(k);
-            end
+            obj.setPropertiesPlayers();
+            
+            obj.setPropertiesProcessors();
+            
         end
         
         function numUnderrun = stepImpl(obj, delays, attenuations)
@@ -94,10 +95,11 @@ classdef reproductor_plus < matlab.System
             % Transform Frequency
             audioProcFs = cell(numLink, 1);
             for k = 1:numLink
-                Fs_reader = obj.processor{indReader(k)}.Fs;
-                Fs_player = obj.player{indPlayer(k)}.Fs;
-                [P, Q] = rat(Fs_player/Fs_reader);
-                audioProcFs = resample(audioProc{k}, P, Q);
+%                 Fs_read = obj.processor{indReader(k)}.Fs;
+%                 Fs_player = obj.player{indPlayer(k)}.Fs;
+%                 [P, Q] = rat(Fs_player/Fs_read);
+%                 audioProcFs{k} = resample(audioProc{k}, P, Q);
+                    audioProcFs{k} = resample(audioProc{k}, obj.frameSizeWriting(indPlayer(k)), obj.frameSizeReading(indReader(k)));
             end
             
             % Sum outputs according to the commutation matrix
@@ -106,6 +108,7 @@ classdef reproductor_plus < matlab.System
             audioOutput = cell(numPlayer, 1);
             for k = 1:numPlayer
                 ind = find(indPlayer == k);
+                audioOutput{k} = zeros(size(audioProcFs{ind(1)}));
                 for l = 1:numel(ind)
                     audioOutput{k} = audioOutput{k} + obj.comMatrix(indCom(ind(l)))*audioProcFs{ind(l)};
                 end
@@ -130,15 +133,16 @@ classdef reproductor_plus < matlab.System
         end
         
         function validatePropertiesImpl(obj)
-            % Check that the audioFileName exists
-            a = dir(obj.audioFileName);
-            assert(numel(a) > 0, 'reproductor:wrongProperty', 'The property audioFileName must specify an audio file that exists')
-            
-            % Check that the audioFileName has the right extension
-            [~, ~, ext] = fileparts(obj.audioFileName);
-            extensions = {'.wav', '.mp3'};
-            assert(ismember(ext, extensions), 'reproductor:wrongProperty', ['The property audioFileName must have one of the next extensions: ', strjoin(extensions, ', ')])
-            
+            for k = 1:obj.numReaders
+                % Check that the audioFileName exists
+                a = dir(obj.audioFileName{k});
+                assert(numel(a) > 0, 'reproductor:wrongProperty', 'The property audioFileName must specify an audio file that exists')
+                
+                % Check that the audioFileName has the right extension
+                [~, ~, ext] = fileparts(obj.audioFileName{k});
+                extensions = {'.wav', '.mp3'};
+                assert(ismember(ext, extensions), 'reproductor:wrongProperty', ['The property audioFileName must have one of the next extensions: ', strjoin(extensions, ', ')])
+            end
         end
     end
     
@@ -155,6 +159,12 @@ classdef reproductor_plus < matlab.System
             numLinks = sum(obj.comMatrix ~= 0);
         end
         
+        function Fs = get.Fs_reader(obj)
+            Fs = zeros(obj.numReaders, 1);
+            for k = 1:obj.numReaders
+                Fs(k) = obj.fileReader{k}.SampleRate;
+            end
+        end
     end
     
     methods(Access = private)
@@ -165,7 +175,12 @@ classdef reproductor_plus < matlab.System
             end
             
             for k = index
-                obj.fileReader{k}.Filename = obj.audioFileName(k);
+                obj.fileReader{k}.Filename = obj.audioFileName{k};
+            end
+            
+            obj.frameSizeReading = floor(obj.frameDuration*obj.Fs_reader);
+            
+            for k = index
                 obj.fileReader{k}.SamplesPerFrame = obj.frameSizeReading(k);
             end
         end
@@ -175,21 +190,38 @@ classdef reproductor_plus < matlab.System
                 index = 1:obj.numLinks;
             end
             
-            for k = 1:index
-                obj.processor{k}.Fs = Fs_reader(indReader(k));
+            [indReader, indPlayer] = obj.linkAbs2Sub(index);
+            
+            % Set properties for the processors
+            for k = 1:numel(index)
+                obj.processor{k}.Fs = obj.Fs_reader(indReader(k));
                 obj.processor{k}.numChannels = obj.numChannels(indPlayer(k));
             end
         end
         
+        function setPropertiesPlayers(obj, index)
+            if nargin == 1
+                index = 1:obj.numPlayers;
+            end
+
+            obj.frameSizeWriting = floor(obj.frameDuration*obj.Fs_player);
+            
+            for k = index
+                obj.player{k}.driver = obj.driver{k};
+                obj.player{k}.device = obj.device{k};
+                obj.player{k}.frameSize = obj.frameSizeWriting(k);
+                obj.player{k}.Fs = obj.Fs_player(k);
+            end
+        end
+        
         function updateNumOutputChannels(obj, index)
-            % The number of channels is the maximum number of
-            % channels of the writing device
+           
             if nargin == 1
                 index = 1:obj.numPlayers;
             end
             
             numChann = zeros(numel(index), 1);
-            for k = index
+            for k = 1:numel(index)
                 numChann(k) = obj.player{k}.numChannels;
             end
             
@@ -198,15 +230,15 @@ classdef reproductor_plus < matlab.System
         
         function stop(obj)
             for k = 1:obj.numReaders
-                release(obj.fileReaders{k})
+                release(obj.fileReader{k})
             end
             
             for k = 1:obj.numLinks
-                release(obj.processors{k})
+                release(obj.processor{k})
             end
             
             for k = 1:obj.numPlayers
-                release(obj.players{k})
+                release(obj.player{k})
             end
             
             obj.playingState = playingStateClass('stopped');
@@ -214,15 +246,15 @@ classdef reproductor_plus < matlab.System
         
         function reset_priv(obj)
             for k = 1:obj.numReaders
-                reset(obj.fileReaders{k})
+                reset(obj.fileReader{k})
             end
             
             for k = 1:obj.numLinks
-                reset(obj.processors{k})
+                reset(obj.processor{k})
             end
             
             for k = 1:obj.numPlayers
-                reset(obj.players{k})
+                reset(obj.player{k})
             end
             
             obj.count = 0;
@@ -236,12 +268,12 @@ classdef reproductor_plus < matlab.System
             end
             
             for k = 1:obj.numPlayers
-                obj.setProps('frameSizeWriting', 1024*10, k);
+                obj.setProps('Fs_player', 44100, k);
                 obj.setProps('driver', 'DirectSound', k);
                 obj.setProps('device', 'Default', k);
             end
-
-            obj.setProps('comMatrix', eye(obj.numReaders, obj.numPlayers));
+            
+            obj.setProps('frameDuration', 0.25, k);
             
             [readInd, playInd] = obj.getLinkSubInd();
             for k = 1:obj.numLinks
@@ -254,40 +286,26 @@ classdef reproductor_plus < matlab.System
         
         function setCommutationMatrix(obj, comMat)
             obj.comMatrix = comMat;
-            [numReader, numPlayer] = size(comMat);
             
-            if obj.numReaders ~= numReader
-                if obj.numReaders < numReader
-                    % Increase the number of readers
-                    obj.fileReader = [obj.fileReader; cell(numReader - obj.numReaders, 1)];
-                else
-                    % Decrease the number of readers
-                    obj.fileReader = obj.fileReader(1:numReader);
-                end
+            [numReaders_new, numPlayers_new] = size(comMat);
+            numLinks_new = sum(comMat ~= 0);
+            
+            obj.fileReader = cell(numReaders_new, 1);
+            for k = 1:numReaders_new
+                obj.fileReader{k} = dsp.AudioFileReader();
             end
             
-            if obj.numPlayers ~= numPlayer
-                if obj.numPlayer < numPlayer
-                    % Increase the number of readers
-                    obj.player = [obj.player; cell(numPlayer - obj.numPlayers, 1)];
-                else
-                    % Decrease the number of readers
-                    obj.player = obj.player(1:numPlayer);
-                end
+            obj.processor = cell(numLinks_new, 1);
+            for k = 1:numLinks_new
+                obj.processor{k} = processSignal('delayType', 'forward');
             end
             
-            % Adjust comMat to have at least the dimensions of the old
-            % comMat            
-            comMat = [comMat; zeros(max(0, obj.numReaders - numReader), size(comMat, 2))];
-            comMat = [comMat, zeros(size(comMat, 1), max(0, obj.numPlayers - numPlayer))];
+            obj.player = cell(numPlayers_new, 1);
+            for k = 1:numPlayers_new
+                obj.player{k} = audioPlayer;
+            end
             
-            oldLinkInd = obj.getLinkAbsInd();
-            newLinkInd = find(comMat);
-            [keptLinkInd, destKeptLinkInd] = ismember(oldLinkInd, newLinkInd); % Old link indices that are kept in the new version
-            newProc = cell(numel(newLinkInd), 1);
-            newProc(destKeptLinkInd) = obj.processor(keptLinkInd);
-            
-            % Terminar
+            obj.setDefaultProperties();
         end
         
         function indices = getLinkAbsInd(obj)
@@ -301,7 +319,7 @@ classdef reproductor_plus < matlab.System
         
         function indices = sub2LinkAbs(obj, readerIndex, playerIndex)
             absInd = sub2ind(size(obj.comMatrix), readerIndex, playerIndex);
-            absLinkInd = getLinkAbsInd(obj.comMatrix);
+            absLinkInd = obj.getLinkAbsInd();
             [~, indices] = ismember(absInd, absLinkInd);
         end
              
@@ -323,29 +341,37 @@ classdef reproductor_plus < matlab.System
                 t = tic;
                 
                 if toc(t0) >= minBufferDepletionTime
-                    delay = obj.getDelayFun();
-                    attenuation = obj.getAttenFun();
-                    delayMat = repmat(delay', obj.frameSizeReading, 1);
-                    attenuationMat = repmat(attenuation', obj.frameSizeReading, 1);
+                    
+                    
+                    [readerIndex, ~] = obj.getLinkSubInd();
+
+                    delays = cell(obj.numLinks, 1);
+                    attenuations = cell(obj.numLinks, 1);
+                    for k = 1:obj.numLinks
+                        delay = obj.getDelayFun{k}();
+                        attenuation = obj.getAttenFun{k}();
+                                          
+                        delays{k} = repmat(delay', obj.frameSizeReading(readerIndex(k)), 1);
+                        attenuations{k} = repmat(attenuation', obj.frameSizeReading(readerIndex(k)), 1);
+                    end
                     
                     try
-                        numUnderrun = step(obj, delayMat, attenuationMat);
+                        numUnderrun = step(obj, delays, attenuations);
                     catch
                         warning('There was some error with the step function of reproductor')
-                        order.action = 'stop';
-                        executeOrder(obj, order);
+                        release(obj);
                         return;
                     end
                     
                     % Timing control
-                    if numUnderrun > 0
+                    if any(numUnderrun > 0)
                         % Interruption in the reproduction. Reset timer
                         t0 = t;
                         counter = 0;
                     end
                     
                     counter = counter + 1;
-                    minBufferDepletionTime = counter*obj.frameSizeReading/obj.player.Fs - margin;
+                    minBufferDepletionTime = counter*obj.frameSizeReading(1)/obj.player{1}.Fs - margin;
                     pause(max(minPause, minBufferDepletionTime - toc(t0)));
                     %                     fprintf(max(minPause, minBufferDepletionTime - toc(t0)))
                 else
@@ -355,9 +381,15 @@ classdef reproductor_plus < matlab.System
                 % Finish condition
                 if ~strcmp(obj.playingState, 'playing')
                     finish = true;
-                elseif isDone(obj.fileReader)
-                    finish = true;
-                    obj.playingState = playingStateClass('stopped');
+                else
+                    done = false(obj.numReaders, 1);
+                    for k = 1:obj.numReaders
+                        done(k) = isDone(obj.fileReader{k});
+                    end
+                    if all(done)
+                        finish = true;
+                        obj.playingState = playingStateClass('stopped');
+                    end
                 end
                 
             end
@@ -381,6 +413,7 @@ classdef reproductor_plus < matlab.System
             % Writing object
             obj.player = {audioPlayer};
             
+            obj.comMatrix = 1;
             obj.setDefaultProperties();
             
         end
@@ -403,7 +436,7 @@ classdef reproductor_plus < matlab.System
                 case playingStateClass('playing')
                     switch action
                         case 'stop'
-                            release(obj); % It only executes if obj is locked. Make sure that always that the state is playing, the obect is locked
+                            release(obj); % It only executes if obj is locked. Make sure that always the state is playing, the obect is locked
                         case 'play'
                             % Two possibilities. Play the same song (reset)
                             % or play a new song
@@ -412,7 +445,7 @@ classdef reproductor_plus < matlab.System
                                 % First, stop but without allowing the tuning
                                 % of anything, i.e., don't release the objects
                                 reset(obj);
-                                % Then, it will play again sincee the state
+                                % Then, it will play again since the state
                                 % hasn't been changed
                             else
                                 % Play a new audio file
@@ -422,7 +455,7 @@ classdef reproductor_plus < matlab.System
                                 obj.audioFileName = p.Results.fileName;
                                 % Then, play again
                                 obj.playingState = playingStateClass('playing');
-                                setup(obj, [], []);
+                                setup(obj, {}, {});
                             end
                         case 'resume'
                             % Do nothing
@@ -437,7 +470,7 @@ classdef reproductor_plus < matlab.System
                             obj.audioFileName = p.Results.fileName;
                             % Then, play again
                             obj.playingState = playingStateClass('playing');
-                            setup(obj, [], []);
+                            setup(obj, {}, {});
                         case ''
                             % Null action
                     end
@@ -453,14 +486,14 @@ classdef reproductor_plus < matlab.System
                                 obj.audioFileName = p.Results.fileName;
                             end
                             if ~isempty(obj.audioFileName)
-                                setup(obj, [], []);
+                                setup(obj, {}, {});
                                 obj.playingState = playingStateClass('playing');
                                 obj.reproduce();
                             end
                         case 'resume'
                             % The same as play if there was no song
                             % specified
-                            setup(obj, [], []);
+                            setup(obj, {}, {});
                             obj.playingState = playingStateClass('playing');
                             obj.reproduce();
                         case 'stop'
@@ -521,7 +554,7 @@ classdef reproductor_plus < matlab.System
                     values = {values};
                     
                     if nargin < 4
-                        indices = {};
+                        indices = {0};
                     else
                         indices = {indices};
                     end
@@ -570,11 +603,13 @@ classdef reproductor_plus < matlab.System
                             ind = obj.sub2LinkAbs(index(1), index(2));
                             obj.(parameter){ind} = value;
                         case 'comMatrix'
-                            obj.(parameter) = value;
+                            obj.setCommutationMatrix(value);
                         case 'frameSizeReading'
-                            obj.(parameter){index} = value;
-                        case 'frameSizeWriting'
-                            obj.(parameter){index} = value;
+                            obj.(parameter)(index) = value;
+                        case 'Fs_player'
+                            obj.(parameter)(index) = value;
+                        case 'frameDuration'
+                            obj.(parameter) = value;
                         otherwise
                             error('reproductor_plus:setProps', 'The first argument must be the name of an existing parameter')
                     end
