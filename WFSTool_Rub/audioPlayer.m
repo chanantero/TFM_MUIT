@@ -23,7 +23,7 @@ classdef audioPlayer < matlab.System
     end
 
     % Pre-computed constants
-    properties(Access = private)
+    properties(SetAccess = private)
         storedSamples
         deviceWriter
     end

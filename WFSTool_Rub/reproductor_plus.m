@@ -69,6 +69,7 @@ classdef reproductor_plus < matlab.System
             
             obj.setPropertiesProcessors();
             
+            
         end
         
         function numUnderrun = stepImpl(obj, delays, attenuations)
@@ -328,7 +329,42 @@ classdef reproductor_plus < matlab.System
             [readerIndex, playerIndex] = ind2sub(size(obj.comMatrix), absInd(index));
         end
         
+        function delays = testDelayBetweenDevices(obj)
+            signal = cell(obj.numPlayers, 1);
+            for k = 1:obj.numPlayers
+                release(obj.player{k}.deviceWriter);
+                obj.player{k}.deviceWriter.SupportVariableSizeInput = true;
+                signal{k} = zeros(obj.frameSizeWriting(k), obj.numChannels(k));
+            end
+            numUnderrun = zeros(obj.numPlayers, 1);
+            for k = 1:obj.numPlayers
+                numUnderrun(k) = play(obj.player{k}.deviceWriter, signal{k});
+            end
+            pause(obj.frameDuration + 5);
+
+            % Write to audio device buffer
+            for k = 1:obj.numPlayers
+                signal{k} = zeros(1, obj.numChannels(k));
+            end
+
+            numUnderrun = zeros(obj.numPlayers, 1);
+            for k = 1:obj.numPlayers
+                numUnderrun(k) = play(obj.player{k}.deviceWriter, signal{k});
+            end
+            
+            delays = numUnderrun./obj.Fs_player';
+            
+            for k = 1:obj.numPlayers
+                release(obj.player{k}.deviceWriter);
+                obj.player{k}.deviceWriter.SupportVariableSizeInput = false;
+            end
+        end
+        
         function reproduce(obj)
+            
+            offset = obj.testDelayBetweenDevices();
+            offset = max(offset) - offset;
+            
             % Timing control
             margin = 0.01;
             counter = 0;
@@ -348,7 +384,7 @@ classdef reproductor_plus < matlab.System
                     delays = cell(obj.numLinks, 1);
                     attenuations = cell(obj.numLinks, 1);
                     for k = 1:obj.numLinks
-                        delay = obj.getDelayFun{k}();
+                        delay = obj.getDelayFun{k}() + offset(k);
                         attenuation = obj.getAttenFun{k}();
                                           
                         delays{k} = repmat(delay', obj.frameSizeReading(readerIndex(k)), 1);

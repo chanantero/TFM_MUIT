@@ -12,8 +12,9 @@ player.setProps('frameDuration', 2);
 player.setProps('device', 'Altavoces (Dispositivo de High Definition Audio)', 1);
 player.setProps('device', 'Controlador primario de sonido', 2);
 
+order.action = 'stop';
+player.executeOrder(order);
+
 order.action = 'play';
 player.executeOrder(order);
 
-order.action = 'stop';
-player.executeOrder(order);
