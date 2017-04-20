@@ -52,6 +52,7 @@ classdef reproductor_plus < matlab.System
         player % Cell Array
     end
     
+    % System object methods
     methods(Access = protected)
         
         function setupImpl(obj)
@@ -147,7 +148,8 @@ classdef reproductor_plus < matlab.System
         end
     end
     
-    methods % Getters and setters
+    % Getters and setters
+    methods
         function numPlayers = get.numPlayers(obj)
             numPlayers = numel(obj.player);
         end
@@ -167,6 +169,7 @@ classdef reproductor_plus < matlab.System
             end
         end
     end
+    
     
     methods(Access = private)
         
@@ -329,37 +332,6 @@ classdef reproductor_plus < matlab.System
             [readerIndex, playerIndex] = ind2sub(size(obj.comMatrix), absInd(index));
         end
         
-        function delays = testDelayBetweenDevices(obj)
-            signal = cell(obj.numPlayers, 1);
-            for k = 1:obj.numPlayers
-                release(obj.player{k}.deviceWriter);
-                obj.player{k}.deviceWriter.SupportVariableSizeInput = true;
-                signal{k} = zeros(obj.frameSizeWriting(k), obj.numChannels(k));
-            end
-            numUnderrun = zeros(obj.numPlayers, 1);
-            for k = 1:obj.numPlayers
-                numUnderrun(k) = play(obj.player{k}.deviceWriter, signal{k});
-            end
-            pause(obj.frameDuration + 5);
-
-            % Write to audio device buffer
-            for k = 1:obj.numPlayers
-                signal{k} = zeros(1, obj.numChannels(k));
-            end
-
-            numUnderrun = zeros(obj.numPlayers, 1);
-            for k = 1:obj.numPlayers
-                numUnderrun(k) = play(obj.player{k}.deviceWriter, signal{k});
-            end
-            
-            delays = numUnderrun./obj.Fs_player';
-            
-            for k = 1:obj.numPlayers
-                release(obj.player{k}.deviceWriter);
-                obj.player{k}.deviceWriter.SupportVariableSizeInput = false;
-            end
-        end
-        
         function reproduce(obj)
             
             offset = obj.testDelayBetweenDevices();
@@ -434,7 +406,46 @@ classdef reproductor_plus < matlab.System
         
     end
     
+    
     methods(Access = public)
+        
+        function delays = testDelayBetweenDevices(obj)
+            signal1 = cell(obj.numPlayers, 1);
+            signal2 = cell(obj.numPlayers, 1);
+            for k = 1:obj.numPlayers
+                signal1{k} = zeros(obj.frameSizeWriting(k), obj.numChannels(k));
+                signal2{k} = zeros(1, obj.numChannels(k));
+            end
+            
+            for k = 1:obj.numPlayers
+                release(obj.player{k}.deviceWriter);
+                obj.player{k}.deviceWriter.SupportVariableSizeInput = true;
+                % Next 2 lines are to ensure the good performance of
+                % numUnderrun
+                play(obj.player{k}.deviceWriter, signal1{k});
+                play(obj.player{k}.deviceWriter, signal2{k});
+            end
+ 
+            numUnderrun = zeros(obj.numPlayers, 1);
+            for k = 1:obj.numPlayers
+                numUnderrun(k) = play(obj.player{k}.deviceWriter, signal1{k});
+            end
+            
+            pause(obj.frameDuration + 1);
+
+            numUnderrun = zeros(obj.numPlayers, 1);
+            for k = 1:obj.numPlayers
+                numUnderrun(k) = play(obj.player{k}.deviceWriter, signal2{k});
+            end
+            
+            delays = numUnderrun./obj.Fs_player';
+            
+            for k = 1:obj.numPlayers
+                release(obj.player{k}.deviceWriter);
+                obj.player{k}.deviceWriter.SupportVariableSizeInput = false;
+            end
+        end
+        
         
         function obj = reproductor_plus()
             
@@ -698,46 +709,7 @@ classdef reproductor_plus < matlab.System
             
             release(obj);
         end
-        
-        %         function setFrameSizeReading(obj, frameSize, index)
-        %             if nargin < 3
-        %                 index = 1;
-        %             end
-        %
-        %             obj.setProps('frameSizeReading', frameSize, index);
-        %         end
-        %
-        %         function setFrameSizeWriting(obj, frameSize, index)
-        %             if nargin < 3
-        %                 index = 1;
-        %             end
-        %
-        %             obj.setProps('frameSizeWriting', frameSize, index);
-        %         end
-        %
-        %         function set_getDelayFun(obj, getDelayFun, index)
-        %             if nargin < 3
-        %                 index = 1;
-        %             end
-        %
-        %             obj.setProps('getDelayFun', getDelayFun, index);
-        %         end
-        %
-        %         function set_getAttenFun(obj, getAttenFun)
-        %             if nargin < 3
-        %                 index = 1;
-        %             end
-        %
-        %             obj.setProps('getAttenFun', getAttenFun, index);
-        %         end
-        %
-        %         function devices = getWritingDevices(obj)
-        %             aux = audioDeviceWriter('Driver', obj.driver);
-        %             devices = getAudioDevices(aux);
-        %             % devices = obj.player.getAvailableDevices();
-        %         end
-        
-        
+          
     end
     
 end
