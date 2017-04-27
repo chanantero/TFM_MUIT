@@ -19,7 +19,8 @@ if writerObj.SupportVariableSizeInput
 else
     bufferSize = size(signal, 1);
 end
-Tr = size(signal, 1)/writerObj.SampleRate;
+TloadingFrame = size(signal, 1)/writerObj.SampleRate;
+TbufferFrame = bufferSize/writerObj.SampleRate;
 
 % Computar
 N = 20; % Número de iteraciones
@@ -66,27 +67,30 @@ ax.Title.String = 'Number of underrun buffers';
 
 
 % Buffer theory
-t_delay = 0;
-t_br = t_delay + cumsum([t_underrun(1); t_underrun(2:end) + Tr]); % Tiempos de inicio de reproducción
-t_er = t_br + Tr; % Tiempos de fin de reproducción
+t_bufferQueueLoad = t_ep; % Tiempos de carga de frame en la cola de buffer
+t_lq = TloadingFrame*(1:N)'; % Tiempo de señal acumulado en la cola de buffer en los tiempos de carga en la cola de buffer
 
-t_bufferLoad = t_br(1):Tr:t_br(end); % Tiempos de inicio de carga y lectura de buffer
-t_lr = zeros(size(t_bufferLoad)); % Tiempo de señal reproducido hasta el momento en cada inicio de carga y lectura de buffer
-for k = 1:numel(t_bufferLoad)
-    ind = find(t_bufferLoad >= t_er, 1, 'last');
+t_delay = 0;
+t_br = t_delay + cumsum([t_underrun(1); t_underrun(2:end) + TloadingFrame]); % Tiempos de inicio de reproducción
+t_er = t_br + TloadingFrame; % Tiempos de fin de reproducción
+
+t_frameChange = (t_br(1):TloadingFrame:t_er(end))'; % Tiempos de cambio de buffer (carga y lectura de buffer)
+t_lr = zeros(size(t_frameChange)); % Tiempo de señal reproducido hasta el momento en cada cambio de buffer
+for k = 1:numel(t_frameChange)
+    ind = find(t_frameChange(k) >= t_er, 1, 'last');
     if isempty(ind)
         ind = 0;
     end
-    t_lr(k) = ind*Tr;
+    t_lr(k) = ind*TloadingFrame;
 end
 
 
 % Buffer queue
-tl_q_x = kron(t_ep, [1; 1]);
-tl_q_y = cumsum(reshape([zeros(1, N); Tr*ones(1, N)], 2*N, 1));
+tl_q_x = kron(t_bufferQueueLoad, [1; 1]);
+tl_q_y = reshape([[0; t_lq(1:end-1)], t_lq]', 2*N, 1); % cumsum(reshape([zeros(1, N); Tr*ones(1, N)], 2*N, 1));
 
-t_r_x = reshape([t_br, t_er]', 2*N, 1);
-t_r_y = cumsum(reshape([zeros(1, N); Tr*ones(1, N)], 2*N, 1));
+t_r_x = t_frameChange;
+t_r_y = t_lr;
 
 plot(t_r_x, t_r_y, tl_q_x, tl_q_y)
 
@@ -94,31 +98,50 @@ plot(t_r_x, t_r_y, tl_q_x, tl_q_y)
 % el inicio de la reproducción
 
 % Tiempo de inicio de reproducción es siempre igual o posterior al tiempo
-% de finalización del procesado (t_ep <= tf_r)
-taddDelay = max(0, max(t_ep - t_br)); % Retardo que hay que añadirse al tiempo de inicio de reproducción actual
+% de carga en la cola de buffer
+delayRep = t_br - t_ep; % Tiempo que pasa entre la carga en la cola de buffer y la reproducción de ese frame
+taddDelay = max(0, -min(delayRep)); % Retardo que hay que añadirse al tiempo de inicio de reproducción actual
 
-% Si asumimos que el tiempo de procesado es igual al tiempo en el que las
-% muestras están disponibles en la cola de buffer, no deberá haber tiempo
-% tiempo underrun si hay muestras disponibles
-flag_Underrun = t_underrun(1:end) > 0;
-
-bufferLoad = t_br(1):Tr:t_br(end); % Tiempos de carga de buffer
+% No deberá haber underrun si hay muestras disponibles en la cola de buffer
 % Tiempos de carga de buffer vacío (underrun)
-iniRep_log = ismember(bufferLoad, t_br); % Índices de tiempos de inicio de reproducción
-iniEmptyBuffer_log = true(numel(bufferLoad), 1); % Índices de tiempos de inicio de reproducción
+iniRep_log = ismember(t_frameChange, t_br); % Índices de tiempos de inicio de reproducción
+iniEmptyBuffer_log = true(numel(t_frameChange), 1); % Índices de tiempos de inicio de underrun
 iniEmptyBuffer_log(iniRep_log) = false;
-tb_EmptyBuffer = bufferLoad(iniEmptyBuffer_log);
+t_b_EmptyBuffer = t_frameChange(iniEmptyBuffer_log);
+acumTime_reprod = t_lr(iniEmptyBuffer_log);
 
-% Cuánta señal acumulada hay en esos tiempos?
-ind = zeros(numel(tb_EmptyBuffer), 1);
-for k = 1:numel(tb_EmptyBuffer)
-    ind(k) = find(tb_EmptyBuffer(k) >= t_ep, 1, 'last');
+% Cuánta señal acumulada hay en la cola en esos tiempos?
+acumTime_queue = zeros(numel(t_b_EmptyBuffer), 1);
+for k = 1:numel(t_b_EmptyBuffer)
+    ind = find(t_b_EmptyBuffer(k) >= t_bufferQueueLoad, 1, 'last');
+    if isempty(ind)
+        acumTime_queue(k) = 0;
+    else
+        acumTime_queue(k) = t_lq(ind);
+    end
 end
-acumTime_reprod = (find(flag_Underrun) - 1)*Tr;
-acumTime_queue = ind*Tr;
-acumTime - acumTime_reprod < bufferSize/writerObj.SampleRate; % Condición que ha de cumplirse
+
+acumTime_queue - acumTime_reprod < bufferSize/writerObj.SampleRate; % Condición que ha de cumplirse
+
 % Cuál es la reducción mínima de retardo necesaria para cumplir con la
 % condición?
+% Tiempo que pasa entre el cambio de frame de reproducción y el tiempo en
+% que la cola de buffer tiene suficiente señal como para seguir
+% reproduciendo
+for k = 1:numel(t_frameChange)
+    ind = find(t_lq >= t_lr(k) + TbufferFrame, 1, 'first');
+    a(k) = t_bufferQueueLoad(ind) - t_frameChange(k);
+end
+
+
+t_enough = zeros(numel(acumTime_reprod), 1); % Tiempo que hace que ya hay suficiente señal en la cola de buffer para reproducir
+for k = 1:numel(acumTime_reprod)
+    ind = find(t_lq <= acumTime_reprod(k), 1, 'last');
+    t_enough(k) = t_lq(ind) - acumTime_reprod(k);
+end
+tsubstractDelay = max(t_enough);
+
+
 
 %%
 % Test. ¿Cómo se comporta la reproducción en un deviceWriter cuando
