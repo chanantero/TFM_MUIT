@@ -1,8 +1,5 @@
 classdef processSignal < matlab.System & matlab.system.mixin.FiniteSource
     
-    % Completar para que la salida tenga varios canales
-    % Completar el forward to backward delay
-    
     properties(DiscreteState)
         countFrames % Number of times that the step method has been called
         countSamples % Number of samples that have been returned by the step method
@@ -43,7 +40,7 @@ classdef processSignal < matlab.System & matlab.system.mixin.FiniteSource
     
     methods(Access = protected)
         
-        function r = stepImpl(obj, s, delay, attenuation)
+        function r = stepImpl(obj, s, delays, attenuations)
             % The size of the inputs delay and attenuation must have obj.numChannels columns and
             % as many rows as input samples.
             % s is a vector. The number of elements is the number of input
@@ -53,53 +50,70 @@ classdef processSignal < matlab.System & matlab.system.mixin.FiniteSource
             numChann = obj.numChannels;
             numSamples = numel(s);
             
-            if obj.delayType % delay is the backward delay
-                delaySamples = round(delay*obj.Fs);
-                atten = attenuation;
-            else % delay is the forward delay
-                % Calculate the backward delay
-                % Each time a frame arrives, the backward delay is
-                % calculated and appended to the already stored backward
-                % delay.
-                % storedDelayBackward must be initialized to cell array
-                % storedDelayForward must be initialized to empty array
-                storedForwDelay = obj.storedDelayForward;
-                forwDelay = [storedForwDelay; delay];
-                obj.storedDelayForward = forwDelay(end, :); % Keep only the forward delay of the last sample
-                delaySamples = zeros(numSamples, numChann);
+            availableSignal = [obj.storedSamples; s];
+            
+            numComp = size(delays, 3);
+            
+            r = zeros(numSamples, numChann, numComp);
+            minIndices = zeros(numComp, 1);
+            for l = 1:numComp
                 
-                storedForwAtten = obj.storedAttenForward;
-                forwAtten = [storedForwAtten; attenuation];
-                obj.storedAttenForward = forwAtten(end, :); % Keep only the forward attenuation of the last sample
-                atten = zeros(numSamples, numChann);
+                delay = delays(:, :, l);
+                attenuation = attenuations(:, :, l);
                 
-                for k = 1:numChann
-                    % Delay
-                    backDelay = BackFromForwDelay(storedForwDelay(:, k), delay(:, k), obj.storedDelayBackward{k}, obj.Fs);
-                    delaySamples(:, k) = round(backDelay(1:numSamples)*obj.Fs);
-                    obj.storedDelayBackward{k} = backDelay(numSamples+1:end);
+                if obj.delayType % delay is the backward delay
+                    delaySamples = round(delay*obj.Fs);
+                    atten = attenuation;
+                else % delay is the forward delay
+                    % Calculate the backward delay
+                    % Each time a frame arrives, the backward delay is
+                    % calculated and appended to the already stored backward
+                    % delay.
+                    % storedDelayBackward must be initialized to cell array
+                    % storedDelayForward must be initialized to empty array
+                    storedForwDelay = obj.storedDelayForward;
+                    forwDelay = [storedForwDelay; delay];
+                    obj.storedDelayForward = forwDelay(end, :); % Keep only the forward delay of the last sample
+                    delaySamples = zeros(numSamples, numChann);
                     
-                    % Attenuation
-                    backAtten = BackFromForwAtten(storedForwDelay(:, k), delay(:, k), storedForwAtten(:, k), attenuation(:,k), obj.storedAttenBackward{k}, obj.Fs);
-                    atten(:, k) = backAtten(1:numSamples);
-                    obj.storedAttenBackward{k} = backAtten(numSamples+1:end);
+                    storedForwAtten = obj.storedAttenForward;
+                    forwAtten = [storedForwAtten; attenuation];
+                    obj.storedAttenForward = forwAtten(end, :); % Keep only the forward attenuation of the last sample
+                    atten = zeros(numSamples, numChann);
+                    
+                    for k = 1:numChann
+                        % Delay
+                        backDelay = BackFromForwDelay(storedForwDelay(:, k), delay(:, k), obj.storedDelayBackward{k}, obj.Fs);
+                        delaySamples(:, k) = round(backDelay(1:numSamples)*obj.Fs);
+                        obj.storedDelayBackward{k} = backDelay(numSamples+1:end);
+                        
+                        % Attenuation
+                        backAtten = BackFromForwAtten(storedForwDelay(:, k), delay(:, k), storedForwAtten(:, k), attenuation(:,k), obj.storedAttenBackward{k}, obj.Fs);
+                        atten(:, k) = backAtten(1:numSamples);
+                        obj.storedAttenBackward{k} = backAtten(numSamples+1:end);
+                    end
+                    
                 end
                 
+                % Apply Delay
+                indices = obj.numStoredSamples + repmat((1:numSamples)', 1, numChann) - delaySamples;
+                minIndices(l) = min(indices(:));
+                valid = indices > 0;
+                
+                r_comp = zeros(numSamples, numChann);
+                r_comp(valid) = availableSignal(indices(valid));
+                
+                % Apply Attenuation
+                r_comp = r_comp.*atten;
+                
+                r(:,:,l) = r_comp;
+                
             end
+            r = sum(r, 3);
             
-            % Apply Delay
-            indices = obj.numStoredSamples + repmat((1:numSamples)', 1, numChann) - delaySamples;
-            valid = indices > 0;
-            
-            r = zeros(numSamples, numChann);
-            availableSignal = [obj.storedSamples; s];
-            r(valid) = availableSignal(indices(valid));
-            
-            % Apply Attenuation
-            r = r.*atten;
             
             % Liberate non-useful samples
-            obj.storedSamples = availableSignal(max(min(indices(:)), 1):end, :);
+            obj.storedSamples = availableSignal(max(min(minIndices), 1):end, :);
             
             % Update discrete state
             obj.numStoredSamples = size(obj.storedSamples, 1);

@@ -331,6 +331,26 @@ classdef reproductor < matlab.System
             [readerIndex, playerIndex] = ind2sub(size(obj.comMatrix), absInd(index));
         end
         
+        function t_br = delayBetweenDevices(obj, ts_bufferQueueLoad, numUnderruns)
+            % Assume that the buffer size and the size of each load to the
+            % buffer queue are equal, i.e. the VariableInputSize of the
+            % deviceWriterObject is set to false.
+            N = numel(ts_bufferQueueLoad); % Number of devices
+            
+            t_br = zeros(N, 1); % Beginning time of reproduction
+            for k = 1:N
+                numUnderrunFrames = numUnderruns{k}/obj.frameSizeWriting(k);
+                delayLimits = processBufferResults( ts_bufferQueueLoad{k}, numUnderrunFrames, obj.frameDuration, obj.frameDuration );
+                delay = delayLimits(1); % Let's take an approximation of the real delay
+                t0 = ts_bufferQueueLoad{k}(1); % Reference time against which the delay Limits are calculated
+                t_br(k) = delay + t0;
+            end
+            
+            % Normalize
+            t_br = t_br - min(t_br);
+            
+        end
+        
         function reproduce(obj)
             
             numPlay = obj.numPlayers;
@@ -359,9 +379,9 @@ classdef reproductor < matlab.System
                     for k = 1:obj.numLinks
                         delay = obj.getDelayFun{k}() + offset(playerIndex(k));
                         attenuation = obj.getAttenFun{k}();
-                                          
-                        delays{k} = repmat(delay', obj.frameSizeReading(readerIndex(k)), 1);
-                        attenuations{k} = repmat(attenuation', obj.frameSizeReading(readerIndex(k)), 1);
+                           
+                        delays{k} = repmat(permute(delay, [3, 1, 2]), obj.frameSizeReading(readerIndex(k)), 1);
+                        attenuations{k} = repmat(permute(attenuation, [3, 1, 2]), obj.frameSizeReading(readerIndex(k)), 1);
                     end
                     
                     try
@@ -429,28 +449,7 @@ classdef reproductor < matlab.System
     
     methods(Access = public)
         
-        function t_br = delayBetweenDevices(obj, ts_bufferQueueLoad, numUnderruns)
-            % Assume that the buffer size and the size of each load to the
-            % buffer queue are equal, i.e. the VariableInputSize of the
-            % deviceWriterObject is set to false.
-            N = numel(ts_bufferQueueLoad); % Number of devices
-            
-            t_br = zeros(N, 1); % Beginning time of reproduction
-            for k = 1:N
-                numUnderrunFrames = numUnderruns{k}/obj.frameSizeWriting(k);
-                delayLimits = processBufferResults( ts_bufferQueueLoad{k}, numUnderrunFrames, obj.frameDuration, obj.frameDuration );
-                delay = delayLimits(1); % Let's take an approximation of the real delay
-                t0 = ts_bufferQueueLoad{k}(1); % Reference time against which the delay Limits are calculated
-                t_br(k) = delay + t0;
-            end
-            
-            % Normalize
-            t_br = t_br - min(t_br);
-            
-        end
-        
-        
-        function obj = reproductor_plus()
+        function obj = reproductor()
             
             obj.playingState = playingStateClass('stopped');
             
@@ -512,15 +511,15 @@ classdef reproductor < matlab.System
                         case 'pause'
                             % Change state. The rest is left the same way
                             obj.playingState = playingStateClass('pause');
-                        case 'assignTrack'
-                            % Play a new audio file
-                            % First, stop
-                            release(obj);
-                            % Then, assign the new file name
-                            obj.audioFileName = p.Results.fileName;
-                            % Then, play again
-                            obj.playingState = playingStateClass('playing');
-                            setup(obj, {}, {});
+%                         case 'assignTrack'
+%                             % Play a new audio file
+%                             % First, stop
+%                             release(obj);
+%                             % Then, assign the new file name
+%                             obj.audioFileName = p.Results.fileName;
+%                             % Then, play again
+%                             obj.playingState = playingStateClass('playing');
+%                             setup(obj, {}, {});
                         case ''
                             % Null action
                     end
@@ -550,9 +549,9 @@ classdef reproductor < matlab.System
                             % Do nothing
                         case 'pause'
                             % Do nothing
-                        case 'assignTrack'
-                            % Assign the new file name
-                            obj.audioFileName = p.Results.fileName;
+%                         case 'assignTrack'
+%                             % Assign the new file name
+%                             obj.audioFileName = p.Results.fileName;
                         case ''
                             % Null action
                     end
@@ -578,13 +577,13 @@ classdef reproductor < matlab.System
                         case 'stop'
                             % Completely release
                             release(obj);
-                        case 'assignTrack'
-                            % New audio file, but don't start reproducing
-                            % First, stop
-                            release(obj);
-                            % Then, assign the new file name
-                            obj.audioFileName = p.Results.fileName;
-                            obj.playingState = playingStateClass('stopped');
+%                         case 'assignTrack'
+%                             % New audio file, but don't start reproducing
+%                             % First, stop
+%                             release(obj);
+%                             % Then, assign the new file name
+%                             obj.audioFileName = p.Results.fileName;
+%                             obj.playingState = playingStateClass('stopped');
                         case ''
                             % Null action
                     end
