@@ -66,8 +66,12 @@ ax = subplot(3, 2, 4);
 plot(numUnderrunBuffers, 'Marker', '.', 'LineStyle', 'none')
 ax.Title.String = 'Number of underrun buffers';
 
-[ fig, delayLimits ] = processBufferResults( t_ep, numUnderrunBuffers, TloadingFrame, TbufferFrame);
+[ delayLimits, fig ] = processBufferResults( t_ep, numUnderrunBuffers, TloadingFrame, TbufferFrame);
 
+t_ep = [1; 2; 3; Inf; Inf];
+numUnderrunBuffers = [0, 0, 1, Inf, Inf]';
+TloadingFrame = 1;
+TbufferFrame = 1;
 
 
 %%

@@ -1,4 +1,4 @@
-function [ fig, delayLimits ] = processBufferResults( t_bufferQueueLoad, numUnderrunFrames, TloadingFrame, TbufferFrame )
+function [ delayLimits, fig ] = processBufferResults( t_bufferQueueLoad, numUnderrunFrames, TloadingFrame, TbufferFrame )
 
 N = numel(t_bufferQueueLoad); % Número de frames cargados. numel(t_bufferQueueLoad) == numel(t_underrun)
 t_underrun = numUnderrunFrames*TbufferFrame;
@@ -45,16 +45,18 @@ delayLimits = [lowLimitDelay, upLimitDelay];
 % taddDelay = max(0, lowLimitDelay); % Retardo que hay que añadirse al tiempo de inicio de reproducción actual
 % tSubstractDelay = max(0, -upLimitDelay); % Retardo que hay que sustraer al tiempo de inicio de reproducción actual
 
-% Representar
-% La señal acumulada en la cola de buffer evoluciona discontinuamente. Hay
-% que representarlo a escalones.
-x = kron(t_bufferQueueLoad, [1; 1]);
-base = 0; % Cantidad de señal que había antes de la primera carga de cola
-y = reshape([[base; t_lq(1:end-1)], t_lq]', 2*N, 1);
+if nargout == 2
+    % Representar
+    % La señal acumulada en la cola de buffer evoluciona discontinuamente. Hay
+    % que representarlo a escalones.
+    x = kron(t_bufferQueueLoad, [1; 1]);
+    base = 0; % Cantidad de señal que había antes de la primera carga de cola
+    y = reshape([[base; t_lq(1:end-1)], t_lq]', 2*N, 1);
 
-fig = figure;
-ax = axes(fig);
-plot(ax, t_frameChange, t_lr, x, y);
+    fig = figure;
+    ax = axes(fig);
+    plot(ax, t_frameChange, t_lr, x, y);
+end
 
 end
 

@@ -37,7 +37,7 @@ classdef reproductor_plus < matlab.System
     % The user cannot set this properties directly, but are useful information that
     % can be viewed by other objects
     properties(SetAccess = private, SetObservable)%, AbortSet)
-        playingState
+        playingState % Playing state
         numChannels % Current number of output channels. It will be set each time a writing device changes
         Fs_reader % Sampling frequency of readers.
         numReaders
@@ -73,7 +73,8 @@ classdef reproductor_plus < matlab.System
             
         end
         
-        function numUnderrun = stepImpl(obj, delays, attenuations)
+        function [numUnderrun, tics] = stepImpl(obj, delays, attenuations)
+            
             % Useful parameters
             numReader = obj.numReaders;
             numPlayer = obj.numPlayers;
@@ -97,11 +98,7 @@ classdef reproductor_plus < matlab.System
             % Transform Frequency
             audioProcFs = cell(numLink, 1);
             for k = 1:numLink
-%                 Fs_read = obj.processor{indReader(k)}.Fs;
-%                 Fs_player = obj.player{indPlayer(k)}.Fs;
-%                 [P, Q] = rat(Fs_player/Fs_read);
-%                 audioProcFs{k} = resample(audioProc{k}, P, Q);
-                    audioProcFs{k} = resample(audioProc{k}, obj.frameSizeWriting(indPlayer(k)), obj.frameSizeReading(indReader(k)));
+                audioProcFs{k} = resample(audioProc{k}, obj.frameSizeWriting(indPlayer(k)), obj.frameSizeReading(indReader(k)));
             end
             
             % Sum outputs according to the commutation matrix
@@ -118,8 +115,9 @@ classdef reproductor_plus < matlab.System
             
             % Write to audio device buffer
             numUnderrun = zeros(numPlayer, 1);
+            tics = uint64(zeros(numPlayer, 1)); % When does it finish processing?
             for k = 1:numPlayer
-                numUnderrun(k) = step(obj.player{k}, audioOutput{k});
+                [numUnderrun(k), tics(k)] = step(obj.player{k}, audioOutput{k});
             end
             
             % Update discrete state
@@ -168,6 +166,7 @@ classdef reproductor_plus < matlab.System
                 Fs(k) = obj.fileReader{k}.SampleRate;
             end
         end
+        
     end
     
     
@@ -334,29 +333,31 @@ classdef reproductor_plus < matlab.System
         
         function reproduce(obj)
             
-            offset = obj.testDelayBetweenDevices();
-            offset = max(offset) - offset;
+            numPlay = obj.numPlayers;
             
             % Timing control
             margin = 0.01;
             counter = 0;
             minPause = 0.01;
             minBufferDepletionTime = 0;
-            t0 = tic;
-            
+            t0 = tic; tref = t0;
+            % Buffer control
+            offset = zeros(numPlay, 1);
+            t_eps = cell(numPlay, 1); % Times of the ending of loading to the buffer queue
+            numUnderruns = cell(numPlay, 1);
+                        
             finish = false;
             while ~finish % Only reproduce if it is playing
                 t = tic;
                 
                 if toc(t0) >= minBufferDepletionTime
                     
-                    
-                    [readerIndex, ~] = obj.getLinkSubInd();
+                    [readerIndex, playerIndex] = obj.getLinkSubInd();
 
                     delays = cell(obj.numLinks, 1);
                     attenuations = cell(obj.numLinks, 1);
                     for k = 1:obj.numLinks
-                        delay = obj.getDelayFun{k}() + offset(k);
+                        delay = obj.getDelayFun{k}() + offset(playerIndex(k));
                         attenuation = obj.getAttenFun{k}();
                                           
                         delays{k} = repmat(delay', obj.frameSizeReading(readerIndex(k)), 1);
@@ -364,7 +365,25 @@ classdef reproductor_plus < matlab.System
                     end
                     
                     try
-                        numUnderrun = step(obj, delays, attenuations);
+                        [numUnderrun, t_ep] = step(obj, delays, attenuations);
+                        
+                        for k = 1:obj.numPlayers
+                            if numel(t_eps{k}) == 20
+                                t_eps{k}(1:end-1) = t_eps{k}(2:end); % Shift
+                                t_eps{k}(end) = toc(tref) - toc(t_ep(k)); % New value to the end
+
+                                numUnderruns{k}(1:end-1) = numUnderruns{k}(2:end); % Shift
+                                numUnderruns{k}(end) = numUnderrun(k); % New value to the end
+                            else
+                                t_eps{k} = [t_eps{k}; toc(tref) - toc(t_ep(k))];
+                                numUnderruns{k} = [numUnderruns{k}; numUnderrun(k)];
+                            end
+                        end
+                        
+                        if numel(t_eps{1}) > 1
+                            offset = obj.delayBetweenDevices(t_eps, numUnderruns);
+                            offset = max(offset) - offset;
+                        end
                     catch
                         warning('There was some error with the step function of reproductor')
                         release(obj);
@@ -376,10 +395,11 @@ classdef reproductor_plus < matlab.System
                         % Interruption in the reproduction. Reset timer
                         t0 = t;
                         counter = 0;
+                        disp('Underrun')
                     end
                     
                     counter = counter + 1;
-                    minBufferDepletionTime = counter*obj.frameSizeReading(1)/obj.player{1}.Fs - margin;
+                    minBufferDepletionTime = counter*obj.frameDuration - margin;
                     pause(max(minPause, minBufferDepletionTime - toc(t0)));
                     %                     fprintf(max(minPause, minBufferDepletionTime - toc(t0)))
                 else
@@ -409,41 +429,24 @@ classdef reproductor_plus < matlab.System
     
     methods(Access = public)
         
-        function delays = testDelayBetweenDevices(obj)
-            signal1 = cell(obj.numPlayers, 1);
-            signal2 = cell(obj.numPlayers, 1);
-            for k = 1:obj.numPlayers
-                signal1{k} = zeros(obj.frameSizeWriting(k), obj.numChannels(k));
-                signal2{k} = zeros(1, obj.numChannels(k));
+        function t_br = delayBetweenDevices(obj, ts_bufferQueueLoad, numUnderruns)
+            % Assume that the buffer size and the size of each load to the
+            % buffer queue are equal, i.e. the VariableInputSize of the
+            % deviceWriterObject is set to false.
+            N = numel(ts_bufferQueueLoad); % Number of devices
+            
+            t_br = zeros(N, 1); % Beginning time of reproduction
+            for k = 1:N
+                numUnderrunFrames = numUnderruns{k}/obj.frameSizeWriting(k);
+                delayLimits = processBufferResults( ts_bufferQueueLoad{k}, numUnderrunFrames, obj.frameDuration, obj.frameDuration );
+                delay = delayLimits(1); % Let's take an approximation of the real delay
+                t0 = ts_bufferQueueLoad{k}(1); % Reference time against which the delay Limits are calculated
+                t_br(k) = delay + t0;
             end
             
-            for k = 1:obj.numPlayers
-                release(obj.player{k}.deviceWriter);
-                obj.player{k}.deviceWriter.SupportVariableSizeInput = true;
-                % Next 2 lines are to ensure the good performance of
-                % numUnderrun
-                play(obj.player{k}.deviceWriter, signal1{k});
-                play(obj.player{k}.deviceWriter, signal2{k});
-            end
- 
-            numUnderrun = zeros(obj.numPlayers, 1);
-            for k = 1:obj.numPlayers
-                numUnderrun(k) = play(obj.player{k}.deviceWriter, signal1{k});
-            end
+            % Normalize
+            t_br = t_br - min(t_br);
             
-            pause(obj.frameDuration + 1);
-
-            numUnderrun = zeros(obj.numPlayers, 1);
-            for k = 1:obj.numPlayers
-                numUnderrun(k) = play(obj.player{k}.deviceWriter, signal2{k});
-            end
-            
-            delays = numUnderrun./obj.Fs_player';
-            
-            for k = 1:obj.numPlayers
-                release(obj.player{k}.deviceWriter);
-                obj.player{k}.deviceWriter.SupportVariableSizeInput = false;
-            end
         end
         
         

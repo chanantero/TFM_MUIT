@@ -78,7 +78,7 @@ classdef audioPlayer < matlab.System
             setup(obj.deviceWriter, zeros(obj.frameSize, obj.numChannels));
         end
 
-        function numUnderrun = stepImpl(obj, signal)
+        function [numUnderrun, t] = stepImpl(obj, signal)
             stored = [obj.storedSamples; signal];
             frSize = obj.frameSize;
             numFrames = floor(size(stored, 1)/frSize);
@@ -87,6 +87,7 @@ classdef audioPlayer < matlab.System
                     sampleIndices = (k-1)*frSize+1:k*frSize;
                     frame = stored(sampleIndices, :);
                     numUnderrun = play(obj.deviceWriter, frame);
+                    t = tic;
                     obj.count = obj.count + 1;
                 end
                 stored = stored(sampleIndices(end)+1:end, :);
