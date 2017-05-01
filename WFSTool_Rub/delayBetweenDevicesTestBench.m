@@ -4,7 +4,7 @@
 % Crear señal (Crear el audio file reader, configurarlo y extraer señal)
 readerObj = dsp.AudioFileReader();
 readerObj.Filename = 'C:\Users\Rubén\Music\La Oreja De Van Gogh - El Planeta Imaginario (2016)\La Oreja De Van Gogh - Diciembre.mp3';
-Tr_desired = 1.5; % Tiempo de reproducción en segundos
+Tr_desired = 2; % Tiempo de reproducción en segundos
 readerObj.SamplesPerFrame = ceil(readerObj.SampleRate*Tr_desired);
 signal = step(readerObj);
 release(readerObj)
@@ -23,8 +23,8 @@ TloadingFrame = size(signal, 1)/writerObj.SampleRate;
 TbufferFrame = bufferSize/writerObj.SampleRate;
 
 % Computar
-N = 20; % Número de iteraciones
-t_pausa = 1.5;
+N = 40; % Número de iteraciones
+t_pausa = 1.9; increase = 0.1;
 t_bp = zeros(N, 1); % Tiempos de incio de procesado
 t_ep = zeros(N, 1); % Tiempos de finalización de procesado
 numUnderrun = zeros(N,1); % Número de muestras reproducidas en silencio
@@ -34,19 +34,20 @@ for k = 1:N
     t_bp(k) = toc(tref);
     signal = step(readerObj);
     numUnderrun(k) = play(writerObj, signal);
+    if numUnderrun(k) == 0
+        t_pausa = t_pausa + increase;
+    elseif numUnderrun(k) >= 2*bufferSize
+        t_pausa = t_pausa - increase;
+    end
     t_ep(k) = toc(tref);
     pause(t_pausa);
 end
 t_underrun = numUnderrun/writerObj.SampleRate;
+numUnderrunBuffers = numUnderrun/bufferSize;
 
 release(writerObj)
 
 % Representar
-if writerObj.SupportVariableSizeInput
-    numUnderrunBuffers = numUnderrun/writerObj.BufferSize;
-else
-    numUnderrunBuffers = numUnderrun/size(signal, 1);
-end
 f = figure;
 ax = subplot(3, 2, 1);
 plot(t_bp, 'Marker', '.', 'LineWidth', 0.01)
@@ -65,52 +66,8 @@ ax = subplot(3, 2, 4);
 plot(numUnderrunBuffers, 'Marker', '.', 'LineStyle', 'none')
 ax.Title.String = 'Number of underrun buffers';
 
-%
-[ fig, delayLimits ] = processBufferResults( t_ep, t_underrun, TbufferFrame, TloadingFrame);
+[ fig, delayLimits ] = processBufferResults( t_ep, numUnderrunBuffers, TloadingFrame, TbufferFrame);
 
-% Buffer theory
-t_bufferQueueLoad = t_ep; % Tiempos de carga de frame en la cola de buffer
-t_lq = TloadingFrame*(1:N)'; % Tiempo de señal acumulado en la cola de buffer en los tiempos de carga en la cola de buffer (después de la carga)
-
-t_delay = 0;
-t_br = t_delay + cumsum([t_underrun(1); t_underrun(2:end) + TloadingFrame]); % Tiempos de inicio de reproducción
-t_er = t_br + TloadingFrame; % Tiempos de fin de reproducción
-
-t_frameChange = (t_br(1):TloadingFrame:t_er(end))'; % Tiempos de cambio de frame (carga y lectura de buffer)
-t_lr = interp1(t_er, (1:N)*TbufferFrame, t_frameChange, 'previous', 0); % Tiempo de señal reproducido hasta el momento en cada cambio de buffer
-
-% Tiempo que pasa entre un cambio de de frame y el momento en que ya hay
-% suficiente señal en la cola de buffer como para reproducir otro
-t_enough = interp1([0; t_lq], [0; t_bufferQueueLoad], t_lr + TbufferFrame, 'next', Inf); % Tiempos en los que ya hay suficiente señal en la cola de buffer como para reproducir otro frame
-t_waiting = t_enough - t_frameChange;
-
-% Condición 1: La reproducción de un frame no vacío siempre ha de producirse cuando hay
-% suficiente señal en la cola de buffer como para reproducirse. Es decir,
-% t_waiting ha de ser negativo siempre que una reproducción se inicie
-% 
-% Condición 2: La reproducción de un frame vacío siempre ha de producirse cuando todavía
-% no hay suficiente señal en la cola de buffer como para reproducirse. Es
-% decir, t_waiting ha de ser positivo siempre que una reproducción de frame
-% vacío (underrun) ocurra
-rbFlag = ismember(t_frameChange, t_br); % Índices de cambios de frame en los que se inicia una reproducción
-underrunFlag = ~rbFlag; % Índices de cambios de frame en los que se inicia un underrun (frame vacío)
-
-lowLimitDelay = max(t_waiting(rbFlag)); % Límite inferior de retardo que puede añadirse para que se cumpla la condición de causalidad (condición 1)
-upLimitDelay = min(t_waiting(underrunFlag)); % Límite superior de retardo que puede añadirse para que se cumpla la condición 2
-assert(upLimitDelay >= lowLimitDelay, 'Error!!!')
-differ = upLimitDelay - lowLimitDelay; % Margen de indeterminación
-
-taddDelay = max(0, lowLimitDelay); % Retardo que hay que añadirse al tiempo de inicio de reproducción actual
-tSubstractDelay = max(0, -upLimitDelay); % Retardo que hay que sustraer al tiempo de inicio de reproducción actual
-
-% Representar
-% La señal acumulada en la cola de buffer evoluciona discontinuamente. Hay
-% que representarlo a escalones.
-x = kron(t_bufferQueueLoad, [1; 1]);
-base = 0; % Cantidad de señal que había antes de la primera carga de cola
-y = reshape([[base; t_lq(1:end-1)], t_lq]', 2*N, 1);
-
-plot(t_frameChange, t_lr, x, y)
 
 
 %%

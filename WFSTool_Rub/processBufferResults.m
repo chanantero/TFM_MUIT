@@ -1,6 +1,7 @@
-function [ fig, delayLimits ] = processBufferResults( t_bufferQueueLoad, t_underrun, TloadingFrame, TbufferFrame )
+function [ fig, delayLimits ] = processBufferResults( t_bufferQueueLoad, numUnderrunFrames, TloadingFrame, TbufferFrame )
 
 N = numel(t_bufferQueueLoad); % Número de frames cargados. numel(t_bufferQueueLoad) == numel(t_underrun)
+t_underrun = numUnderrunFrames*TbufferFrame;
 
 % Buffer theory
 % t_bufferQueueLoad: Tiempos de carga de frame en la cola de buffer
