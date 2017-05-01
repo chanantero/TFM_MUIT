@@ -16,7 +16,7 @@ classdef WFSTool2 < handle
             
             obj.reprodPanel = reproductionPanel(fig, @(action) obj.orderCallback(action));
             obj.scenarioObj = scenario(fig);
-            obj.player = reproductor();
+            obj.player = reproductor_plus();
             obj.player.set_getDelayFun(@() obj.scenarioObj.delays);
             obj.player.set_getAttenFun(@() obj.scenarioObj.attenuations);
             obj.propPanel = propertiesPanel(obj.player, fig, [0.05 0.1 0.4 0.2], @(x) obj.player.setFrameSize(x), @(x) obj.player.setDevice(x), @(x) obj.player.setDriver(x));
