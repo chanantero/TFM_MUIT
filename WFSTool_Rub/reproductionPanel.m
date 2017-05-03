@@ -66,6 +66,10 @@ classdef reproductionPanel < handle
                 obj.list.UserData.paths = [obj.list.UserData.paths; PathName(k)];
             end
         end
+        
+        function deleteTrack(obj, index)
+            obj.list.Data(index) = [];
+        end
               
     end
     

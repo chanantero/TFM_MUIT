@@ -78,8 +78,8 @@ classdef reproductor < matlab.System
             % Useful parameters
             numReader = obj.numReaders;
             numPlayer = obj.numPlayers;
-            indCom = find(obj.comMatrix ~= 0);
-            [indReader, indPlayer] = ind2sub([numReader, numPlayer], indCom);
+            indCom = obj.getLinkAbsInd();
+            [indReader, indPlayer] = obj.getLinkSubInd();
             numLink = obj.numLinks;
             
             % Read from file
@@ -491,6 +491,7 @@ classdef reproductor < matlab.System
                             % or play a new song
                             if ismember('fileName', p.UsingDefaults)
                                 % Play current song from the beggining
+                                
                                 % First, stop but without allowing the tuning
                                 % of anything, i.e., don't release the objects
                                 reset(obj);
@@ -498,6 +499,7 @@ classdef reproductor < matlab.System
                                 % hasn't been changed
                             else
                                 % Play a new audio file
+                                
                                 % First, stop
                                 release(obj);
                                 % Then, assign the new file name
