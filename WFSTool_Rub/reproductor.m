@@ -457,7 +457,7 @@ classdef reproductor < matlab.System
             obj.fileReader = {dsp.AudioFileReader()};
             
             % Processing object
-            obj.processor = {processSignal('delayType', 'forward')};
+            obj.processor = {processSignal('delayType', 'backward')};
             
             % Writing object
             obj.player = {audioPlayer};
