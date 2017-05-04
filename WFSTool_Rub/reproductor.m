@@ -6,7 +6,14 @@ classdef reproductor < matlab.System
         frameDuration % In seconds
         
         % Reader settings
-        audioFileName % Cell string array with as many elements as fileReaders
+        mode % file or sinusoidal
+        % mode == file
+        audioFileName % Cell string array with as many elements as signalReaders
+        % mode == sinusoidal
+        amplitude
+        phase
+        frequency
+        FsGenerator % Sampling frequency for the sinusoidal signal
         
         % Processor settings
         getDelayFun % Cell array of functions with as many elements as players
@@ -23,7 +30,7 @@ classdef reproductor < matlab.System
     % set up the properties of the reader, processor and player objects
     properties(SetAccess = private)
         % Reader settings
-        frameSizeReading % Array with as many elements as fileReaders
+        frameSizeReading % Array with as many elements as signalReaders
         
         % Player settings
         frameSizeWriting % Array with as many elements as players
@@ -47,7 +54,7 @@ classdef reproductor < matlab.System
     
     % Private properties: objects
     properties(SetAccess = private)
-        fileReader % Cell Array
+        signalReader % Cell Array
         processor % Cell Array as non-null elements of comMatrix
         player % Cell Array
     end
@@ -64,7 +71,7 @@ classdef reproductor < matlab.System
 %             end
 %             obj.Fs_player(k) = obj.Fs_reader(firstPlayer(k));
             
-            obj.setPropertiesFileReaders();
+            obj.setPropertiesSignalProviders();
             
             obj.setPropertiesPlayers();
             
@@ -85,7 +92,7 @@ classdef reproductor < matlab.System
             % Read from file
             audioInput = cell(numReader, 1);
             for k = 1:numReader
-                audioInput{k} = step(obj.fileReader{k});
+                audioInput{k} = step(obj.signalReader{k});
                 audioInput{k} = mean(audioInput{k}, 2); % From Stereo to Mono
             end
             
@@ -153,7 +160,7 @@ classdef reproductor < matlab.System
         end
         
         function numReaders = get.numReaders(obj)
-            numReaders = numel(obj.fileReader);
+            numReaders = numel(obj.signalReader);
         end
         
         function numLinks = get.numLinks(obj)
@@ -163,7 +170,7 @@ classdef reproductor < matlab.System
         function Fs = get.Fs_reader(obj)
             Fs = zeros(obj.numReaders, 1);
             for k = 1:obj.numReaders
-                Fs(k) = obj.fileReader{k}.SampleRate;
+                Fs(k) = obj.signalReader{k}.SampleRate;
             end
         end
         
@@ -172,19 +179,24 @@ classdef reproductor < matlab.System
     
     methods(Access = private)
         
-        function setPropertiesFileReaders(obj, index)
+        function setPropertiesSignalProviders(obj, index)
             if nargin == 1
                 index = 1:obj.numReaders;
             end
             
             for k = index
-                obj.fileReader{k}.Filename = obj.audioFileName{k};
+                obj.signalReader{k}.Filename = obj.audioFileName{k};
+                obj.signalReader{k}.mode = obj.mode(k);
+                obj.signalReader{k}.amplitude = obj.amplitude(k);
+                obj.signalReader{k}.phase = obj.phase(k);
+                obj.signalReader{k}.frequency = obj.frequency(k);
+                obj.signalReader{k}.SampleRate = obj.FsGenerator(k);
             end
             
             obj.frameSizeReading = floor(obj.frameDuration*obj.Fs_reader);
             
             for k = index
-                obj.fileReader{k}.SamplesPerFrame = obj.frameSizeReading(k);
+                obj.signalReader{k}.SamplesPerFrame = obj.frameSizeReading(k);
             end
         end
         
@@ -233,7 +245,7 @@ classdef reproductor < matlab.System
         
         function stop(obj)
             for k = 1:obj.numReaders
-                release(obj.fileReader{k})
+                release(obj.signalReader{k})
             end
             
             for k = 1:obj.numLinks
@@ -249,7 +261,7 @@ classdef reproductor < matlab.System
         
         function reset_priv(obj)
             for k = 1:obj.numReaders
-                reset(obj.fileReader{k})
+                reset(obj.signalReader{k})
             end
             
             for k = 1:obj.numLinks
@@ -268,6 +280,11 @@ classdef reproductor < matlab.System
             for k = 1:obj.numReaders
                 obj.setProps('audioFileName', '', k);
                 obj.setProps('frameSizeReading', 1024*10, k);
+                obj.setProps('mode', originType('file'), k);
+                obj.setProps('amplitude', 1, k);
+                obj.setProps('phase', 0, k);
+                obj.setProps('frequency', 1, k);
+                obj.setProps('FsGenerator', 44100, k);
             end
             
             for k = 1:obj.numPlayers
@@ -293,9 +310,9 @@ classdef reproductor < matlab.System
             [numReaders_new, numPlayers_new] = size(comMat);
             numLinks_new = sum(comMat ~= 0);
             
-            obj.fileReader = cell(numReaders_new, 1);
+            obj.signalReader = cell(numReaders_new, 1);
             for k = 1:numReaders_new
-                obj.fileReader{k} = dsp.AudioFileReader();
+                obj.signalReader{k} = signalProvider();
             end
             
             obj.processor = cell(numLinks_new, 1);
@@ -432,7 +449,7 @@ classdef reproductor < matlab.System
                 else
                     done = false(obj.numReaders, 1);
                     for k = 1:obj.numReaders
-                        done(k) = isDone(obj.fileReader{k});
+                        done(k) = isDone(obj.signalReader{k});
                     end
                     if all(done)
                         finish = true;
@@ -442,6 +459,78 @@ classdef reproductor < matlab.System
                 
             end
             
+        end
+        
+        function lowLevelOrder(obj, action)
+                      
+            % There are 5 basic actions:
+            % - lock
+            % - unlock
+            % - resume
+            % - pause
+            % - restart
+            
+            switch obj.playingState
+                case playingStateClass('playing') % Reproducing (obviously locked)
+                    switch action
+                        case 'lock'
+                            % It is already locked, so do nothing
+                        case 'unlock'
+                            assert(isLocked(obj), 'reproductor:WrongState', 'When the state is playing, the object should be locked');
+                            release(obj); % It only executes if obj is locked. Make sure that always the state is playing, the obect is locked
+                        case 'resume'
+                            % It is already reproducing, so do nothing
+                        case 'pause'
+                            % Change state. The rest is left the same way
+                            obj.playingState = playingStateClass('paused');
+                        case 'restart'
+                            reset(obj);
+                        case ''
+                            % Null action
+                    end
+                    
+                case playingStateClass('stopped') % Unlocked
+                    switch action
+                        case 'lock'
+                            setup(obj, {}, {});
+                            obj.playingState = playingStateClass('paused');
+                        case 'unlock'
+                            % It is already stopped, so do nothing
+                        case 'resume'
+                            % The only possible action is locking, so do
+                            % nothing
+                        case 'pause'
+                            % The only possible action is locking, so do
+                            % nothing
+                        case 'restart'
+                            % The only possible action is locking, so do
+                            % nothing
+                        case ''
+                            % Null action
+                    end
+                    
+                case playingStateClass('paused') % Locked but not reproducing
+                    switch action
+                        case 'lock'
+                            % It is already locked, so do nothing
+                        case 'unlock'
+                            assert(isLocked(obj), 'reproductor:WrongState', 'When the state is playing, the object should be locked');
+                            release(obj); % It only executes if obj is locked. Make sure that always the state is playing, the obect is locked
+                        case 'resume'
+                            % Continue song
+                            obj.playingState = playingStateClass('playing');
+                            obj.reproduce();
+                        case 'pause'
+                            % It is already paused, so do nothing
+                        case 'restart'
+                            reset(obj);
+                        case ''
+                            % Null action
+                    end
+                    
+                otherwise
+                    error('reproductor:nonValidPlayingState', 'The playing state is not valid')
+            end
         end
         
     end
@@ -454,7 +543,7 @@ classdef reproductor < matlab.System
             obj.playingState = playingStateClass('stopped');
             
             % Reading object
-            obj.fileReader = {dsp.AudioFileReader()};
+            obj.signalReader = {signalProvider()};
             
             % Processing object
             obj.processor = {processSignal('delayType', 'backward')};
@@ -467,61 +556,21 @@ classdef reproductor < matlab.System
             
         end
         
-        function executeOrder(obj, order)
-            % 'order' is a structure with 1 or 2 fields.
-            % The field 'action' is mandatory
-            % The field 'fileName' is not mandatory. It refers to the
-            % active track
-            if isempty(order);   return;     end
-            
-            p = inputParser;
-            addParameter(p, 'action', '');
-            addParameter(p, 'fileName', '');
-            parse(p, order);
-            
-            action = p.Results.action;
-            
+        function executeOrder(obj, action)
+                        
             switch obj.playingState
                 case playingStateClass('playing')
                     switch action
                         case 'stop'
-                            release(obj); % It only executes if obj is locked. Make sure that always the state is playing, the obect is locked
+                            obj.lowLevelOrder('unlock');
                         case 'play'
-                            % Two possibilities. Play the same song (reset)
-                            % or play a new song
-                            if ismember('fileName', p.UsingDefaults)
-                                % Play current song from the beggining
-                                
-                                % First, stop but without allowing the tuning
-                                % of anything, i.e., don't release the objects
-                                reset(obj);
-                                % Then, it will play again since the state
-                                % hasn't been changed
-                            else
-                                % Play a new audio file
-                                
-                                % First, stop
-                                release(obj);
-                                % Then, assign the new file name
-                                obj.audioFileName = p.Results.fileName;
-                                % Then, play again
-                                obj.playingState = playingStateClass('playing');
-                                setup(obj, {}, {});
-                            end
+                            % Play from the beggining
+                            obj.lowLevelOrder('restart');   
                         case 'resume'
                             % Do nothing
                         case 'pause'
                             % Change state. The rest is left the same way
-                            obj.playingState = playingStateClass('pause');
-%                         case 'assignTrack'
-%                             % Play a new audio file
-%                             % First, stop
-%                             release(obj);
-%                             % Then, assign the new file name
-%                             obj.audioFileName = p.Results.fileName;
-%                             % Then, play again
-%                             obj.playingState = playingStateClass('playing');
-%                             setup(obj, {}, {});
+                            obj.lowLevelOrder('pause');
                         case ''
                             % Null action
                     end
@@ -529,31 +578,15 @@ classdef reproductor < matlab.System
                 case playingStateClass('stopped')
                     switch action
                         case 'play'
-                            % Two possibilities. Play the same song (reset)
-                            % or play a new song
-                            if ~ismember('fileName', p.UsingDefaults)
-                                % Play a new audio file
-                                % Assign the new file name
-                                obj.audioFileName = p.Results.fileName;
-                            end
-                            if ~isempty(obj.audioFileName)
-                                setup(obj, {}, {});
-                                obj.playingState = playingStateClass('playing');
-                                obj.reproduce();
-                            end
+                            % Play from the beginning
+                            obj.lowLevelOrder('lock');
+                            obj.lowLevelOrder('resume');
                         case 'resume'
-                            % The same as play if there was no song
-                            % specified
-                            setup(obj, {}, {});
-                            obj.playingState = playingStateClass('playing');
-                            obj.reproduce();
+                            % Do nothing
                         case 'stop'
                             % Do nothing
                         case 'pause'
                             % Do nothing
-%                         case 'assignTrack'
-%                             % Assign the new file name
-%                             obj.audioFileName = p.Results.fileName;
                         case ''
                             % Null action
                     end
@@ -562,30 +595,16 @@ classdef reproductor < matlab.System
                     switch action
                         case 'play'
                             % Start current song from the begginging
-                            % First, stop but without allowing the tuning
-                            % of anything, i.e., don't release the objects,
-                            % only reset it
-                            reset(obj);
-                            obj.playingState = playingStateClass('playing');
-                            obj.reproduce();
-                            % Then, it will play again sincee the state
-                            % hasn't been changed
+                            obj.lowLevelOrder('restart');
+                            obj.lowLevelOrder('resume');
                         case 'resume'
                             % Continue song
-                            obj.playingState = playingStateClass('playing');
-                            obj.reproduce();
+                            obj.lowLevelOrder('resume');
                         case 'pause'
                             % Do nothing
                         case 'stop'
                             % Completely release
-                            release(obj);
-%                         case 'assignTrack'
-%                             % New audio file, but don't start reproducing
-%                             % First, stop
-%                             release(obj);
-%                             % Then, assign the new file name
-%                             obj.audioFileName = p.Results.fileName;
-%                             obj.playingState = playingStateClass('stopped');
+                            obj.lowLevelOrder('unlock');
                         case ''
                             % Null action
                     end
@@ -661,6 +680,16 @@ classdef reproductor < matlab.System
                             obj.(parameter)(index) = value;
                         case 'frameDuration'
                             obj.(parameter) = value;
+                        case 'mode'
+                            obj.(parameter)(index) = value;
+                        case 'amplitude'
+                            obj.(parameter)(index) = value;
+                        case 'phase'
+                            obj.(parameter)(index) = value;
+                        case 'frequency'
+                            obj.(parameter)(index) = value;
+                        case 'FsGenerator'
+                            obj.(parameter)(index) = value;
                         otherwise
                             error('reproductor_plus:setProps', 'The first argument must be the name of an existing parameter')
                     end
@@ -674,7 +703,7 @@ classdef reproductor < matlab.System
             setup(obj, [], []);
             obj.playingState = playingStateClass('playing');
             
-            Fs = obj.fileReader.SampleRate;
+            Fs = obj.signalReader.SampleRate;
             numChann = obj.numChannels;
             numSamp = obj.frameSize;
             
@@ -685,7 +714,7 @@ classdef reproductor < matlab.System
             attenuation = attenuation(ind, :);
             
             countSamples = 0;
-            while ~isDone(obj.fileReader)
+            while ~isDone(obj.signalReader)
                 
                 % Find out which samples of change we need
                 t_ind = find(t_Samp >= (countSamples + 1) & t_Samp <= (countSamples + numSamp));

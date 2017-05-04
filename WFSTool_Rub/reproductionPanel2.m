@@ -95,17 +95,17 @@ classdef reproductionPanel2 < handle
         end
         
         function buttonCallback(obj, buttonTag)
-            % Create order structure
+            % Specify what the order is
             switch buttonTag
                 case 'play'
-                    order.action = 'play';
+                    order = 'play';
                 case 'stop'
-                    order.action = 'stop';
+                    order = 'stop';
                 case 'pause'
-                    order.action = 'pause';
+                    order = 'pause';
             end
             
-            % Send order structure to the callback
+            % Send order to the callback
             obj.orderCallback(order);
         end
                 

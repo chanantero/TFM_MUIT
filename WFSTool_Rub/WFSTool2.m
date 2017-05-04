@@ -6,6 +6,8 @@ classdef WFSTool2 < handle
         reprodPanel
         scenarioObj
         propPanel
+        signalsChanged
+        numSources % Number of sources
     end
     
     methods
@@ -45,86 +47,70 @@ classdef WFSTool2 < handle
     end
     
     methods(Access = private)
-        function command = createCommand(obj, order, state)
+        
+        function orderCallback(obj, order)
+            % Based on the user order and the state of the player, a
+            % command for the player is created
+            state = obj.player.playingState;
             
-            p = inputParser;
-            addParameter(p, 'action', '')
-            addParameter(p, 'fileName', '')
-            parse(p, order)
-            
-            action = p.Results.action;
-            fileName = p.Results.fileName;
-            
-            switch action
+            switch order
                 case 'play'
-                    % Start track again
-                    command.action = 'play';
+                    % Start track again. If signals have changed, assign
+                    % the new signals and then reproduce
+                    
+                    if obj.signalsChanged
+                        % First, stop the reproductor
+                        obj.player.executeOrder('stop');
+                        
+                        % Second, assign the new signals
+                        for k = 1:obj.numSources
+                            % Identify if the singal specification is a
+                            % file name or a sinusoidal signal
+                            signalSpec = obj.reprodPanel.getTrackName(1);
+                            
+                            % Is a complex number?
+                            param = regexp(signalSpec, 'A:(?<Amplitude>(\d+\.\d+|\d+)) Ph:(?<Phase>(\d+\.\d+|\d+)) f:(?<Frequency>(\d+\.\d+|\d+))', 'names');
+                            if isempty(param)
+                                % It is not a complex number
+                                % Is it a file that exists?
+                                a = dir(signalSpec);
+                                assert(numel(a) > 0, 'The signal specifications must specify an audio file that exists or a complex number');
+                                
+                                obj.player.setProps('mode', originTypes('file'), k);
+                                obj.player.setProps('audioFileName', signalSpec, k);
+                            else
+                                % It is a complex number, set the
+                                % properties
+                                obj.player.setProps('mode', originTypes('sinusoidal'), k);
+                                obj.player.setProps('amplitude', param.Amplitude, k);
+                                obj.player.setProps('phase', param.Phase, k);
+                                obj.player.setProps('frequency', param.Frequency, k);
+                            end
+                            
+                        end
+                        
+                        % Third, play
+                        obj.player.executeOrder('play');
+                    else
+                        % Just restart
+                        obj.player.executeOrder('stop');
+                        obj.player.executeOrder('play');
+                    end
                 case 'stop'
                     % Stop
-                    command.action = 'stop';
+                    obj.player.executeOrder('stop');
                 case 'pause'
                     % Pause
                     switch state
                         case playingStateClass('playing')
-                            command.action = 'pause';
+                            obj.player.executeOrder('pause');
                         case playingStateClass('stopped')
                             % Do nothing
-                            command = [];
                         case playingStateClass('paused')
-                            % Resume
-                            command.action = 'resume';
+                            obj.player.executeOrder('resume');
                     end
-                case 'next'
-                    % Next track
-%                     % Get list of tracks
-%                     list = obj.reprodPanel.getTrackNames();
-%                     % Find index of current track
-%                     [~, index] = ismember(fileName, list);
-%                     % Increase it by one and check it doesn't fall
-%                     % out of range
-%                     N = size(list, 1);
-%                     index = mod(index, N) + 1;
-%                     % Get new track
-%                     activeTrack = list{index};
-                    % Based in the active track registered in the
-                    % reproduction panel object
-                    activeTrack = obj.reprodPanel.getNextTrackName();
-                case 'previous'
-                    % Previous track
-                    activeTrack = obj.reprodPanel.getPreviousTrackName();       
-                case 'doubleClick'
-                    % Play other song
-                    command.action = 'play';
-                    command.fileName = fileName;
-                    % Update panel
-                    obj.reprodPanel.setActiveTrack(fileName);
             end
             
-            if ismember(action, {'next', 'previous'})
-                switch state
-                    case playingStateClass('playing')
-                        command.action = 'play';
-                    case playingStateClass('stopped')
-                        command.action = 'assignTrack';
-                    case playingStateClass('paused')
-                        command.action = 'assignTrack';
-                end
-                command.fileName = activeTrack;
-                % Update panel
-                obj.reprodPanel.setActiveTrack(activeTrack);
-            end
-            
-        end
-        
-        function orderCallback(obj, order)
-            % order is a structure with the information of the order the
-            % user has specified when interacting with the reproduction
-            % panel
-            
-            % Based on the user order and the state of the player, a
-            % command for the player is created
-            state = obj.player.playingState;
-            command = obj.createCommand(order, state);
             
             % Send command to the player
             obj.player.executeOrder(command);
