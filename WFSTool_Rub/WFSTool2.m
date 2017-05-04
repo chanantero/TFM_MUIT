@@ -59,10 +59,19 @@ classdef WFSTool2 < handle
                     % the new signals and then reproduce
                     
                     if obj.signalsChanged
-                        % First, stop the reproductor
+                        % Stop the reproductor
                         obj.player.executeOrder('stop');
                         
-                        % Second, assign the new signals
+                        % See if the signals correspond to real
+                        % sources, virtual sources or both
+                        virtual; % Column vector
+                        real; % Column vector
+                        
+                        % Assign the new commutation matrix
+                        comMat = [virtual, diag(double(real))];
+                        obj.player.setProps('comMatrix', comMat);
+                        
+                        % Assign the new signals
                         for k = 1:obj.numSources
                             % Identify if the singal specification is a
                             % file name or a sinusoidal signal
@@ -89,7 +98,7 @@ classdef WFSTool2 < handle
                             
                         end
                         
-                        % Third, play
+                        % Play
                         obj.player.executeOrder('play');
                     else
                         % Just restart
