@@ -1,111 +1,97 @@
 classdef reproductionPanel < handle
     
-    properties
+    
+    properties(SetAccess = private, SetObservable, AbortSet)
+        signals
+        virtual
+        real
+        numSources
+    end
+    
+    properties(SetAccess = private)
+        selectedTrack
         panel
         list
         orderCallback
     end
     
-    properties(SetAccess = private)
-        selectedTrack
-        activeTrack
-    end
-    
-    
     methods
-        
         function obj = reproductionPanel(parent, orderCallback)
             obj.panel = obj.createPanel(parent, @(buttonTag) obj.buttonCallback(buttonTag),...
-                @() obj.listCallback(),...
                 @(eventData) obj.changeSelection(eventData),...
-                @() obj.addTrackCallback());
+                @() obj.setTrackCallback(),...
+                @(eventData) obj.cellEditCallback(eventData),...
+                @(x) obj.numSourcesPopUpMenuCallback(x));
             obj.list = findobj(obj.panel, 'Tag', 'list');
             obj.orderCallback = orderCallback;
-            obj.activeTrack = '';
-        end
-         
-        function trackName = getActiveTrackName(obj)
-            trackName = obj.getTrackName(obj.activeTrack);
-        end
-        
-        function trackName = getNextTrackName(obj)
-            trackName = obj.nJumpsTrackName(1);
-        end
-        
-        function trackName = getPreviousTrackName(obj)
-            trackName = obj.nJumpsTrackName(-1);
-        end
-        
-        function trackName = getTrackName(obj, ind)
-            trackNames = obj.getTrackNames();
-            trackName = trackNames{ind};
-        end
-        
-        function trackNames = getTrackNames(obj)
-            trackNames = cell(numel(obj.list.Data), 1);
-            for k = 1:numel(obj.list.Data)
-                trackNames{k} = [obj.list.UserData.paths{k}, obj.list.Data{k}];
-            end
-        end
-        
-        function setActiveTrack(obj, trackName)
-            [~, ind] = ismember(trackName, obj.getTrackNames());
-            if ind > 0
-                obj.activeTrack = ind;
-            end
-        end
-        
-        function addTrack(obj, FileName, PathName)
-            if ~iscell(FileName)
-                FileName = {FileName};
-                PathName = {PathName};
-            end
             
-            for k = 1:numel(FileName)
-                obj.list.Data = [obj.list.Data; FileName(k)];
-                obj.list.UserData.paths = [obj.list.UserData.paths; PathName(k)];
-            end
+            obj.setNumSignals(1);
+        end
+
+        
+        function setSignal(obj, signalSpec, index)
+            obj.signals{index} = signalSpec;
+            obj.list.Data(index, 1) = {signalSpec};
         end
         
-        function deleteTrack(obj, index)
-            obj.list.Data(index) = [];
+        function setSignals(obj, signalSpecs)
+            obj.signals = signalSpecs;
+            obj.list.Data(:, 1) = signalSpecs;
         end
-              
+        
+        function setVirtualFlags(obj, flags)
+            obj.virtual = flags;
+            obj.list.Data(:, 2) = num2cell(flags);
+        end
+        
+        function setRealFlags(obj, flags)
+            obj.real = flags;
+            obj.list.Data(:, 3) = num2cell(flags);
+        end
+        
+        function setNumSignals(obj, num)
+            obj.list.Data = [cell(num, 1), num2cell(false(num, 2))];
+            obj.numSources = num;
+            obj.virtual = false(num, 1);
+            obj.real = false(num, 1);
+            sign = cell(num, 1);
+            for k = 1:num
+                sign{k} = '';
+            end
+            obj.signals = sign;
+        end
+
     end
     
     methods(Access = private)
-        function panel = createPanel(~, parent, buttonCallback, listButtonDownCallback, listSelectionCallback, addButtonCallback)
+                                                   
+        function panel = createPanel(~, parent, buttonCallback, listSelectionCallback, setTrackCallback, cellEditCallback, setNumSourcesCallback)
             panel = uipanel(parent, 'BackgroundColor','white', 'Units', 'normalized', 'Position', [0.05, 0.5, 0.4, 0.4]);
-            list = uitable(panel, 'Units', 'Normalized', 'Position', [0.05, 0.2, 0.9, 0.7], ...
-                'ColumnName',{'Name'}, 'ColumnFormat', {'char'}, 'Tag', 'list',...
-                'ButtonDownFcn', @(hObject, eventData) listButtonDownCallback(),...
-                'CellSelectionCallback', @(hObject, eventData) listSelectionCallback(eventData));
-            list.UserData = struct('paths', []);
+            menu = uicontextmenu;
+            list_ = uitable(panel, 'Units', 'Normalized', 'Position', [0.05, 0.2, 0.9, 0.7], ...
+                'ColumnName',{'Signal', 'Virtual', 'Real'}, 'ColumnFormat', {'char', 'logical', 'logical'}, 'Tag', 'list',...
+                'ColumnEditable', [true, true, true], 'UIContextMenu', menu,...
+                'CellSelectionCallback', @(hObject, eventData) listSelectionCallback(eventData),...
+                'CellEditCallback', @(hObject, eventData) cellEditCallback(eventData));
+            list_.UserData = struct('paths', []);
             
-            addButton = uicontrol(panel, 'Style', 'pushbutton', 'Tag', 'addButton',...
-                'Units', 'normalized', 'Position', [0.05, 0.9, 0.1 0.1], 'Callback', @(hObject, eventData) addButtonCallback());
+            uimenu(menu, 'Label', 'Select Audio Track', 'Callback', setTrackCallback);
             
             y0 = 0.05; h = 0.1; w = 0.1;
             playPos = [0.35, y0, w, h];
             stopPos = [0.2, y0, w, h];
             pausePos = [0.5, y0, w, h];
-            prevPos = [0.05, y0, w, h];
-            nextPos = [0.65, y0, w, h];
-            
+                        
             playButton = uicontrol(panel, 'Style', 'pushbutton',...
                 'Units', 'normalized', 'Position', playPos, 'Callback', @(hObject, eventData) buttonCallback('play'));
             stopButton = uicontrol(panel, 'Style', 'pushbutton',...
                 'Units', 'normalized', 'Position', stopPos, 'Callback', @(hObject, eventData) buttonCallback('stop'));
             pauseButton = uicontrol(panel, 'Style', 'pushbutton',...
                 'Units', 'normalized', 'Position', pausePos, 'Callback', @(hObject, eventData) buttonCallback('pause'));
-            nextButton = uicontrol(panel, 'Style', 'pushbutton',...
-                'Units', 'normalized', 'Position', nextPos, 'Callback', @(hObject, eventData) buttonCallback('next'));
-            prevButton = uicontrol(panel, 'Style', 'pushbutton',...
-                'Units', 'normalized', 'Position', prevPos, 'Callback', @(hObject, eventData) buttonCallback('previous'));
+                        
             
-            
-            buttons = [addButton, playButton, stopButton, pauseButton, nextButton, prevButton];
-            iconNames = {'images/addIcon.bmp', 'images/playIcon.bmp', 'images/stopIcon.bmp', 'images/pauseIcon.jpg', 'images/nextIcon.bmp', 'images/prevIcon.bmp'};
+            buttons = [playButton, stopButton, pauseButton];
+            iconNames = {'images/playIcon.bmp', 'images/stopIcon.bmp', 'images/pauseIcon.jpg'};
             
             for k = 1:numel(buttons)
                 button = buttons(k);
@@ -128,55 +114,29 @@ classdef reproductionPanel < handle
                 
                 button.Units = 'Normalized';
             end
+            
+            % Number of sources uicontrol
+            uicontrol(panel, 'Style', 'popupmenu', 'Units', 'normalized', 'Position', [0.1 0.9 0.2 0.1],...
+                'String', {'1', '2', '3'}, 'Callback', @(hObject, ~, ~) setNumSourcesCallback(str2double(hObject.String{hObject.Value})));
         end
         
         function buttonCallback(obj, buttonTag)
-            % Create order structure
+            % Specify what the order is
             switch buttonTag
                 case 'play'
-                    order.action = 'play';
+                    order = 'play';
                 case 'stop'
-                    order.action = 'stop';
+                    order = 'stop';
                 case 'pause'
-                    order.action = 'pause';
-                case 'next'
-                    order.action = 'next';
-                    order.fileName = obj.activeTrack;
-                case 'previous'
-                    order.action = 'previous';
-                    order.fileName = obj.activeTrack;
+                    order = 'pause';
             end
             
-            % Send order structure to the callback
+            % Send order to the callback
             obj.orderCallback(order);
         end
-        
-        function listCallback(obj)
-            persistent click lastClickedSong;
-            if isempty(click)
-                click = 0;
-            end
-            if isempty(lastClickedSong)
-                lastClickedSong = '';
-            end
-            
-            if click == 0
-                % Single right click
-                click = 1;
-                pause(0.5);
-                click = 0;
-            else
-                % Double right click
-                % Create order structure
-                order.action = 'doubleClick';
-                order.fileName = obj.getTrackName(obj.selectedTrack);
-                click = 0;
-               
-                % Send order structure to the callback
-                obj.orderCallback(order);
-                obj.activeTrack = obj.selectedTrack;
-            end       
-            
+                
+        function numSourcesPopUpMenuCallback(obj, numSources)
+            obj.setNumSignals(numSources);
         end
         
         function changeSelection(obj, eventdata)
@@ -187,23 +147,46 @@ classdef reproductionPanel < handle
             end
         end
         
-        function addTrackCallback(obj)
+        function setTrackCallback(obj)
             musicDirectory = 'C:\Users\Rubén\Music\Varias\';
             [FileName, PathName, ~] = uigetfile({'*.mp3', 'MP3 File'; '*.wav', 'WAV File'}, 'Select audio track', 'MultiSelect', 'on', musicDirectory);
+                        
             
             if FileName ~= 0
-                obj.addTrack(FileName, PathName);
+                obj.setSignal([PathName, FileName], obj.selectedTrack);
             end
         end
         
-        function trackName = nJumpsTrackName(obj, n)
-            trackNames = obj.getTrackNames();
-            N = numel(trackNames);
-            ind = obj.activeTrack + n;
-            ind = mod(ind - 1, N) + 1;
-            trackName = trackNames{ind};
+        function cellEditCallback(obj, eventData)
+            
+            row = eventData.Indices(1);
+            column = eventData.Indices(2);
+            
+            newSignal = eventData.EditData;
+            
+            if column == 1
+                % If the name of the track has been changed, check:
+                % Is a complex number?
+                param = regexp(newSignal, 'A:(?<Amplitude>(\d+\.\d+|\d+)) Ph:(?<Phase>(\d+\.\d+|\d+)) f:(?<Frequency>(\d+\.\d+|\d+))', 'names');
+                a = dir(newSignal);
+                complexFlag = ~isempty(param);
+                fileFlag = numel(a) > 0;
+                if complexFlag == false && fileFlag == false
+                    % Wrong format
+                    % Restart
+                    obj.list.Data{row, 1} = 'A:0 Ph:0 f:1';   
+                end
+                obj.signals = obj.list.Data(:, 1);
+            elseif column == 2
+                % The virtual flags have been changed
+                obj.virtual = cell2mat(obj.list.Data(:, 2));
+            elseif column == 3
+                % The real flags have been changed
+                obj.real = cell2mat(obj.list.Data(:, 3));
+            end
+                        
         end
-        
+           
     end
    
     

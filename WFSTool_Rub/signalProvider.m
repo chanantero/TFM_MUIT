@@ -28,12 +28,12 @@ classdef signalProvider < matlab.System
     methods(Access = protected)
         function setupImpl(obj)
             switch obj.mode
-                case 'file'
+                case originType('file')
                     obj.providerFunction = @() obj.stepFileReader();
                     obj.fileReader.Filename = obj.FileName;
                     obj.fileReader.SamplesPerFrame = obj.SamplesPerFrame;
                     setup(obj.fileReader)
-                case 'sinusoidal'
+                case originType('sinusoidal')
                     obj.providerFunction = @() obj.signalGenerator();
                 otherwise
                     error('signalProvider:setup', 'The variable mode is not recognized')
@@ -83,7 +83,7 @@ classdef signalProvider < matlab.System
     
     methods(Access = private)
         function setDefaultProperties(obj)
-            obj.mode = origynType('file');
+            obj.mode = originType('file');
             obj.SamplesPerFrame = 44100;
             
             obj.FileName = '';
