@@ -63,7 +63,7 @@ classdef propertiesPanel < handle
             end
             
             % Execute callbacks for the first time
-            frameDuration = obj.frameDurationMenus.String(obj.frameDurationMenus.Value);
+            frameDuration = str2double(obj.frameDurationMenus.String(obj.frameDurationMenus.Value));
             setFrameDurationFunc(frameDuration);
             
             for k = 1:N

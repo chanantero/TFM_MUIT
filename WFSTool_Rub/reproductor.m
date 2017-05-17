@@ -327,9 +327,7 @@ classdef reproductor < matlab.System
             [numReaders_new, numPlayers_new] = size(comMat);
             numLinks_new = sum(comMat(:));
 
-            if numReaders_new ~= obj.numReaders || numPlayers_new ~= obj.numPlayers
-                obj.comMatrixCoef = double(comMat);
-            end
+            obj.comMatrixCoef = double(comMat);
                         
             obj.signalReader = cell(numReaders_new, 1);
             for k = 1:numReaders_new
@@ -383,6 +381,9 @@ classdef reproductor < matlab.System
             offset = zeros(numPlay, 1);
             t_eps = cell(numPlay, 1); % Times of the ending of loading to the buffer queue
             numUnderruns = cell(numPlay, 1);
+            
+            % Other variables
+            [readerIndex, playerIndex] = obj.getLinkSubInd();
                         
             finish = false;
             while ~finish % Only reproduce if it is playing
@@ -390,8 +391,6 @@ classdef reproductor < matlab.System
                 
                 if toc(t0) >= minBufferDepletionTime
                     
-                    [readerIndex, playerIndex] = obj.getLinkSubInd();
-
                     delays = cell(obj.numLinks, 1);
                     attenuations = cell(obj.numLinks, 1);
                     for k = 1:obj.numLinks
@@ -405,23 +404,24 @@ classdef reproductor < matlab.System
                     try
                         [numUnderrun, t_ep] = step(obj, delays, attenuations);
                         
-                        for k = 1:obj.numPlayers
-                            if numel(t_eps{k}) == 20
-                                t_eps{k}(1:end-1) = t_eps{k}(2:end); % Shift
-                                t_eps{k}(end) = toc(tref) - toc(t_ep(k)); % New value to the end
-
-                                numUnderruns{k}(1:end-1) = numUnderruns{k}(2:end); % Shift
-                                numUnderruns{k}(end) = numUnderrun(k); % New value to the end
-                            else
-                                t_eps{k} = [t_eps{k}; toc(tref) - toc(t_ep(k))];
-                                numUnderruns{k} = [numUnderruns{k}; numUnderrun(k)];
-                            end
-                        end
-                        
-                        if numel(t_eps{1}) > 1
-                            offset = obj.delayBetweenDevices(t_eps, numUnderruns);
-                            offset = max(offset) - offset;
-                        end
+%                         % Delay between writing devices control
+%                         for k = 1:obj.numPlayers
+%                             if numel(t_eps{k}) == 20
+%                                 t_eps{k}(1:end-1) = t_eps{k}(2:end); % Shift
+%                                 t_eps{k}(end) = toc(tref) - toc(t_ep(k)); % New value to the end
+% 
+%                                 numUnderruns{k}(1:end-1) = numUnderruns{k}(2:end); % Shift
+%                                 numUnderruns{k}(end) = numUnderrun(k); % New value to the end
+%                             else
+%                                 t_eps{k} = [t_eps{k}; toc(tref) - toc(t_ep(k))];
+%                                 numUnderruns{k} = [numUnderruns{k}; numUnderrun(k)];
+%                             end
+%                         end
+%                         
+%                         if numel(t_eps{1}) > 1
+%                             offset = obj.delayBetweenDevices(t_eps, numUnderruns);
+%                             offset = max(offset) - offset;
+%                         end
                     catch
                         warning('There was some error with the step function of reproductor')
                         release(obj);

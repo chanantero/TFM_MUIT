@@ -2,12 +2,17 @@ classdef scenario < handle
             
     properties(SetAccess = private)
         panel
+        
         sourcesPosition
+        activeSource
+        
         loudspeakersPosition
         loudspeakersOrientation
         loudspeakersState % Logical. True is enabled, false is disabled
+        
         forcedEnabledLoudspeakers
         forcedDisabledLoudspeakers % Priority over enabled loudspeakers
+        
         delays
         attenuations
     end
@@ -44,7 +49,7 @@ classdef scenario < handle
             
             obj.panel = obj.createGraphics(parent, @(ax) obj.mouseClickCallback(ax));
             obj.setScenario(sourcesPosition, loudspeakersPosition, loudspeakersOrientation, roomPosition);
-            
+            obj.activeSource = 1;
         end         
         
         function setNumSources(obj, numSources)
@@ -95,9 +100,9 @@ classdef scenario < handle
             obj.sourcesPosition = sourcesPosition;
             obj.loudspeakersPosition = loudspeakersPosition;
             obj.loudspeakersOrientation = loudspeakersOrientation;
-            obj.loudspeakersState = true(size(loudspeakersPosition, 1), 1);
-            obj.forcedDisabledLoudspeakers = false(size(loudspeakersPosition, 1), 1);
-            obj.forcedEnabledLoudspeakers = false(size(loudspeakersPosition, 1), 1);
+            obj.loudspeakersState = true(obj.numLoudspeakers, obj.numSources);
+            obj.forcedDisabledLoudspeakers = false(obj.numLoudspeakers, 1);
+            obj.forcedEnabledLoudspeakers = false(obj.numLoudspeakers, 1);
             
             obj.updateDelaysAndAttenuations();
         end
@@ -135,7 +140,7 @@ classdef scenario < handle
             
         end
         
-        function mouseClickCallback(obj, axes, index)
+        function mouseClickCallback(obj, axes)
             x = axes.CurrentPoint(1, 1);
             y = axes.CurrentPoint(1, 2);
             
@@ -143,8 +148,8 @@ classdef scenario < handle
             source.XData = x;
             source.YData = y;
             
-            obj.sourcesPosition(index, 1) = x;
-            obj.sourcesPosition(index, 2) = y;
+            obj.sourcesPosition(obj.activeSource, 1) = x;
+            obj.sourcesPosition(obj.activeSource, 2) = y;
                                  
             obj.updateDelaysAndAttenuations();
         end
@@ -182,14 +187,7 @@ classdef scenario < handle
                       
             % Calculate distances between sources and loudspeakers
             dist = obj.calcDistances();
-            obj.delays = dist/obj.c;
-
-            % Calculate active loudspeakers
-            % Coseno del ángulo entre la línea que une la fuente virtual 
-            % con cada altavoz y la dirección principal en la que el
-            % altavoz emite ("broadside")
-            cosAlfa = obj.calcCosAlfa();
-            obj.loudspeakersState = cosAlfa > 0; % Buscamos los altavoces que debería estar activos
+            obj.delays = dist/obj.c;          
             
             % Calculate attenuations based on those distances and
             % orientations
@@ -216,6 +214,13 @@ classdef scenario < handle
         function atten = calcAttenuations(obj, distances)
             atten = scenario.calcPhysicalAttenuation(distances);
             
+            % Calculate active loudspeakers
+            % Coseno del ángulo entre la línea que une la fuente virtual 
+            % con cada altavoz y la dirección principal en la que el
+            % altavoz emite ("broadside")
+            cosAlfa = obj.calcCosAlfa();
+            obj.loudspeakersState = cosAlfa > 0; % Buscamos los altavoces que deberían estar activos
+            
             atten(~obj.getEnabledLoudspeakers()) = 0;
         end
         
@@ -238,8 +243,14 @@ classdef scenario < handle
             end
         end
         
-        function ind = getEnabledLoudspeakers(obj)
-            ind = (obj.loudspeakersState | obj.forcedEnabledLoudspeakers) & ~obj.forcedDisabledLoudspeakers;
+        function ind = getEnabledLoudspeakers(obj, sourceIndices)
+            if nargin == 1
+                sourceIndices = 1:obj.numSources;
+            end
+            
+            forcedEnabled = repmat(obj.forcedEnabledLoudspeakers, numel(sourceIndices), 1);
+            forcedDisabled = repmat(obj.forcedDisabledLoudspeakers, numel(sourceIndices), 1);
+            ind = (obj.loudspeakersState | forcedEnabled) & ~forcedDisabled;
         end
         
         

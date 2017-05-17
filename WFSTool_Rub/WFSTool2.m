@@ -2,7 +2,6 @@ classdef WFSTool2 < handle
     
     properties(SetAccess = private) 
         changed % Variables changed since last update
-        numSources
         virtual
         real
         signalsSpec
@@ -13,7 +12,18 @@ classdef WFSTool2 < handle
         scenarioObj
         propPanel
     end
-        
+    
+    properties(Dependent)
+        numSources
+    end
+       
+    % Getters and setters
+    methods
+        function numSources = get.numSources(obj)
+            numSources = numel(obj.signalsSpec);
+        end
+    end
+    
     methods
         
         function obj = WFSTool2()
@@ -25,16 +35,22 @@ classdef WFSTool2 < handle
             obj.scenarioObj = scenario(fig);
             obj.propPanel = propertiesPanel(obj.player, fig, [0.05 0.1 0.4 0.2]);
             
-            obj.changed = struct('numSources', false, 'virtual', false, 'real', false, 'signalsSpec', false);
-            
-            obj.setNumSources(1);
-            obj.updateEverything();
+            obj.changed = struct('virtual', false, 'real', false, 'signalsSpec', false);
                         
             addlistener(obj.player, 'numChannels', 'PostSet', @(~, eventData) obj.changeScenario(eventData.AffectedObject.numChannels(1)));
             addlistener(obj.reprodPanel, 'numSources', 'PostSet', @(~, ~) obj.reprodPanelListener('numSources'));
             addlistener(obj.reprodPanel, 'virtual', 'PostSet', @(~, ~) obj.reprodPanelListener('virtual'));
             addlistener(obj.reprodPanel, 'real', 'PostSet', @(~, ~) obj.reprodPanelListener('real'));
-            addlistener(obj.reprodPanel, 'signals', 'PostSet', @(~, ~) obj.reprodPanelListener('signals'));            
+            addlistener(obj.reprodPanel, 'signals', 'PostSet', @(~, ~) obj.reprodPanelListener('signals'));
+            
+            obj.numSources = obj.reprodPanel.numSources;
+            obj.signalsSpec = obj.reprodPanel.signals;
+            obj.virtual = obj.reprodPanel.virtual;
+            obj.real = obj.reprodPanel.real;
+            obj.changed.virtual = true;
+            obj.changed.real = true;
+            obj.changed.signalsSpec = true;
+            obj.updateEverything();
         end       
         
         function noRealTimeReproduction(obj, t, positions)
@@ -56,22 +72,32 @@ classdef WFSTool2 < handle
         end
         
         function updateEverything(obj)
-            if obj.changed.numSources
-                obj.updateNumSourcesStuff();
-            else
-                if obj.changed.virtual || obj.changed.real
-                    obj.updateComMat();
-                end
+
+            if obj.changed.virtual || obj.changed.real
+                rightSize = [obj.numSources, 1];
+                virtualRight = all(size(obj.virtual) == rightSize);
+                realRight = all(size(obj.real) == rightSize);
+                signalsRight = all(size(obj.signalsSpec) == rightSize);
+                assert(virtualRight && realRight && signalsRight, 'WFSTool2:updateEverything', 'The signals specifications and the virtual and real flags must have the same size')
                 
-                if obj.changed.signalsSpec
-                    obj.updateSignalProvidersVariables();
-                end
+                obj.updateComMat();
+            end
+            
+            if obj.changed.signalsSpec
+                obj.updateSignalProvidersVariables();
             end
         end
         
-        function setNumSources(obj, value)
-            obj.numSources = value;
-            obj.changed.numSources = true;
+        function setNumSources(obj, numSources)
+            obj.virtual = true(numSources, 1);
+            obj.real = true(numSources, 1);
+            obj.signalsSpec = cell(numSources, 1);
+            for k = 1:N
+                obj.signalsSpec{k} = '';
+            end
+            
+            obj.updateComMat();
+            obj.updateSignalProvidersVariables();    
         end
         
         function setVirtual(obj, value)
@@ -98,15 +124,13 @@ classdef WFSTool2 < handle
                     obj.signalsSpec = obj.reprodPanel.signals;
                     obj.changed.signalsSpec = true;
                 case 'numSources'
-                    obj.numSources = obj.reprodPanel.numSources;
-%                     obj.virtual = obj.reprodPanel.virtual;
-%                     obj.real = obj.reprodPanel.real;
-%                     obj.signalsSpec = obj.reprodPanel.signals;
+                    obj.virtual = obj.reprodPanel.virtual;
+                    obj.real = obj.reprodPanel.real;
+                    obj.signalsSpec = obj.reprodPanel.signals;
                     
-%                     obj.changed.virtual = true;
-%                     obj.changed.real = true;
-%                     obj.changed.signalsSpec = true;
-                    obj.changed.numSources = true;
+                    obj.changed.virtual = true;
+                    obj.changed.real = true;
+                    obj.changed.signalsSpec = true;
                 case 'virtual'
                     obj.virtual = obj.reprodPanel.virtual;
                     obj.changed.virtual = true;
@@ -116,21 +140,6 @@ classdef WFSTool2 < handle
             end
             
             obj.updateEverything();
-        end
-        
-        function updateNumSourcesStuff(obj)
-            N = obj.numSources;
-            obj.virtual = true(N, 1);
-            obj.real = true(N, 1);
-            obj.signalsSpec = cell(N, 1);
-            for k = 1:N
-                obj.signalsSpec{k} = '';
-            end
-            
-            obj.updateComMat();
-            obj.updateSignalProvidersVariables();     
-            
-            obj.changed.numSources = false;
         end
         
         function updateComMat(obj)
@@ -206,6 +215,7 @@ classdef WFSTool2 < handle
             
             % Assign signals
             
+            success = true(obj.numSources, 1);
             for k = 1:obj.numSources
                 signalSpec = obj.signalsSpec{k};
                 
@@ -219,7 +229,7 @@ classdef WFSTool2 < handle
                         obj.player.setProps('mode', originType('file'), k);
                         obj.player.setProps('audioFileName', signalSpec, k);
                     else
-                        warning('WFSTool2:updateSignalProvidersVariables', 'The signal specifications must specify an audio file that exists or a complex number');
+                        success(k) = false;
                     end
                 else
                     % It is a complex number, set the
@@ -229,6 +239,9 @@ classdef WFSTool2 < handle
                     obj.player.setProps('phase', str2double(param.Phase), k);
                     obj.player.setProps('frequency', str2double(param.Frequency), k);
                 end
+            end
+            if any(~success)
+                warning('WFSTool2:updateSignalProvidersVariables', 'The signal specifications must specify an audio file that exists or a complex number');
             end
             
             obj.changed.signalsSpec = false;

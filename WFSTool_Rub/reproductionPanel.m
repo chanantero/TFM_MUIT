@@ -27,8 +27,7 @@ classdef reproductionPanel < handle
             
             obj.setNumSignals(1);
         end
-
-        
+     
         function setSignal(obj, signalSpec, index)
             obj.signals{index} = signalSpec;
             obj.list.Data(index, 1) = {signalSpec};
@@ -50,8 +49,7 @@ classdef reproductionPanel < handle
         end
         
         function setNumSignals(obj, num)
-            obj.list.Data = [cell(num, 1), num2cell(false(num, 2))];
-            obj.numSources = num;
+            obj.list.Data = [cell(num, 1), num2cell(false(num, 2))];           
             obj.virtual = false(num, 1);
             obj.real = false(num, 1);
             sign = cell(num, 1);
@@ -59,6 +57,8 @@ classdef reproductionPanel < handle
                 sign{k} = '';
             end
             obj.signals = sign;
+            
+            obj.numSources = num;
         end
 
     end
@@ -75,7 +75,7 @@ classdef reproductionPanel < handle
                 'CellEditCallback', @(hObject, eventData) cellEditCallback(eventData));
             list_.UserData = struct('paths', []);
             
-            uimenu(menu, 'Label', 'Select Audio Track', 'Callback', setTrackCallback);
+            uimenu(menu, 'Label', 'Select Audio Track', 'Callback', @(~, ~) setTrackCallback());
             
             y0 = 0.05; h = 0.1; w = 0.1;
             playPos = [0.35, y0, w, h];

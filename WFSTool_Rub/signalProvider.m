@@ -61,7 +61,7 @@ classdef signalProvider < matlab.System
             if obj.mode % Sinusoidal
                 SampleRate = obj.SampleRate;
             else %File
-                obj.fileReader.SampleRate;
+                SampleRate = obj.fileReader.SampleRate;
             end
         end
         
@@ -104,7 +104,7 @@ classdef signalProvider < matlab.System
             f = obj.frequency;
             t = (obj.count*obj.SamplesPerFrame + (0:obj.SamplesPerFrame-1)')/obj.SampleRate;
             
-            y = A*cos(1i*(2*pi*f*t + Ph));
+            y = A*cos(2*pi*f*t + Ph);
         end
     end
 end
