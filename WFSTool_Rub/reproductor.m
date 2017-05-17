@@ -336,7 +336,7 @@ classdef reproductor < matlab.System
             
             obj.processor = cell(numLinks_new, 1);
             for k = 1:numLinks_new
-                obj.processor{k} = processSignal('delayType', 'forward');
+                obj.processor{k} = processSignal();
             end
             
             obj.player = cell(numPlayers_new, 1);
@@ -547,7 +547,7 @@ classdef reproductor < matlab.System
             obj.signalReader = {signalProvider()};
             
             % Processing object
-            obj.processor = {processSignal('delayType', 'backward')};
+            obj.processor = {processSignal()};
             
             % Writing object
             obj.player = {audioPlayer};
