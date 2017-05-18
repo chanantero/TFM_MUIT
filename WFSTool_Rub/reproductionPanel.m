@@ -1,7 +1,7 @@
 classdef reproductionPanel < handle
     
     
-    properties(SetAccess = private, SetObservable, AbortSet)
+    properties(SetAccess = private)
         signals
         virtual
         real
@@ -14,6 +14,10 @@ classdef reproductionPanel < handle
         list
         orderCallback
     end
+    
+   events
+      updatedValues
+   end
     
     methods
         function obj = reproductionPanel(parent, orderCallback)
@@ -31,21 +35,33 @@ classdef reproductionPanel < handle
         function setSignal(obj, signalSpec, index)
             obj.signals{index} = signalSpec;
             obj.list.Data(index, 1) = {signalSpec};
+            
+            evntData = updatedValuesEvntData('signals');
+            notify(obj, 'updatedValues', evntData);
         end
         
         function setSignals(obj, signalSpecs)
             obj.signals = signalSpecs;
             obj.list.Data(:, 1) = signalSpecs;
+            
+            evntData = updatedValuesEvntData('signals');
+            notify(obj, 'updatedValues', evntData);
         end
         
         function setVirtualFlags(obj, flags)
             obj.virtual = flags;
             obj.list.Data(:, 2) = num2cell(flags);
+            
+            evntData = updatedValuesEvntData('virtual');
+            notify(obj, 'updatedValues', evntData);
         end
         
         function setRealFlags(obj, flags)
             obj.real = flags;
             obj.list.Data(:, 3) = num2cell(flags);
+            
+            evntData = updatedValuesEvntData('real');
+            notify(obj, 'updatedValues', evntData);
         end
         
         function setNumSignals(obj, num)
@@ -59,6 +75,9 @@ classdef reproductionPanel < handle
             obj.signals = sign;
             
             obj.numSources = num;
+            
+            evntData = updatedValuesEvntData('numSources');
+            notify(obj, 'updatedValues', evntData);
         end
 
     end
@@ -177,12 +196,21 @@ classdef reproductionPanel < handle
                     obj.list.Data{row, 1} = 'A:0 Ph:0 f:1';   
                 end
                 obj.signals = obj.list.Data(:, 1);
+                
+                evntData = updatedValuesEvntData('signals');
+                notify(obj, 'updatedValues', evntData);
             elseif column == 2
                 % The virtual flags have been changed
                 obj.virtual = cell2mat(obj.list.Data(:, 2));
+                
+                evntData = updatedValuesEvntData('virtual');
+                notify(obj, 'updatedValues', evntData);
             elseif column == 3
                 % The real flags have been changed
                 obj.real = cell2mat(obj.list.Data(:, 3));
+                
+                evntData = updatedValuesEvntData('real');
+                notify(obj, 'updatedValues', evntData);
             end
                         
         end

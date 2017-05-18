@@ -38,12 +38,8 @@ classdef WFSTool2 < handle
             obj.changed = struct('virtual', false, 'real', false, 'signalsSpec', false);
                         
             addlistener(obj.player, 'numChannels', 'PostSet', @(~, eventData) obj.changeScenario(eventData.AffectedObject.numChannels(1)));
-            addlistener(obj.reprodPanel, 'numSources', 'PostSet', @(~, ~) obj.reprodPanelListener('numSources'));
-            addlistener(obj.reprodPanel, 'virtual', 'PostSet', @(~, ~) obj.reprodPanelListener('virtual'));
-            addlistener(obj.reprodPanel, 'real', 'PostSet', @(~, ~) obj.reprodPanelListener('real'));
-            addlistener(obj.reprodPanel, 'signals', 'PostSet', @(~, ~) obj.reprodPanelListener('signals'));
+            addlistener(obj.reprodPanel, 'updatedValues', @(~, evntData) obj.reprodPanelListener(evntData.type));
             
-            obj.numSources = obj.reprodPanel.numSources;
             obj.signalsSpec = obj.reprodPanel.signals;
             obj.virtual = obj.reprodPanel.virtual;
             obj.real = obj.reprodPanel.real;
@@ -114,6 +110,7 @@ classdef WFSTool2 < handle
             obj.signalsSpec = value;
             obj.changed.signalsSpec = true;
         end
+        
     end
     
     methods(Access = private)
@@ -147,6 +144,7 @@ classdef WFSTool2 < handle
             comMat = WFSTool2.createCommutationMatrix(obj.virtual, obj.real);
             obj.player.setProps('comMatrix', comMat);
             
+            obj.updateSignalProvidersVariables();
             obj.updateProcessorVariables();
             obj.updateGUIConnectionsStuff();
             
@@ -275,6 +273,7 @@ classdef WFSTool2 < handle
         end
               
         function changeScenario(obj, numChannels)
+            numChannels = numChannels(1);
             switch numChannels
                 case 0;
                     sourcePosition = [0 0 0];
@@ -283,7 +282,7 @@ classdef WFSTool2 < handle
                     roomPosition = [0 0 1 1];
                     obj.scenarioObj.setScenario(sourcePosition, loudspeakersPosition, loudspeakersOrientation, roomPosition);
                 case 2;
-                    sourcePosition = [0 1 0];
+                    sourcePosition = obj.scenarioObj.sourcesPosition;
                     loudspeakersPosition = [-0.1 0 0; 0.1 0 0];
                     loudspeakersOrientation = [1 0 0; -1 0 0];
                     roomPosition = [-2, -2, 4, 4];

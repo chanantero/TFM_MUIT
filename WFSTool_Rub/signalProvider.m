@@ -61,7 +61,13 @@ classdef signalProvider < matlab.System
             if obj.mode % Sinusoidal
                 SampleRate = obj.SampleRate;
             else %File
-                SampleRate = obj.fileReader.SampleRate;
+%                 SampleRate = obj.fileReader.SampleRate;
+                try
+                    inf = audioinfo(obj.FileName);
+                    SampleRate = inf.SampleRate;
+                catch
+                    SampleRate = NaN;
+                end
             end
         end
         
@@ -72,6 +78,15 @@ classdef signalProvider < matlab.System
                 flag = isDone(obj.fileReader);
             end
         end
+        
+%         function set.FileName(obj, fileName)
+%             try
+%                 obj.fileReader.Filename = fileName;
+%             catch % e
+% %                 warning('signalProvider:setFileName', e.message)         
+%             end
+%             obj.FileName = fileName;
+%         end
     end
     
     methods

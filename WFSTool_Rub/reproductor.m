@@ -48,7 +48,7 @@ classdef reproductor < matlab.System
     % Reading properties
     % The user cannot set this properties directly, but are useful information that
     % can be viewed by other objects
-    properties(SetAccess = private, SetObservable)%, AbortSet)
+    properties(SetAccess = private, SetObservable, AbortSet)
         playingState % Playing state
         numChannels
     end
@@ -59,8 +59,6 @@ classdef reproductor < matlab.System
         numPlayers
         numLinks
     end
-    
-    
     
     % Private properties: objects
     properties(SetAccess = private)
@@ -177,7 +175,7 @@ classdef reproductor < matlab.System
         end
         
         function numLinks = get.numLinks(obj)
-            numLinks = sum(obj.comMatrix);
+            numLinks = sum(obj.comMatrix(:));
         end
         
         function Fs = get.Fs_reader(obj)
@@ -404,24 +402,24 @@ classdef reproductor < matlab.System
                     try
                         [numUnderrun, t_ep] = step(obj, delays, attenuations);
                         
-%                         % Delay between writing devices control
-%                         for k = 1:obj.numPlayers
-%                             if numel(t_eps{k}) == 20
-%                                 t_eps{k}(1:end-1) = t_eps{k}(2:end); % Shift
-%                                 t_eps{k}(end) = toc(tref) - toc(t_ep(k)); % New value to the end
-% 
-%                                 numUnderruns{k}(1:end-1) = numUnderruns{k}(2:end); % Shift
-%                                 numUnderruns{k}(end) = numUnderrun(k); % New value to the end
-%                             else
-%                                 t_eps{k} = [t_eps{k}; toc(tref) - toc(t_ep(k))];
-%                                 numUnderruns{k} = [numUnderruns{k}; numUnderrun(k)];
-%                             end
-%                         end
-%                         
-%                         if numel(t_eps{1}) > 1
-%                             offset = obj.delayBetweenDevices(t_eps, numUnderruns);
-%                             offset = max(offset) - offset;
-%                         end
+                        % Delay between writing devices control
+                        for k = 1:obj.numPlayers
+                            if numel(t_eps{k}) == 20
+                                t_eps{k}(1:end-1) = t_eps{k}(2:end); % Shift
+                                t_eps{k}(end) = toc(tref) - toc(t_ep(k)); % New value to the end
+
+                                numUnderruns{k}(1:end-1) = numUnderruns{k}(2:end); % Shift
+                                numUnderruns{k}(end) = numUnderrun(k); % New value to the end
+                            else
+                                t_eps{k} = [t_eps{k}; toc(tref) - toc(t_ep(k))];
+                                numUnderruns{k} = [numUnderruns{k}; numUnderrun(k)];
+                            end
+                        end
+                        
+                        if numel(t_eps{1}) > 1
+                            offset = obj.delayBetweenDevices(t_eps, numUnderruns);
+                            offset = max(offset) - offset;
+                        end
                     catch
                         warning('There was some error with the step function of reproductor')
                         release(obj);
@@ -769,6 +767,10 @@ classdef reproductor < matlab.System
         
         function indices = getActivePlayers(obj)
             indices = find(any(obj.comMatrix, 1));
+        end
+        
+        function indices = getActiveReaders(obj)
+            indices = find(any(obj.comMatrix, 2));
         end
     end
     

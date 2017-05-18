@@ -24,6 +24,7 @@ classdef scenario < handle
     
     properties (Constant)
         c = 343;
+        sourceColor = [0 0 1];
     end
     
     % Getters and setters
@@ -55,12 +56,16 @@ classdef scenario < handle
         function setNumSources(obj, numSources)
             
             obj.sourcesPosition = zeros(numSources, 3);
-            
+            obj.activeSource = 1;
+            obj.loudspeakersState = true(obj.numLoudspeakers, obj.numSources);
+
             source = findobj(obj.panel, 'Tag', 'source');
 
             source.XData = zeros(1, numSources);
             source.YData = zeros(1, numSources);
             source.ZData = zeros(1, numSources);
+            source.CData = repmat(obj.sourceColor, numSources, 1);
+            
         end
         
         function setSourcePosition(obj, sourcePosition, index)
@@ -90,6 +95,7 @@ classdef scenario < handle
             source.XData = sourcesPosition(:, 1);
             source.YData = sourcesPosition(:, 2);
             source.ZData = sourcesPosition(:, 3);
+            source.CData = repmat(obj.sourceColor, size(sourcesPosition, 1), 1);
             
             loudspeakers.XData = loudspeakersPosition(:, 1);
             loudspeakers.YData = loudspeakersPosition(:, 2);
@@ -98,6 +104,7 @@ classdef scenario < handle
             
             % Other variable
             obj.sourcesPosition = sourcesPosition;
+            obj.activeSource = 1;
             obj.loudspeakersPosition = loudspeakersPosition;
             obj.loudspeakersOrientation = loudspeakersOrientation;
             obj.loudspeakersState = true(obj.numLoudspeakers, obj.numSources);
@@ -128,8 +135,9 @@ classdef scenario < handle
             
             ax.NextPlot = 'Add';
             
-            source = scatter(ax, 0, 0, 'b');
+            source = scatter(ax, 0, 0, 50, obj.sourceColor);
             source.Tag = 'source';
+            source.ButtonDownFcn = @(hObj, ~) obj.sourcesCallback(hObj);
             
             loudspeakers = scatter(ax, 0, 1, 'k', 'MarkerEdgeColor', [0 0 0], 'MarkerFaceColor', 'flat');
             loudspeakers.Tag = 'loudspeakers';
@@ -145,8 +153,8 @@ classdef scenario < handle
             y = axes.CurrentPoint(1, 2);
             
             source = findobj(axes, 'Tag', 'source');
-            source.XData = x;
-            source.YData = y;
+            source.XData(obj.activeSource) = x;
+            source.YData(obj.activeSource) = y;
             
             obj.sourcesPosition(obj.activeSource, 1) = x;
             obj.sourcesPosition(obj.activeSource, 2) = y;
@@ -166,11 +174,17 @@ classdef scenario < handle
 
         end
         
-        function updateLoudspeakersColor(obj)
-            N = numel(obj.loudspeakersState);
+        function sourcesCallback(obj, scat)
+            point = scat.Parent.CurrentPoint;
             
-            activeState = 2*ones(N, 1);
-            activeState(obj.loudspeakersState) = 1;
+            % Which is the closest loudspeaker to the current point?
+            [~, ind] = min(sum((repmat(point(1,:), size(obj.sourcesPosition, 1), 1) - obj.sourcesPosition).^2, 2));
+            obj.activeSource = ind;
+        end
+        
+        function updateLoudspeakersColor(obj)            
+            activeState = 2*ones(obj.numLoudspeakers, 1);
+            activeState(obj.loudspeakersState(:, obj.activeSource)) = 1;
             activeState(obj.forcedEnabledLoudspeakers) = 3;
             activeState(obj.forcedDisabledLoudspeakers) = 4;
             
@@ -212,16 +226,21 @@ classdef scenario < handle
         end
         
         function atten = calcAttenuations(obj, distances)
-            atten = scenario.calcPhysicalAttenuation(distances);
             
-            % Calculate active loudspeakers
             % Coseno del ángulo entre la línea que une la fuente virtual 
             % con cada altavoz y la dirección principal en la que el
             % altavoz emite ("broadside")
             cosAlfa = obj.calcCosAlfa();
-            obj.loudspeakersState = cosAlfa > 0; % Buscamos los altavoces que deberían estar activos
             
+            % Calculate active loudspeakers
+%             obj.loudspeakersState = cosAlfa > 0; % Buscamos los altavoces que deberían estar activos
+            obj.loudspeakersState(:) = true;
+
+            atten = obj.calcPhysicalAttenuation(distances, cosAlfa);
+                      
             atten(~obj.getEnabledLoudspeakers()) = 0;
+            
+            
         end
         
         function cosAlfa = calcCosAlfa(obj, sourceIndices)
@@ -243,23 +262,28 @@ classdef scenario < handle
             end
         end
         
+        function attenuation = calcPhysicalAttenuation(obj, distances, cosAlfa)
+            if obj.numLoudspeakers == 96
+                r0 = 1.44*(0.5+cosd(45));
+                A = sqrt(r0./(r0+distances));
+                attenuation = A.*cosAlfa./sqrt(distances);
+            else
+%                 attenuation = ones(size(distances));
+                attenuation = min(1, (0.1)./distances);
+            end
+        end
+        
         function ind = getEnabledLoudspeakers(obj, sourceIndices)
             if nargin == 1
                 sourceIndices = 1:obj.numSources;
             end
             
-            forcedEnabled = repmat(obj.forcedEnabledLoudspeakers, numel(sourceIndices), 1);
-            forcedDisabled = repmat(obj.forcedDisabledLoudspeakers, numel(sourceIndices), 1);
+            forcedEnabled = repmat(obj.forcedEnabledLoudspeakers, 1, numel(sourceIndices));
+            forcedDisabled = repmat(obj.forcedDisabledLoudspeakers, 1, numel(sourceIndices));
             ind = (obj.loudspeakersState | forcedEnabled) & ~forcedDisabled;
         end
         
         
-    end
-    
-    methods(Static)
-        function attenuation = calcPhysicalAttenuation(distances)
-            attenuation = ones(size(distances));
-        end
     end
     
 end
