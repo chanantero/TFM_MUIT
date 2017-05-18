@@ -34,7 +34,7 @@ classdef signalProvider < matlab.System
                     obj.fileReader.SamplesPerFrame = obj.SamplesPerFrame;
                     setup(obj.fileReader)
                 case originType('sinusoidal')
-                    obj.providerFunction = @() obj.signalGenerator();
+                    obj.providerFunction = @() obj.toneGenerator();
                 otherwise
                     error('signalProvider:setup', 'The variable mode is not recognized')
             end
@@ -113,7 +113,7 @@ classdef signalProvider < matlab.System
             y = step(obj.fileReader);
         end
         
-        function y = signalGenerator(obj)
+        function y = toneGenerator(obj)
             A = obj.amplitude;
             Ph = obj.phase; % Initial phase
             f = obj.frequency;
@@ -121,5 +121,6 @@ classdef signalProvider < matlab.System
             
             y = A*cos(2*pi*f*t + Ph);
         end
+        
     end
 end

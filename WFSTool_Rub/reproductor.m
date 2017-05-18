@@ -366,6 +366,7 @@ classdef reproductor < matlab.System
         end
         
         function reproduce(obj)
+            if ~strcmp(obj.playingState, 'playing'),  return;  end
             
             numPlay = obj.numPlayers;
             
@@ -391,14 +392,33 @@ classdef reproductor < matlab.System
                     
                     delays = cell(obj.numLinks, 1);
                     attenuations = cell(obj.numLinks, 1);
-                    for k = 1:obj.numLinks
-                        delay = obj.getDelayFun{k}() + offset(playerIndex(k));
-                        attenuation = obj.getAttenFun{k}();
-                           
-                        delays{k} = repmat(permute(delay, [3, 1, 2]), obj.frameSizeReading(readerIndex(k)), 1);
-                        attenuations{k} = repmat(permute(attenuation, [3, 1, 2]), obj.frameSizeReading(readerIndex(k)), 1);
+                    
+                    if nargin(obj.getDelayFun{1}) > 0
+                        feedBack = true;
+                    else
+                        feedBack = false;
                     end
                     
+                    if feedBack
+                        for k = 1:obj.numLinks
+                            frameSize = obj.frameSizeReading(readerIndex(k));
+                            
+                            [delays, attens] = obj.getDelayFun{k}(frameSize);
+                            
+                            delays{k} = delays + offset(playerIndex(k));
+                            attenuations{k} = attens;
+                       end
+                    else
+                        for k = 1:obj.numLinks  
+                            delay = obj.getDelayFun{k}() + offset(playerIndex(k));
+                            attenuation = obj.getAttenFun{k}();
+                            
+                            delays{k} = repmat(permute(delay, [3, 1, 2]), obj.frameSizeReading(readerIndex(k)), 1);
+                            attenuations{k} = repmat(permute(attenuation, [3, 1, 2]), obj.frameSizeReading(readerIndex(k)), 1);
+                        end
+                    end
+                    
+                    % Step
                     try
                         [numUnderrun, t_ep] = step(obj, delays, attenuations);
                         
