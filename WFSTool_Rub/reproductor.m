@@ -16,9 +16,15 @@ classdef reproductor < matlab.System
         frequency
         FsGenerator % Sampling frequency for the sinusoidal signal
         
-        % Processor settings
+        % Process settings
+        modeProc % realTime or predefined
+        % modeProc == realTime
         getDelayFun % Cell array of functions with as many elements as processors
         getAttenFun % Cell array of functions with as many elements as processors
+        % modeProc == predefined
+        pred_t
+        pred_delay
+        pred_atten
         
         % Player settings
         driver % Cell string array with as many elements as players
@@ -63,6 +69,7 @@ classdef reproductor < matlab.System
     % Private properties: objects
     properties(SetAccess = private)
         signalReader % Cell Array
+        procParamProvider % Cell Array
         processor % Cell Array as non-null elements of comMatrix
         player % Cell Array
     end
@@ -218,11 +225,24 @@ classdef reproductor < matlab.System
             
             [indReader, indPlayer] = obj.linkAbs2Sub(index);
             
-            % Set properties for the processors
+            % Set properties for the processors and processor parameter
+            % providers
             for k = 1:numel(index)
                 obj.processor{k}.Fs = obj.Fs_reader(indReader(k));
                 obj.processor{k}.numChannels = obj.numChannels(indPlayer(k));
+                
+                obj.procParamProvider{k}.mode = obj.modeProc(k);
+                obj.procParamProvider{k}.FrameSize = obj.frameSizeReading(indReader(k));
+                
+                obj.procParamProvider{k}.getDelayFun = obj.getDelayFun{k};
+                obj.procParamProvider{k}.getAttenFun = obj.getAttenFun{k};
+                
+                obj.procParamProvider{k}.SampleRate = obj.Fs_reader(indReader(k));
+                obj.procParamProvider{k}.t_change = obj.pred_t{k};
+                obj.procParamProvider{k}.delays = obj.pred_delay{k};
+                obj.procParamProvider{k}.attenuations = obj.pred_atten{k};
             end
+      
         end
         
         function setPropertiesPlayers(obj, index)
@@ -334,6 +354,7 @@ classdef reproductor < matlab.System
             
             obj.processor = cell(numLinks_new, 1);
             for k = 1:numLinks_new
+                obj.procParamProvider{k} = delayAndAttenProvider();
                 obj.processor{k} = processSignal();
             end
             
@@ -380,43 +401,24 @@ classdef reproductor < matlab.System
             offset = zeros(numPlay, 1);
             t_eps = cell(numPlay, 1); % Times of the ending of loading to the buffer queue
             numUnderruns = cell(numPlay, 1);
-            
-            % Other variables
-            [readerIndex, playerIndex] = obj.getLinkSubInd();
                         
+            [~, playerIndex] = getLinkSubInd();
+            
             finish = false;
             while ~finish % Only reproduce if it is playing
                 t = tic;
                 
                 if toc(t0) >= minBufferDepletionTime
                     
+                    % Get processor parameters: delays and attenuations
                     delays = cell(obj.numLinks, 1);
                     attenuations = cell(obj.numLinks, 1);
-                    
-                    if nargin(obj.getDelayFun{1}) > 0
-                        feedBack = true;
-                    else
-                        feedBack = false;
+                    for k = 1:obj.numLinks
+                        [delay, attenuations{k}] = step(obj.procParamProvider{k});
+                        delay = delay + offset(playerIndex(k));
+                        delays{k} = delay;
                     end
                     
-                    if feedBack
-                        for k = 1:obj.numLinks
-                            frameSize = obj.frameSizeReading(readerIndex(k));
-                            
-                            [delays, attens] = obj.getDelayFun{k}(frameSize);
-                            
-                            delays{k} = delays + offset(playerIndex(k));
-                            attenuations{k} = attens;
-                       end
-                    else
-                        for k = 1:obj.numLinks  
-                            delay = obj.getDelayFun{k}() + offset(playerIndex(k));
-                            attenuation = obj.getAttenFun{k}();
-                            
-                            delays{k} = repmat(permute(delay, [3, 1, 2]), obj.frameSizeReading(readerIndex(k)), 1);
-                            attenuations{k} = repmat(permute(attenuation, [3, 1, 2]), obj.frameSizeReading(readerIndex(k)), 1);
-                        end
-                    end
                     
                     % Step
                     try
@@ -566,6 +568,7 @@ classdef reproductor < matlab.System
             
             % Processing object
             obj.processor = {processSignal()};
+            obj.procParamProvider = {delayAndAttenProvider()};
             
             % Writing object
             obj.player = {audioPlayer};
@@ -692,6 +695,15 @@ classdef reproductor < matlab.System
                         case 'getAttenFun'
                             ind = obj.sub2LinkAbs(index(1), index(2));
                             obj.(parameter){ind} = value;
+                        case 'pred_t'
+                            ind = obj.sub2LinkAbs(index(1), index(2));
+                            obj.(parameter){ind} = value;
+                        case 'pred_delay'
+                            ind = obj.sub2LinkAbs(index(1), index(2));
+                            obj.(parameter){ind} = value;
+                        case 'pred_atten'
+                            ind = obj.sub2LinkAbs(index(1), index(2));
+                            obj.(parameter){ind} = value;
                         case 'comMatrix'
                             obj.setCommutationMatrix(value);
                         case 'comMatrixCoef'
@@ -718,51 +730,6 @@ classdef reproductor < matlab.System
                     
                 end
             end
-        end
-        
-        function reproduceNoRealTime(obj, t, delay, attenuation)
-            if ~strcmp(obj.playingState, 'stopped'),  return;  end
-            setup(obj, [], []);
-            obj.playingState = playingStateClass('playing');
-            
-            Fs = obj.signalReader.SampleRate;
-            numChann = obj.numChannels;
-            numSamp = obj.frameSize;
-            
-            % Calculate samples where delay and attenuation changes
-            t_Samp = ceil(t*Fs) + 1; % Samples were the position should change
-            [t_Samp, ind] = unique(t_Samp); % Eliminate redundant information
-            delay = delay(ind, :);
-            attenuation = attenuation(ind, :);
-            
-            countSamples = 0;
-            while ~isDone(obj.signalReader)
-                
-                % Find out which samples of change we need
-                t_ind = find(t_Samp >= (countSamples + 1) & t_Samp <= (countSamples + numSamp));
-                keySamples = [t_Samp(t_ind) - countSamples; numSamp + 1];
-                if keySamples(1) > 1
-                    keySamples = [1; keySamples];
-                    prevInd = find(t_Samp < countSamples + 1, 1, 'last');
-                    t_ind = [prevInd; t_ind];
-                end
-                
-                % Give the delays and attenuations the convenient format for the processor
-                % object
-                delays = zeros(numSamp, numChann);
-                attenuations = zeros(numSamp, numChann);
-                for k = 1:numel(keySamples) - 1
-                    currInd = keySamples(k):keySamples(k+1)-1;
-                    delays(currInd, :) = repmat(delay(t_ind(k), :), numel(currInd), 1);
-                    attenuations(currInd, :) = repmat(attenuation(t_ind(k), :), numel(currInd), 1);
-                end
-                
-                step(obj, delays, attenuations);
-                
-                countSamples = countSamples + numSamp;
-            end
-            
-            release(obj);
         end
           
         function indices = getLinkAbsInd(obj)
