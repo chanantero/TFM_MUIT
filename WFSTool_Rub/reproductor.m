@@ -281,6 +281,7 @@ classdef reproductor < matlab.System
             
             for k = 1:obj.numLinks
                 release(obj.processor{k})
+                release(obj.procParamProvider{k})
             end
             
             for k = 1:obj.numPlayers
@@ -297,6 +298,7 @@ classdef reproductor < matlab.System
             
             for k = 1:obj.numLinks
                 reset(obj.processor{k})
+                reset(obj.procParamProvider{k});
             end
             
             for k = 1:obj.numPlayers
@@ -329,8 +331,12 @@ classdef reproductor < matlab.System
             [readInd, playInd] = obj.getLinkSubInd();
             for k = 1:obj.numLinks
                 ind = [readInd(k), playInd(k)];
+                obj.setProps('modeProc', timeInteractionTypes('realTime'), ind);
                 obj.setProps('getDelayFun', [], ind);
                 obj.setProps('getAttenFun', [], ind);
+                obj.setProps('pred_t', [], ind);
+                obj.setProps('pred_delay', [], ind);
+                obj.setProps('pred_atten', [], ind);
             end
             
         end
@@ -353,6 +359,7 @@ classdef reproductor < matlab.System
             end
             
             obj.processor = cell(numLinks_new, 1);
+            obj.procParamProvider = cell(numLinks_new, 1);
             for k = 1:numLinks_new
                 obj.procParamProvider{k} = delayAndAttenProvider();
                 obj.processor{k} = processSignal();
@@ -402,7 +409,7 @@ classdef reproductor < matlab.System
             t_eps = cell(numPlay, 1); % Times of the ending of loading to the buffer queue
             numUnderruns = cell(numPlay, 1);
                         
-            [~, playerIndex] = getLinkSubInd();
+            [~, playerIndex] = obj.getLinkSubInd();
             
             finish = false;
             while ~finish % Only reproduce if it is playing
@@ -689,6 +696,9 @@ classdef reproductor < matlab.System
                             
                             % Update the number of channels for that device
                             obj.updateNumOutputChannels(index);
+                        case 'modeProc'
+                            ind = obj.sub2LinkAbs(index(1), index(2));
+                            obj.(parameter)(ind) = value;
                         case 'getDelayFun'                            
                             ind = obj.sub2LinkAbs(index(1), index(2));
                             obj.(parameter){ind} = value;

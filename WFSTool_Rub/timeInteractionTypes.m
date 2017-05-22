@@ -1,6 +1,6 @@
 classdef timeInteractionTypes < logical
    enumeration
-      realTime  (0)
-      predefined (1)
+      realTime  (false)
+      predefined (true)
    end
 end

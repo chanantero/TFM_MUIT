@@ -40,9 +40,9 @@ classdef delayAndAttenProvider < matlab.System
         function setupImpl(obj)
             obj.time2Samples_update();
             if obj.mode == timeInteractionTypes('realTime');
-                obj.getDelayFun() = @() obj.stepRealTime();
+                obj.getDelayAndAttenFun = @() obj.stepRealTime();
             else
-                obj.getDelayFun() = @() obj.stepPredefined();
+                obj.getDelayAndAttenFun = @() obj.stepPredefined();
             end
         end
         
@@ -52,7 +52,7 @@ classdef delayAndAttenProvider < matlab.System
         end
         
         function resetImpl(obj)
-            obj.countSamples = 0;
+            obj.count = 0;
         end
         
         function releaseImpl(~)
@@ -145,7 +145,7 @@ classdef delayAndAttenProvider < matlab.System
     
     methods(Access = private)
         function time2Samples_update(obj)
-            [obj.t_Samp, obj.delays_Samp, obj.attenuations_Samp] = delayAndAttenProvider.time2Samples(obj.SampleRate, obj.t_change, obj.delays, obj.attenuations);
+            [obj.t_change_Samp, obj.delays_Samp, obj.attenuations_Samp] = delayAndAttenProvider.time2Samples(obj.SampleRate, obj.t_change, obj.delays, obj.attenuations);
         end
         
     end
