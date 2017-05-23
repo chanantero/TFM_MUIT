@@ -399,7 +399,7 @@ classdef reproductor < matlab.System
             numPlay = obj.numPlayers;
             
             % Timing control
-            margin = 0.01;
+            margin = 0.25;
             counter = 0;
             minPause = 0.01;
             minBufferDepletionTime = 0;
@@ -646,20 +646,21 @@ classdef reproductor < matlab.System
         end
         
         function setProps(obj, parameters, values, indices )
-            if obj.playingState == playingStateClass('stopped')
+            
+            % Parse inputs
+            if ~iscell(parameters)
+                parameters = {parameters};
+                values = {values};
                 
-                % Parse inputs
-                if ~iscell(parameters)
-                    parameters = {parameters};
-                    values = {values};
-                    
-                    if nargin < 4
-                        indices = {0};
-                    else
-                        indices = {indices};
-                    end
+                if nargin < 4
+                    indices = {0};
+                else
+                    indices = {indices};
                 end
-                
+            end
+            
+            if obj.playingState == playingStateClass('stopped')
+        
                 % Set parameters
                 for k = 1:numel(parameters)
                     
@@ -738,6 +739,20 @@ classdef reproductor < matlab.System
                             error('reproductor_plus:setProps', 'The first argument must be the name of an existing parameter')
                     end
                     
+                end
+            else
+                % You can modify tunable properties
+                for k = 1:numel(parameters)
+                    parameter = parameters{k};
+                    value = values{k};
+                    index = indices{k};
+                    
+                    switch parameter
+                        case 'comMatrixCoef'
+                            obj.setCommutationMatrixCoef(value);
+                        otherwise
+                            error('reproductor_plus:setProps', 'The first argument must be the name of an existing parameter')
+                    end
                 end
             end
         end

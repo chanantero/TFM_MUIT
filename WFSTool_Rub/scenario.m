@@ -56,7 +56,11 @@ classdef scenario < handle
         function setNumSources(obj, numSources)
             
             obj.sourcesPosition = zeros(numSources, 3);
-            obj.activeSource = 1;
+            if numSources > 0
+                obj.activeSource = 1;
+            else
+                obj.activeSource = [];
+            end
             obj.loudspeakersState = true(obj.numLoudspeakers, obj.numSources);
 
             source = findobj(obj.panel, 'Tag', 'source');
@@ -104,7 +108,11 @@ classdef scenario < handle
             
             % Other variable
             obj.sourcesPosition = sourcesPosition;
-            obj.activeSource = 1;
+            if obj.numSources > 0
+                obj.activeSource = 1;
+            else
+                obj.activeSource = [];
+            end
             obj.loudspeakersPosition = loudspeakersPosition;
             obj.loudspeakersOrientation = loudspeakersOrientation;
             obj.loudspeakersState = true(obj.numLoudspeakers, obj.numSources);

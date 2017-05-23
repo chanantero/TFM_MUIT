@@ -1,3 +1,15 @@
+% 22/05/2017
+obj = simulator(figure);
+z = -5:0.1:5;
+
+for k = 1:numel(z)
+    obj.z = z(k);
+    obj.simulate();
+    pause(0.05)
+end
+
+
+%%
 % Spherical wave propagating
 rSource = [0 0 0];
 k = 1;
@@ -39,6 +51,8 @@ rSources = [0 0 0; 1 1 0; 0 1 0; 2 0 0];
 XnumPoints = 100; YnumPoints = 100;
 xVec = linspace(-1, 4, XnumPoints)'; yVec = linspace(-1, 2, YnumPoints)';
 rImage = [kron(xVec, ones(YnumPoints, 1)), repmat(yVec, XnumPoints, 1), zeros(XnumPoints*YnumPoints, 1)];
+% [a, b] = ndgrid(yVec, xVec);
+% rImage2 = [b(:), a(:), zeros(XnumPoints*YnumPoints, 1)];
 
 U = sum(sphericalWave(k, ones(size(rSources, 1), 1), rSources, rImage), 2);
 

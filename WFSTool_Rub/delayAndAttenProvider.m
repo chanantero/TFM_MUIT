@@ -24,18 +24,6 @@ classdef delayAndAttenProvider < matlab.System
         getDelayAndAttenFun
     end
     
-    
-    properties(Dependent)
-        numChannels
-    end
-    
-    % Getters and setters
-    methods
-        function numChannels = get.numChannels(obj)
-            numChannels = size(obj.delays, 2);
-        end
-    end
-    
     methods(Access = protected)
         function setupImpl(obj)
             obj.time2Samples_update();
@@ -73,7 +61,7 @@ classdef delayAndAttenProvider < matlab.System
             firstSample = obj.count * obj.FrameSize + 1;
             lastSample = firstSample + obj.FrameSize - 1;
             
-            [delay, attenuation] = getDelayAndAtten(firstSample, lastSample);
+            [delay, attenuation] = obj.getDelayAndAtten(firstSample, lastSample);
         end
         
         function [delay, attenuation] = getDelayAndAtten(obj, firstSample, lastSample)
@@ -85,7 +73,7 @@ classdef delayAndAttenProvider < matlab.System
             atten = obj.attenuations_Samp;
             
             % Find out which samples of change we need
-            [keySamples, t_ind] = vectorSubSelection(t_Samp, firstSample, lastSample);
+            [keySamples, t_ind] = delayAndAttenProvider.vectorSubSelection(t_Samp, firstSample, lastSample);
             
             % If it is empty or the first index is bigger than 1, we need
             % to add a first keySample of change
@@ -103,7 +91,7 @@ classdef delayAndAttenProvider < matlab.System
             
             % Give the delays and attenuations the convenient format for the processor
             % object
-            valueInd = changeIndices2Vector([keySamples; lastSample - firstSample + 1], t_ind);
+            valueInd = delayAndAttenProvider.changeIndices2Vector([keySamples; lastSample - firstSample + 2], t_ind);
             delay = del(valueInd, :);
             attenuation = atten(valueInd, :);
             
@@ -117,7 +105,7 @@ classdef delayAndAttenProvider < matlab.System
             [t_Samp, delay_Samp, attenuation_Samp] = delayAndAttenProvider.time2Samples(obj.SampleRate, obj.t_change, obj.delays, obj.attenuations);
             
             % Find out which samples of change we need
-            [keySamples, t_ind] = vectorSubSelection(t_Samp, firstSample, lastSample);
+            [keySamples, t_ind] = delayAndAttenProvider.vectorSubSelection(t_Samp, firstSample, lastSample);
             
             % If it is empty or the first index is bigger than 1, we need
             % to add a first keySample of change
@@ -135,7 +123,7 @@ classdef delayAndAttenProvider < matlab.System
             
             % Give the delays and attenuations the convenient format for the processor
             % object
-            valueInd = changeIndices2Vector([keySamples; lastSample - firstSample + 1], t_ind);
+            valueInd = delayAndAttenProvider.changeIndices2Vector([keySamples; lastSample - firstSample + 1], t_ind);
             delay = delay_Samp(valueInd, :);
             attenuation = attenuation_Samp(valueInd, :);
             
@@ -169,17 +157,17 @@ classdef delayAndAttenProvider < matlab.System
         
         function [selInd, valueInd] = vectorSubSelection(x, firstSample, lastSample)
             % x must be an sorted vector in ascending order
-            valueInd = find(x >= firstSample & t_Samp <= lastSample);
+            valueInd = find(x >= firstSample & x <= lastSample);
             selInd = x(valueInd) - firstSample + 1;
         end
         
         function values = changeIndices2Vector(changeIndices, valueIndices)
             % changeIndices must have one more element than valueIndices.
             % That last element indicates the ending
-            
+            values = zeros(changeIndices(end) - 1, 1);
             for k = 1:numel(changeIndices) - 1
                 currInd = changeIndices(k):changeIndices(k+1) - 1;
-                values = repmat(valueIndices(k, :), numel(currInd), 1);
+                values(currInd) = repmat(valueIndices(k, :), numel(currInd), 1);
             end
             
         end

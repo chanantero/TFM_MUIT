@@ -33,12 +33,14 @@ classdef WFSTool2 < handle
             obj.player = reproductor();
             obj.reprodPanel = reproductionPanel(fig, @(action) obj.orderCallback(action));
             obj.scenarioObj = scenario(fig);
-            obj.propPanel = propertiesPanel(obj.player, fig, [0.05 0.1 0.4 0.2]);
+            obj.propPanel = propertiesPanel(fig, [0.05 0.1 0.4 0.2]);
             
             obj.changed = struct('virtual', false, 'real', false, 'signalsSpec', false);
                         
             addlistener(obj.player, 'numChannels', 'PostSet', @(~, eventData) obj.changeScenario(eventData.AffectedObject.numChannels(1)));
             addlistener(obj.reprodPanel, 'updatedValues', @(~, evntData) obj.reprodPanelListener(evntData.type));
+            addlistener(obj.player, 'playingState', 'PostSet', @(~, eventData) obj.GUIenabling(eventData.AffectedObject.playingState));
+
             
             obj.signalsSpec = obj.reprodPanel.signals;
             obj.virtual = obj.reprodPanel.virtual;
@@ -48,24 +50,6 @@ classdef WFSTool2 < handle
             obj.changed.signalsSpec = true;
             obj.updateEverything();
         end       
-        
-        function noRealTimeReproduction(obj, t, positions)
-            % Calculate the delays and attenuations for each position
-            % Use scenario object
-            numChann = obj.player.numChannels;
-            delay = zeros(numel(t), numChann);
-            attenuation = zeros(numel(t), numChann);
-            for k = 1:numel(t)
-                % Set scenario
-                obj.scenarioObj.setSourcePosition(positions(k, :));
-                
-                % Get delay and attenuation of the different channels
-                delay(k, :) = obj.scenarioObj.getDelays();
-                attenuation(k, :) = obj.scenarioObj.getAttenuations();
-            end
-            
-            obj.player.reproduceNoRealTime(t, delay, attenuation);
-        end
         
         function updateEverything(obj)
 
@@ -114,6 +98,16 @@ classdef WFSTool2 < handle
     end
     
     methods(Access = private)
+        
+        function GUIenabling(obj, newPlayingState)
+            if newPlayingState == playingStateClass('stopped')
+                obj.reprodPanel.enableGUI();
+                obj.propPanel.enableGUI();
+            else
+                obj.reprodPanel.disableGUI();
+                obj.propPanel.disableGUI();
+            end
+        end
         
         function reprodPanelListener(obj, name)
             switch name
@@ -192,19 +186,29 @@ classdef WFSTool2 < handle
             % driver and device
             
             % Update player GUI controls based on the real sources
-            indReal = [1, find(any(obj.player.comMatrix(:, 2:end), 1))+1];
+%             indReal = [1, find(any(obj.player.comMatrix(:, 2:end), 1))+1];
+            indReal = find(any(obj.player.comMatrix, 1));
             setFrameDurationFunc = @(frameDuration) obj.player.setProps('frameDuration', frameDuration);
+            setVolumeFunc = @(volume, index) obj.setVolume(volume, indReal(index));
             setDeviceFunc = @(device, index) obj.player.setProps('device', device, indReal(index));
             setDriverFunc = @(driver, index) obj.player.setProps('driver', driver, indReal(index));
             getAvailableDevicesFunc = @(index) obj.player.player{indReal(index)}.getAvailableDevices();
             labels = cell(numel(indReal), 1);
-            labels{1} = 'WFS Array';
-            for k = 2:numel(indReal)
+            for k = 1:numel(indReal)
                 labels{k} = sprintf('Device %d', indReal(k)-1);
             end
+            if ~isempty(indReal) && indReal(1) == 1
+                labels{1} = 'WFS Array';
+            end
 
-            obj.propPanel.setFunctions(setFrameDurationFunc, setDeviceFunc, setDriverFunc, getAvailableDevicesFunc, labels);
+            obj.propPanel.setFunctions(setFrameDurationFunc, setVolumeFunc, setDeviceFunc, setDriverFunc, getAvailableDevicesFunc, labels);
             
+        end
+        
+        function setVolume(obj, volume, indPlayer)
+            comMatCoef = obj.player.comMatrixCoef;
+            comMatCoef(:, indPlayer) = volume;
+            obj.player.setProps('comMatrixCoef', comMatCoef);
         end
         
         function updateSignalProvidersVariables(obj)
@@ -239,7 +243,12 @@ classdef WFSTool2 < handle
                 end
             end
             if any(~success)
-                warning('WFSTool2:updateSignalProvidersVariables', 'The signal specifications must specify an audio file that exists or a complex number');
+%                 warning('WFSTool2:updateSignalProvidersVariables', 'The signal specifications must specify an audio file that exists or a complex number');
+                % Set the silence signal
+                obj.player.setProps('mode', originType('sinusoidal'), k);
+                obj.player.setProps('amplitude', 0, k);
+                obj.player.setProps('phase', 0, k);
+                obj.player.setProps('frequency', 1, k);
             end
             
             obj.changed.signalsSpec = false;

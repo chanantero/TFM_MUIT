@@ -15,9 +15,9 @@ classdef reproductionPanel < handle
         orderCallback
     end
     
-   events
-      updatedValues
-   end
+    events
+        updatedValues
+    end
     
     methods
         function obj = reproductionPanel(parent, orderCallback)
@@ -31,7 +31,7 @@ classdef reproductionPanel < handle
             
             obj.setNumSignals(1);
         end
-     
+        
         function setSignal(obj, signalSpec, index)
             obj.signals{index} = signalSpec;
             obj.list.Data(index, 1) = {signalSpec};
@@ -65,7 +65,7 @@ classdef reproductionPanel < handle
         end
         
         function setNumSignals(obj, num)
-            obj.list.Data = [cell(num, 1), num2cell(false(num, 2))];           
+            obj.list.Data = [cell(num, 1), num2cell(false(num, 2))];
             obj.virtual = false(num, 1);
             obj.real = false(num, 1);
             sign = cell(num, 1);
@@ -79,11 +79,23 @@ classdef reproductionPanel < handle
             evntData = updatedValuesEvntData('numSources');
             notify(obj, 'updatedValues', evntData);
         end
-
+        
+        function disableGUI(obj)
+            obj.list.Enable = 'off';
+            numSourcesPopUp = findobj(obj.panel, 'Tag', 'numSources');
+            numSourcesPopUp.Enable = 'off';
+        end
+        
+        function enableGUI(obj)
+            obj.list.Enable = 'on';
+            numSourcesPopUp = findobj(obj.panel, 'Tag', 'numSources');
+            numSourcesPopUp.Enable = 'on';
+        end
+        
     end
     
     methods(Access = private)
-                                                   
+        
         function panel = createPanel(~, parent, buttonCallback, listSelectionCallback, setTrackCallback, cellEditCallback, setNumSourcesCallback)
             panel = uipanel(parent, 'BackgroundColor','white', 'Units', 'normalized', 'Position', [0.05, 0.5, 0.4, 0.4]);
             menu = uicontextmenu;
@@ -100,14 +112,14 @@ classdef reproductionPanel < handle
             playPos = [0.35, y0, w, h];
             stopPos = [0.2, y0, w, h];
             pausePos = [0.5, y0, w, h];
-                        
+            
             playButton = uicontrol(panel, 'Style', 'pushbutton',...
                 'Units', 'normalized', 'Position', playPos, 'Callback', @(hObject, eventData) buttonCallback('play'));
             stopButton = uicontrol(panel, 'Style', 'pushbutton',...
                 'Units', 'normalized', 'Position', stopPos, 'Callback', @(hObject, eventData) buttonCallback('stop'));
             pauseButton = uicontrol(panel, 'Style', 'pushbutton',...
                 'Units', 'normalized', 'Position', pausePos, 'Callback', @(hObject, eventData) buttonCallback('pause'));
-                        
+            
             
             buttons = [playButton, stopButton, pauseButton];
             iconNames = {'images/playIcon.bmp', 'images/stopIcon.bmp', 'images/pauseIcon.jpg'};
@@ -136,7 +148,7 @@ classdef reproductionPanel < handle
             
             % Number of sources uicontrol
             uicontrol(panel, 'Style', 'popupmenu', 'Units', 'normalized', 'Position', [0.1 0.9 0.2 0.1],...
-                'String', {'1', '2', '3'}, 'Callback', @(hObject, ~, ~) setNumSourcesCallback(str2double(hObject.String{hObject.Value})));
+                'Tag', 'numSources', 'String', {'1', '2', '3'}, 'Callback', @(hObject, ~, ~) setNumSourcesCallback(str2double(hObject.String{hObject.Value})));
         end
         
         function buttonCallback(obj, buttonTag)
@@ -153,7 +165,7 @@ classdef reproductionPanel < handle
             % Send order to the callback
             obj.orderCallback(order);
         end
-                
+        
         function numSourcesPopUpMenuCallback(obj, numSources)
             obj.setNumSignals(numSources);
         end
@@ -169,7 +181,7 @@ classdef reproductionPanel < handle
         function setTrackCallback(obj)
             musicDirectory = 'C:\Users\Rubén\Music\Varias\';
             [FileName, PathName, ~] = uigetfile({'*.mp3', 'MP3 File'; '*.wav', 'WAV File'}, 'Select audio track', 'MultiSelect', 'on', musicDirectory);
-                        
+            
             
             if FileName ~= 0
                 obj.setSignal([PathName, FileName], obj.selectedTrack);
@@ -193,7 +205,7 @@ classdef reproductionPanel < handle
                 if complexFlag == false && fileFlag == false
                     % Wrong format
                     % Restart
-                    obj.list.Data{row, 1} = 'A:0 Ph:0 f:1';   
+                    obj.list.Data{row, 1} = 'A:0 Ph:0 f:1';
                 end
                 obj.signals = obj.list.Data(:, 1);
                 
@@ -212,11 +224,11 @@ classdef reproductionPanel < handle
                 evntData = updatedValuesEvntData('real');
                 notify(obj, 'updatedValues', evntData);
             end
-                        
+            
         end
-           
+        
     end
-   
+    
     
 end
 
