@@ -69,7 +69,8 @@ classdef scenario < handle
             source.YData = zeros(1, numSources);
             source.ZData = zeros(1, numSources);
             source.CData = repmat(obj.sourceColor, numSources, 1);
-            
+           
+            obj.updateDelaysAndAttenuations();
         end
         
         function setSourcePosition(obj, sourcePosition, index)
@@ -124,10 +125,12 @@ classdef scenario < handle
             
         function setForcedEnabledLoudspeakers(obj, enabled)
             obj.forcedEnabledLoudspeakers = enabled(:);
+            obj.updateDelaysAndAttenuations();
         end
         
         function setForcedDisabledLoudspeakers(obj, enabled)
             obj.forcedDisabledLoudspeakers = enabled(:);
+            obj.updateDelaysAndAttenuations();
         end
     end
     

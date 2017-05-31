@@ -4,6 +4,7 @@ classdef propertiesPanel < handle
         panel
         menuLabels
         frameDurationMenu
+        fieldLabels
         volumeControls
         deviceMenus
         driverMenus
@@ -26,6 +27,7 @@ classdef propertiesPanel < handle
             delete(obj.deviceMenus);
             delete(obj.driverMenus);
             delete(obj.menuLabels);
+            delete(obj.fieldLabels);
                 
             % Create new ones
             N = numel(labels);
@@ -34,26 +36,51 @@ classdef propertiesPanel < handle
             obj.deviceMenus = gobjects(N, 1);
             obj.driverMenus = gobjects(N, 1);
             obj.menuLabels = gobjects(N, 1);
+            obj.fieldLabels = gobjects(3, 1);
                         
             % Positions
-            yPos = 0.8*(0:N-1)'/N;
-            yDim = 0.8/max(3, N);
-            xPos_label = 0.05;
-            xDim_label = 0.15;
-            xPos_Volume = 0.3;
-            xDim_Volume = 0.15;
-            xPos_deviceMenu = 0.55;
-            xDim_deviceMenu = 0.15;
-            xPos_driverMenu = 0.80;
-            xDim_driverMenu = 0.15;
+            gridPos = [0.15 0 0.65 0.6];
+            numCol = 3; % Number of fields
+            numRow = N;
+            xRelMargin = 0.1; % 10%
+            yRelMargin = 0.1; % 10%
             
-%             position_label = [xPos_label*ones(N, 1), yPos, xDim_label*ones(N, 1), yDim*ones(N, 1)];
-%             position_frameDurationMenu = [xPos_frameDurationMenu*ones(N, 1), yPos, xDim_frameDurationMenu*ones(N, 1), yDim*ones(N, 1)];
-%             position_deviceMenu = [xPos_deviceMenu*ones(N, 1), yPos, xDim_deviceMenu*ones(N, 1), yDim*ones(N, 1)];
-%             position_driverMenu= [xPos_driverMenu*ones(N, 1), yPos, xDim_driverMenu*ones(N, 1), yDim*ones(N, 1)];
-
+            squareXDim = gridPos(3)/numCol;
+            squareYDim = gridPos(4)/max(numRow, 3); 
+            squaresXPos = gridPos(1) + squareXDim*(0:numCol-1);
+            squaresYPos = gridPos(2) + gridPos(4) - squareYDim*(1:numRow);
+            % Apply margins
+            xMargin = xRelMargin*squareXDim;
+            yMargin = yRelMargin*squareYDim;    
+            squaresXPos = squaresXPos + xMargin;
+            squaresYPos = squaresYPos + yMargin;
+            squareXDim = squareXDim - 2*xMargin;
+            squareYDim = squareYDim - 2*yMargin;
+            
+            yPos_frameDurationMenu = 0.92;
+            yDim_frameDurationMenu = 0.1;
+            xDim_label = 0.15;
+            xPos_label = squaresXPos(1) - xDim_label;
+            yPos_FieldLabels = gridPos(2) + gridPos(4);
+            yDim_FieldLabels = 0.1;
+            yPos = squaresYPos;
+            yDim = squareYDim;
+            xPos_Volume = squaresXPos(1);
+            xDim_Volume = squareXDim;
+            xPos_deviceMenu = squaresXPos(2);
+            xDim_deviceMenu = squareXDim;
+            xPos_driverMenu = squaresXPos(3);
+            xDim_driverMenu = squareXDim;
+            
+            
+            obj.fieldLabels(1) = uicontrol(obj.panel, 'Style', 'text', 'String', 'Volume', 'Tag', 'FieldLabel', 'Units', 'normalized', 'Position', [xPos_Volume, yPos_FieldLabels, xDim_Volume, yDim_FieldLabels]);
+            obj.fieldLabels(2) = uicontrol(obj.panel, 'Style', 'text', 'String', 'Device', 'Tag', 'FieldLabel', 'Units', 'normalized', 'Position', [xPos_deviceMenu, yPos_FieldLabels, xDim_deviceMenu, yDim_FieldLabels]);
+            obj.fieldLabels(3) = uicontrol(obj.panel, 'Style', 'text', 'String', 'Driver', 'Tag', 'FieldLabel', 'Units', 'normalized', 'Position', [xPos_driverMenu, yPos_FieldLabels, xDim_driverMenu, yDim_FieldLabels]);
+            
+          
+            uicontrol(obj.panel, 'Style', 'text', 'String', 'Frame Duration (s)', 'Tag', 'frameDurationLabel', 'Units', 'normalized', 'Position', [0.05, yPos_frameDurationMenu, 0.25, yDim_frameDurationMenu]);
             obj.frameDurationMenu = uicontrol(obj.panel, 'Style', 'popupmenu', 'String', {'0.5', '1', '2'}, 'Tag', 'frameDuration',...
-                    'Units', 'normalized', 'Position', [0.3, 0.9, 0.15, 0.1], 'Callback', @(hObject, ~) setFrameDurationFunc(str2double(hObject.String{hObject.Value})));
+                    'Units', 'normalized', 'Position', [0.3, yPos_frameDurationMenu, 0.15, yDim_frameDurationMenu], 'Callback', @(hObject, ~) setFrameDurationFunc(str2double(hObject.String{hObject.Value})));
              
             for k = 1:N     
                 obj.volumeControls(k) = uicontrol(obj.panel, 'Style', 'Edit', 'String', '1', 'Tag', 'Volume', 'Units', 'normalized', 'Position', [xPos_Volume, yPos(k), xDim_Volume, yDim],...

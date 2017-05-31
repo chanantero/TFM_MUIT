@@ -12,31 +12,30 @@ else
     mode = 'array';
 end
 
-% grad_U_plane = A*scaleVector(rPlane_r0, exp(-1i*k*rPlane_r0_mod)./rPlane_r0_mod.^2.*(-1i*k - 1./rPlane_r0_mod));
-
-
 switch mode
     case 'array'
-        % With arrays
-        distMatrix = zeros(numPoints, numSources);
-        for l = 1:numSources
-            difVector = r - repmat(rSources(l, :), numPoints, 1);
-            distMatrix(:, l) = sqrt(sum(difVector.^2, 2));
-        end
+        % With arrays        
+        difVector = repmat(permute(r, [1, 3, 2]), [1, numSources, 1])...
+                  - repmat(permute(rSources, [3, 1, 2]), [numPoints, 1, 1]);
         
-        U = repmat(CoefSources.', numPoints, 1).*exp(-1i*k*distMatrix)./distMatrix;
-        U = sum(U, 2);
+        distMatrix = sqrt(sum(difVector.^2, 3));
+        
+        CoefSourcesMat = repmat(permute(CoefSources, [2, 1]), [numPoints, 1]);
+        A = CoefSourcesMat .* exp(-1i*k*distMatrix)./(distMatrix.^2).*(-1i*k - 1./distMatrix);
+        
+        U = permute(sum(repmat(A, [1 1 3]) .* difVector, 2), [1, 3, 2]);
         
     case 'loop'
         % With loop to avoid overflow of memory. It returns a column vector, not a
         % matrix
-        U = zeros(numPoints, 1);
+        U = zeros(numPoints, 3);
         for l = 1:numPoints
             % Calculate distance of every source to the point
             difVector = repmat(r(l,:), numSources, 1) - rSources;
             dist = sqrt(sum(difVector.^2, 2));
             
-            U(l) = CoefSources.'*(exp(-1i*k*dist)./dist);
+            A = CoefSources.*exp(-1i*k*dist)./(dist.^2).*(-1i*k - 1./dist);
+            U(l, :) = sum(difVector * repmat(A, 1, 3), 1);
         end
 end
 end

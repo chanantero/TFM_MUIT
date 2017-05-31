@@ -1,11 +1,14 @@
-classdef reproductionPanel < handle
+classdef reproductionPanel_noiseChannel < handle
     
     
     properties(SetAccess = private)
         signals
         virtual
         real
+        channelNumber
         numSources
+        virtualVolume
+        realVolume
     end
     
     properties(SetAccess = private)
@@ -20,7 +23,7 @@ classdef reproductionPanel < handle
     end
     
     methods
-        function obj = reproductionPanel(parent, orderCallback)
+        function obj = reproductionPanel_noiseChannel(parent, orderCallback)
             obj.panel = obj.createPanel(parent, @(buttonTag) obj.buttonCallback(buttonTag),...
                 @(eventData) obj.changeSelection(eventData),...
                 @() obj.setTrackCallback(),...
@@ -65,9 +68,13 @@ classdef reproductionPanel < handle
         end
         
         function setNumSignals(obj, num)
-            obj.list.Data = [cell(num, 1), num2cell(false(num, 2))];
+            obj.list.Data = [cell(num, 1), num2cell(false(num, 2)), num2cell(zeros(num, 1)), ...
+                num2cell(ones(num, 1)), num2cell(ones(num, 1))];
             obj.virtual = false(num, 1);
             obj.real = false(num, 1);
+            obj.channelNumber = zeros(num, 1);
+            obj.virtualVolume = ones(num, 1);
+            obj.realVolume = ones(num, 1);
             sign = cell(num, 1);
             for k = 1:num
                 sign{k} = '';
@@ -100,8 +107,8 @@ classdef reproductionPanel < handle
             panel = uipanel(parent, 'BackgroundColor','white', 'Units', 'normalized', 'Position', [0.05, 0.5, 0.4, 0.4]);
             menu = uicontextmenu;
             list_ = uitable(panel, 'Units', 'Normalized', 'Position', [0.05, 0.2, 0.9, 0.7], ...
-                'ColumnName',{'Signal', 'Virtual', 'Real'}, 'ColumnFormat', {'char', 'logical', 'logical'}, 'Tag', 'list',...
-                'ColumnEditable', [true, true, true], 'UIContextMenu', menu,...
+                'ColumnName',{'Signal', 'Virtual', 'Real', 'Channel nº', 'Virtual volume', 'Real Volume'}, 'ColumnFormat', {'char', 'logical', 'logical', 'numeric', 'numeric', 'numeric'}, 'Tag', 'list',...
+                'ColumnEditable', [true, true, true, true, true, true], 'UIContextMenu', menu,...
                 'CellSelectionCallback', @(hObject, eventData) listSelectionCallback(eventData),...
                 'CellEditCallback', @(hObject, eventData) cellEditCallback(eventData));
             list_.UserData = struct('paths', []);
@@ -224,6 +231,22 @@ classdef reproductionPanel < handle
                 obj.real = cell2mat(obj.list.Data(:, 3));
                 
                 evntData = updatedValuesEvntData('real');
+                notify(obj, 'updatedValues', evntData);
+            elseif column == 4
+                % The number of the channels for the sources have changed
+                obj.channelNumber = cell2mat(obj.list.Data(:, 4));
+                
+                evntData = updatedValuesEvntData('channelNumber');
+                notify(obj, 'updatedValues', evntData);
+            elseif column == 5
+                obj.virtualVolume = cell2mat(obj.list.Data(:, 5));
+                
+                evntData = updatedValuesEvntData('virtualVolume');
+                notify(obj, 'updatedValues', evntData);
+            elseif column == 6
+                obj.virtualVolume = cell2mat(obj.list.Data(:, 6));
+                
+                evntData = updatedValuesEvntData('realVolume');
                 notify(obj, 'updatedValues', evntData);
             end
             
