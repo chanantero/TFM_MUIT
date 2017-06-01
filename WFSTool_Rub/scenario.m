@@ -124,13 +124,26 @@ classdef scenario < handle
         end
             
         function setForcedEnabledLoudspeakers(obj, enabled)
+            if numel(enabled) == obj.numLoudspeakers
             obj.forcedEnabledLoudspeakers = enabled(:);
             obj.updateDelaysAndAttenuations();
+            else
+                warning('scenario:wrongSize', ['The number of loudspeakers is %d. The number ',...
+                'of elements of the enabled loudspeakers vector must be the same'],...
+                obj.numLoudspeakers);
+            end
         end
         
-        function setForcedDisabledLoudspeakers(obj, enabled)
-            obj.forcedDisabledLoudspeakers = enabled(:);
-            obj.updateDelaysAndAttenuations();
+        function setForcedDisabledLoudspeakers(obj, disabled)
+            if numel(disabled) == obj.numLoudspeakers
+                obj.forcedDisabledLoudspeakers = disabled(:);
+                obj.updateDelaysAndAttenuations();
+            else
+                warning('scenario:wrongSize', ['The number of loudspeakers is %d. The number ',...
+                'of elements of the disabled loudspeakers vector must be the same'],...
+                obj.numLoudspeakers);
+            end
+            
         end
     end
     

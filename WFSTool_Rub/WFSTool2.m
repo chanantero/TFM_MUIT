@@ -278,19 +278,19 @@ classdef WFSTool2 < handle
         function changeScenario(obj, numChannels)
             numChannels = numChannels(1);
             switch numChannels
-                case 0;
+                case 0
                     sourcePosition = [0 0 0];
                     loudspeakersPosition = double.empty(0,3);
                     loudspeakersOrientation = double.empty(0,3);
                     roomPosition = [0 0 1 1];
                     obj.scenarioObj.setScenario(sourcePosition, loudspeakersPosition, loudspeakersOrientation, roomPosition);
-                case 2;
+                case 2
                     sourcePosition = obj.scenarioObj.sourcesPosition;
                     loudspeakersPosition = [-0.1 0 0; 0.1 0 0];
                     loudspeakersOrientation = [1 0 0; -1 0 0];
                     roomPosition = [-2, -2, 4, 4];
                     obj.scenarioObj.setScenario(sourcePosition, loudspeakersPosition, loudspeakersOrientation, roomPosition);
-                case 96;                    
+                case 96                   
                     d = 0.18; % Separation between two contiguous loudspeakers. Size of one loudspeaker
                     nb = 8; % Bottom and upper sides of the octogon (2 sides)
                     nd = 8; % Diagonal sides of the octogon (4 sides)
