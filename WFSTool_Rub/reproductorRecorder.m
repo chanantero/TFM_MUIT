@@ -30,6 +30,11 @@ classdef reproductor < matlab.System
         driver % Cell string array with as many elements as players
         device % Cell string array with as many elements as players
         Fs_player
+        
+        % Recorder settings
+        driver_recorder % Cell string array with as many elements as recorders
+        device_recorder % Cell string array with as many elements as recorders
+        Fs_recorder
     end
     
     % Tunable properties
@@ -45,6 +50,9 @@ classdef reproductor < matlab.System
         
         % Player settings
         frameSizeWriting % Array with as many elements as players
+        
+        % Recorder settings
+        frameSizeRecorder % Array with as many elements as recorders
     end
     
     properties(DiscreteState)
@@ -64,6 +72,7 @@ classdef reproductor < matlab.System
         numReaders
         numPlayers
         numLinks
+        numRecorders
     end
     
     % Private properties: objects
@@ -72,6 +81,7 @@ classdef reproductor < matlab.System
         procParamProvider % Cell Array
         processor % Cell Array as non-null elements of comMatrix
         player % Cell Array
+        recorder % Cell Array
     end
     
     % System object methods
@@ -91,7 +101,9 @@ classdef reproductor < matlab.System
             obj.setPropertiesPlayers();
             
             obj.setPropertiesProcessors();
-                               
+            
+            obj.setPropertiesRecorder();
+                   
         end
         
         function [numUnderrun, tics] = stepImpl(obj, delays, attenuations)
@@ -183,7 +195,11 @@ classdef reproductor < matlab.System
         function numLinks = get.numLinks(obj)
             numLinks = sum(obj.comMatrix(:));
         end
-                
+        
+        function numRecorders = get.numRecorders(obj)
+            numRecorders = numel(obj.recorder);
+        end
+        
         function Fs = get.Fs_reader(obj)
             Fs = zeros(obj.numReaders, 1);
             for k = 1:obj.numReaders
@@ -258,7 +274,22 @@ classdef reproductor < matlab.System
                 obj.player{k}.Fs = obj.Fs_player(k);
             end
         end
-              
+      
+        function setPropertiesRecorder(obj, index)
+             if nargin == 1
+                index = 1:obj.numRecorders;
+             end
+             
+             obj.frameSizeRecorder = floor(obj.frameDuration*obj.Fs_recorder);
+            
+             for k = index
+                 obj.recorder{k}.Driver = obj.driver_recorder{k};
+                 obj.recorder{k}.Device = obj.device_recorder{k};
+                 obj.recorder{k}.SamplesPerFrame = obj.frameSizeRecorder(k);
+                 obj.recorder{k}.SampleRate = obj.Fs_recorder(k);
+             end
+        end
+        
         function updateNumOutputChannels(obj, index)
            
             if nargin == 1
