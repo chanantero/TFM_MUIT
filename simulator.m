@@ -35,7 +35,8 @@ classdef simulator < handle
     methods
         function obj = simulator(parentFig)
             if nargin == 1
-                obj.ax = axes(parentFig, 'CLim', [0 10]);
+                obj.ax = axes(parentFig, 'CLim', [-1 1]);
+                colormap(obj.ax, 'gray');
             end
             obj.setDefaultProperties();
         end
@@ -79,11 +80,11 @@ classdef simulator < handle
             obj.imag = image(obj.ax, 'XData', obj.XLim, 'YData', obj.YLim,...
                 'CData', real(U), 'CDataMapping', 'scaled');
             
-            % Draw sources
-            obj.ax.NextPlot = 'Add';
-            scatter(obj.ax, obj.sourcePositions(:, 1), obj.sourcePositions(:, 2), 50, [1 1 1],...
-                'MarkerEdgeColor', [0 0 0]);
-            obj.ax.NextPlot = 'Replace';
+%             % Draw sources
+%             obj.ax.NextPlot = 'Add';
+%             scatter(obj.ax, obj.sourcePositions(:, 1), obj.sourcePositions(:, 2), 50, [1 1 1],...
+%                 'MarkerEdgeColor', [0 0 0]);
+%             obj.ax.NextPlot = 'Replace';
         end
        
         function animate(obj, f, t)
@@ -107,40 +108,60 @@ classdef simulator < handle
             % the X, Y and Z coordinates, third dimension along sources
             numSour = obj.numSources;
             numMeasPoints = size(measurePointPositions, 1);
-%             diffVec = zeros(numMeasPoints, 3, numSour);
-%             for s = 1:numSour
-%                 sourcePosition = obj.sourcePositions(s, :);
-%                 diffVec(:, :, s) = measurePointPositions - repmat(sourcePosition, numMeasPoints, 1);
-%             end
 
-% More synthetic, it shows unstable behaviour
-            diffVec = repmat(measurePointPositions, [1, 1, numSour]) - repmat(permute(obj.sourcePositions, [3, 2, 1]), [numMeasPoints, 1, 1]);
-            dist = permute(sqrt(sum(diffVec.^2, 2)), [1, 3, 2]);
-            
-            % From the difference vector and the orientation of the
-            % sources, calculate the relative orientation respect to the
-            % source reference system
-            % relDir has size equal to [numMeasurePoints, 3, numSour]
-            relDir = zeros(numMeasPoints, 3, numSour);
+%             diffVec = zeros(numMeasPoints, 3, numSour);
+%             for l = 1:numMeasPoints
+%                 diffVec(l, :, :) = repmat(measurePointPositions(l, :), [1, 1, numSour]) - permute(obj.sourcePositions, [3, 2, 1]);
+%             end
+%             % More synthetic, it shows unstable behaviour
+% %             diffVec = repmat(measurePointPositions, [1, 1, numSour]) - repmat(permute(obj.sourcePositions, [3, 2, 1]), [numMeasPoints, 1, 1]);
+% 
+%             dist = permute(sqrt(sum(diffVec.^2, 2)), [1, 3, 2]);             
+%             
+%             % From the difference vector and the orientation of the
+%             % sources, calculate the relative orientation respect to the
+%             % source reference system
+%             % relDir has size equal to [numMeasurePoints, 3, numSour]
+%             relDir = zeros(numMeasPoints, 3, numSour);
+%             for s = 1:numSour
+%                 rotVec = obj.sourceOrientations(s, :);
+%                 rotVec(1) = -rotVec(1);
+%                 quat = simulator.rotVec2quat(rotVec);
+%                 relDir(:, :, s) = quatrotate(quat, diffVec(:, :, s));
+%             end
+% %             clear('diffVec')
+% 
+%             % Calculate the ratidation pattern for each source and measure
+%             % point
+%             radPatCoef = zeros(numMeasPoints, numSour);
+%             for s = 1:numSour
+%                 radPatFun = obj.radPatFuns{s};
+%                 radPatCoef(:, s) = radPatFun(relDir(:, :, s));
+%             end
+%             clear('relDir')
+%             
+%             % Calculate the final value
+%             A = radPatCoef.*repmat(obj.sourceCoefficients.', numMeasPoints, 1);
+%             U = sum(A.*exp(-1i*obj.k*dist)./dist, 2);
+
+%             In loop. Less memory requirements
+            U_aux = zeros(numMeasPoints, numSour);
             for s = 1:numSour
+                diffVec = measurePointPositions - repmat(obj.sourcePositions(s, :), numMeasPoints, 1);
+                dist = sqrt(sum(diffVec.^2, 2));
+                
                 rotVec = obj.sourceOrientations(s, :);
                 rotVec(1) = -rotVec(1);
                 quat = simulator.rotVec2quat(rotVec);
-                relDir(:, :, s) = quatrotate(quat, diffVec(:, :, s));
-            end
-            
-            % Calculate the ratidation pattern for each source and measure
-            % point
-            radPatCoef = zeros(numMeasPoints, numSour);
-            for s = 1:numSour
+                relDir = quatrotate(quat, diffVec);
+                
                 radPatFun = obj.radPatFuns{s};
-                radPatCoef(:, s) = radPatFun(relDir(:, :, s));
+                radPatCoef = radPatFun(relDir);
+                
+                U_aux(:, s) = obj.sourceCoefficients(s)*radPatCoef.*exp(-1i*obj.k*dist)./dist;
             end
-            
-            % Calculate the final value
-            A = radPatCoef.*repmat(obj.sourceCoefficients', numMeasPoints, 1);
-            U = sum(A.*exp(-1i*obj.k*dist)./dist, 2);
-            
+            U = sum(U_aux, 2);
+                       
         end
         
         function setSources(obj, varargin)
@@ -193,15 +214,10 @@ classdef simulator < handle
             monopoleSourcePos = surfacePointsPos;
             dipoleSourcePos = surfacePointsPos;
             sourcePos = [originalSourcePos; monopoleSourcePos; dipoleSourcePos];
-            
-%             originalSourceCoeff = -sourceCoeff;
-%             monopoleSourceCoeff = monopoleCoeff;
-%             dipoleSourceCoeff = dipoleCoeff;
-            
-            originalSourceCoeff = 0;
-            monopoleSourceCoeff = dipoleCoeff;
-            dipoleSourceCoeff = zeros(size(monopoleCoeff, 1), 1);
-            
+           
+            originalSourceCoeff = -sourceCoeff;
+            monopoleSourceCoeff = monopoleCoeff;
+            dipoleSourceCoeff = dipoleCoeff;
             sourceCoef = [originalSourceCoeff; monopoleSourceCoeff; dipoleSourceCoeff];
             
             originalSourceOrient = repmat([0 1 0 0], numSourc, 1);
@@ -211,12 +227,11 @@ classdef simulator < handle
             
             originalSourceRadPat = repmat({@(x) simulator.monopoleRadPat(x)}, numSourc, 1);
             monopoleSourceRadPat = repmat({@(x) simulator.monopoleRadPat(x)}, numSurfacePoints, 1);
-            dipoleSourceRadPat = repmat({@(x) simulator.dipoleRadPat(x)}, numSurfacePoints, 1);
+            dipoleSourceRadPat = repmat({@(x) simulator.dipolePreciseRadPat(x, obj.k)}, numSurfacePoints, 1);
             sourceRadPat = [originalSourceRadPat; monopoleSourceRadPat; dipoleSourceRadPat];
             
             obj.setSources(sourcePos, 'coefficient', sourceCoef, 'orientation', sourceOrient, 'radiationPattern', sourceRadPat);
         end
-
 
         function setLinearArrayScenario(obj, sourcePos, sourceCoeff, surfacePointsPos)
             numSour = size(sourcePos, 1);
@@ -252,19 +267,6 @@ classdef simulator < handle
     end
     
     methods(Static)
-        function quat = rotVec2quat(rotVec)
-            % Rotation vector to quaternion
-            % rotVec is a Mx4 matrix. Each row is a rotation vector
-            % quat is a Mx4 matrix. Each row is a quaternion
-            rotVecNorm = sqrt(sum(rotVec.^2, 2));
-            rotVec = rotVec./repmat(rotVecNorm, 1, 4);
-            
-            theta = rotVec(:, 1);
-            x = rotVec(:, 2);
-            y = rotVec(:, 3);
-            z = rotVec(:, 4);
-            quat = [cos(theta/2), repmat(sin(theta/2), 1, 3).*[x, y, z]];
-        end
         
         function [monopoleCoeff, dipoleCoeff] = KirchhoffIntegralCoeff(k, sourcePos, sourceCoeff, surfacePointsPos, surfacePointsNormal, surfacePointsArea)
             % We will assume that the sources are monopoles
@@ -285,8 +287,8 @@ classdef simulator < handle
             
             % Calculate the coeffients of monopoles and dipoles
             % (Kirchhoff Integral)
-            monopoleCoeff = surfacePointsArea.*directDer_U;
-            dipoleCoeff = surfacePointsArea.*U;
+            monopoleCoeff = 1/(4*pi)*surfacePointsArea.*directDer_U;
+            dipoleCoeff = 1/(4*pi)*surfacePointsArea.*U;
             
             
         end
@@ -306,12 +308,26 @@ classdef simulator < handle
             radPat = dot(repmat(broadside, size(relDir, 1), 1), relDir, 2)./normRelDir;
         end
         
-        function radPat = dipolePreciseRadPat(relDir)
+        function radPat = dipolePreciseRadPat(relDir, k)
             % Broadside at Z axis
             broadside = [0 0 1];
             
             normRelDir = sqrt(sum(relDir.^2, 2));
-            radPat = (1i*k + 1./normRelDir).*dot(broadside, relDir)./normRelDir;           
+            radPat = (1i*k + 1./normRelDir).*dot(repmat(broadside, size(relDir, 1), 1), relDir, 2)./normRelDir;           
+        end
+        
+        function quat = rotVec2quat(rotVec)
+            % Rotation vector to quaternion
+            % rotVec is a Mx4 matrix. Each row is a rotation vector
+            % quat is a Mx4 matrix. Each row is a quaternion
+            rotVecNorm = sqrt(sum(rotVec.^2, 2));
+            rotVec = rotVec./repmat(rotVecNorm, 1, 4);
+            
+            theta = rotVec(:, 1);
+            x = rotVec(:, 2);
+            y = rotVec(:, 3);
+            z = rotVec(:, 4);
+            quat = [cos(theta/2), repmat(sin(theta/2), 1, 3).*[x, y, z]];
         end
         
         function rotVec = vec2rotVec(x)
@@ -330,6 +346,7 @@ classdef simulator < handle
             
             rotVec = [theta, rotAxis];
         end
+        
     end
     
 end

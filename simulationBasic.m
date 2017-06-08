@@ -1,13 +1,8 @@
 % 22/05/2017
 obj = simulator(figure);
-z = -5:0.1:5;
+t = 0:0.2:10;
 
-for k = 1:numel(z)
-    obj.z = z(k);
-    obj.simulate();
-    pause(0.05)
-end
-
+obj.animate(1, t)
 
 %%
 % Spherical wave propagating
@@ -145,7 +140,7 @@ U_surface = sphericalWave(k, A, r0, r_surface);
 
 scatter3(r_surface(:,1), r_surface(:,2), r_surface(:,3), [], [0 0 1])
 
-p = [60, 60, 100];
+p = [65, 60, 100];
 
 % Kirchhoff's integral
 r_p = r_surface - repmat(p, numPointsSurface, 1);
