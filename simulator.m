@@ -100,8 +100,6 @@ classdef simulator < handle
         end
         
         function U = calculate(obj, measurePointPositions)
-%             U = sum(sphericalWave(obj.k, obj.sourceCoefficients, obj.sourcePositions, measurePointPositions), 2);
-
             % Calculate the difference vectors between sources and measure
             % points
             % First dimension along measurePoints, second dimension along
@@ -109,56 +107,23 @@ classdef simulator < handle
             numSour = obj.numSources;
             numMeasPoints = size(measurePointPositions, 1);
 
-%             diffVec = zeros(numMeasPoints, 3, numSour);
-%             for l = 1:numMeasPoints
-%                 diffVec(l, :, :) = repmat(measurePointPositions(l, :), [1, 1, numSour]) - permute(obj.sourcePositions, [3, 2, 1]);
-%             end
-%             % More synthetic, it shows unstable behaviour
-% %             diffVec = repmat(measurePointPositions, [1, 1, numSour]) - repmat(permute(obj.sourcePositions, [3, 2, 1]), [numMeasPoints, 1, 1]);
-% 
-%             dist = permute(sqrt(sum(diffVec.^2, 2)), [1, 3, 2]);             
-%             
-%             % From the difference vector and the orientation of the
-%             % sources, calculate the relative orientation respect to the
-%             % source reference system
-%             % relDir has size equal to [numMeasurePoints, 3, numSour]
-%             relDir = zeros(numMeasPoints, 3, numSour);
-%             for s = 1:numSour
-%                 rotVec = obj.sourceOrientations(s, :);
-%                 rotVec(1) = -rotVec(1);
-%                 quat = simulator.rotVec2quat(rotVec);
-%                 relDir(:, :, s) = quatrotate(quat, diffVec(:, :, s));
-%             end
-% %             clear('diffVec')
-% 
-%             % Calculate the ratidation pattern for each source and measure
-%             % point
-%             radPatCoef = zeros(numMeasPoints, numSour);
-%             for s = 1:numSour
-%                 radPatFun = obj.radPatFuns{s};
-%                 radPatCoef(:, s) = radPatFun(relDir(:, :, s));
-%             end
-%             clear('relDir')
-%             
-%             % Calculate the final value
-%             A = radPatCoef.*repmat(obj.sourceCoefficients.', numMeasPoints, 1);
-%             U = sum(A.*exp(-1i*obj.k*dist)./dist, 2);
-
-%             In loop. Less memory requirements
             U_aux = zeros(numMeasPoints, numSour);
             for s = 1:numSour
-                diffVec = measurePointPositions - repmat(obj.sourcePositions(s, :), numMeasPoints, 1);
+                sourceCoef = obj.sourceCoefficients(s);
+                sourcePos = obj.sourcePositions(s, :);
+                sourceOrient = obj.sourceOrientations(s, :);
+                radPatFun = obj.radPatFuns{s};
+                
+                diffVec = measurePointPositions - repmat(sourcePos, numMeasPoints, 1);
                 dist = sqrt(sum(diffVec.^2, 2));
                 
-                rotVec = obj.sourceOrientations(s, :);
+                rotVec = sourceOrient;
                 rotVec(1) = -rotVec(1);
                 quat = simulator.rotVec2quat(rotVec);
                 relDir = quatrotate(quat, diffVec);
-                
-                radPatFun = obj.radPatFuns{s};
                 radPatCoef = radPatFun(relDir);
                 
-                U_aux(:, s) = obj.sourceCoefficients(s)*radPatCoef.*exp(-1i*obj.k*dist)./dist;
+                U_aux(:, s) = sourceCoef*radPatCoef.*exp(-1i*obj.k*dist)./dist;
             end
             U = sum(U_aux, 2);
                        
@@ -174,6 +139,7 @@ classdef simulator < handle
             addParameter(p, 'radiationPattern', []);
             
             parse(p, varargin{:})
+%             disp('Parse completed')
             
             obj.sourcePositions = p.Results.position;
             N = obj.numSources;
@@ -276,11 +242,11 @@ classdef simulator < handle
             % Field
             numSources = size(sourcePos, 1);
             radPat = repmat({@(x) simulator.monopoleRadPat(x)}, numSources, 1);
-            obj = simulator;
-            obj.setSources(sourcePos, 'coefficient', sourceCoeff, 'radiationPattern', radPat);
-            U = obj.calculate(surfacePointsPos);
-            delete(obj);
-            
+            objAux = simulator;
+            objAux.setSources(sourcePos, 'coefficient', sourceCoeff, 'radiationPattern', radPat);
+            U = objAux.calculate(surfacePointsPos);
+            delete(objAux);
+                        
             % Directional derivative
             grad_U = sphericalWave_grad(k, sourceCoeff, sourcePos, surfacePointsPos);
             directDer_U = sum(grad_U.*surfacePointsNormal, 2);
@@ -313,15 +279,15 @@ classdef simulator < handle
             broadside = [0 0 1];
             
             normRelDir = sqrt(sum(relDir.^2, 2));
-            radPat = (1i*k + 1./normRelDir).*dot(repmat(broadside, size(relDir, 1), 1), relDir, 2)./normRelDir;           
+            radPat = (-1i*k - 1./normRelDir).*dot(repmat(broadside, size(relDir, 1), 1), -relDir, 2)./normRelDir;           
         end
         
         function quat = rotVec2quat(rotVec)
             % Rotation vector to quaternion
             % rotVec is a Mx4 matrix. Each row is a rotation vector
             % quat is a Mx4 matrix. Each row is a quaternion
-            rotVecNorm = sqrt(sum(rotVec.^2, 2));
-            rotVec = rotVec./repmat(rotVecNorm, 1, 4);
+            rotVecNorm = sqrt(sum(rotVec(2:end).^2, 2));
+            rotVec(2:end) = rotVec(2:end)./repmat(rotVecNorm, 1, 3);
             
             theta = rotVec(:, 1);
             x = rotVec(:, 2);

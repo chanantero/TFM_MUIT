@@ -67,12 +67,17 @@ classdef reproductor < matlab.System
         numChannels
     end
     
+    properties(SetAccess = private)
+        recorded
+    end
+    
     properties(Dependent)
         Fs_reader % Sampling frequency of readers.
         numReaders
         numPlayers
         numLinks
         numRecorders
+        numRecorderChannels
     end
     
     % Private properties: objects
@@ -114,6 +119,7 @@ classdef reproductor < matlab.System
             indCom = obj.getLinkAbsInd();
             [indReader, indPlayer] = obj.getLinkSubInd();
             numLink = obj.numLinks;
+            numRec = obj.numRecorders;
             
             % Read from file
             audioInput = cell(numReader, 1);
@@ -152,6 +158,11 @@ classdef reproductor < matlab.System
             tics = uint64(zeros(numPlayer, 1)); % When does it finish processing?
             for k = indPlay
                 [numUnderrun(k), tics(k)] = step(obj.player{k}, audioOutput{k});
+            end
+            
+            % Record
+            for k = 1:numRec
+                obj.recorded{k} = step(obj.recorder{k});
             end
             
             % Update discrete state
@@ -198,6 +209,19 @@ classdef reproductor < matlab.System
         
         function numRecorders = get.numRecorders(obj)
             numRecorders = numel(obj.recorder);
+        end
+        
+        function set.numRecorders(obj, N)
+            obj.setNumRecorders(N)
+        end
+        
+        function numRecorderChannels = get.numRecorderChannels(obj)
+            N = obj.numRecorders;
+            numRecorderChannels = zeros(N, 1);
+            for k = 1:N
+                numRecorderChannels(k) = obj.recorder{k}.NumChannels;
+            end
+           
         end
         
         function Fs = get.Fs_reader(obj)
@@ -318,6 +342,10 @@ classdef reproductor < matlab.System
                 release(obj.player{k})
             end
             
+            for k = 1:obj.numRecorders
+                release(obj.recorder{k})
+            end
+            
             obj.playingState = playingStateClass('stopped');
         end
         
@@ -333,6 +361,11 @@ classdef reproductor < matlab.System
             
             for k = 1:obj.numPlayers
                 reset(obj.player{k})
+            end
+            
+            for k = 1:obj.numRecorders
+                reset(obj.recorder{k})
+                obj.recorded{k} = zeros(0, obj.numRecorders);
             end
             
             obj.count = 0;
@@ -371,6 +404,14 @@ classdef reproductor < matlab.System
             
         end
         
+        function setRecorderDefaultProperties(obj)         
+            for k = 1:obj.numRecorders
+                obj.setProps('driver_recorder', 'DirectSound', k);
+                obj.setProps('device_recorder', 'Default', k);
+                obj.setProps('Fs_recorder', '44100', k);
+            end
+        end
+        
         function setCommutationMatrixCoef(obj, comMatCoef)
             obj.comMatrixCoef = comMatCoef;
         end
@@ -402,7 +443,16 @@ classdef reproductor < matlab.System
             
             obj.setDefaultProperties();
         end
+        
+        function setNumRecorders(obj, numRecorders)
+            obj.recorder = cell(numRecorders, 1);
+            for k = 1:numRecorders
+                obj.recorder{k} = audioDeviceReader;
+            end
             
+            obj.setRecorderDefaultProperties();
+        end
+        
         function t_br = delayBetweenDevices(obj, ts_bufferQueueLoad, numUnderruns)
             % Assume that the buffer size and the size of each load to the
             % buffer queue are equal, i.e. the VariableInputSize of the
@@ -614,6 +664,10 @@ classdef reproductor < matlab.System
             obj.comMatrixCoef = 1;
             obj.setDefaultProperties();
             
+            % Recording object
+            obj.recorder = {audioDeviceReader};
+            obj.setRecorderDefaultProperties();
+            
         end
         
         function executeOrder(obj, action)
@@ -764,6 +818,14 @@ classdef reproductor < matlab.System
                         case 'frequency'
                             obj.(parameter)(index) = value;
                         case 'FsGenerator'
+                            obj.(parameter)(index) = value;
+                        case 'numRecorders'
+                            obj.
+                        case 'driver_recorder'
+                            obj.(parameter)(index) = value;
+                        case 'device_recorder'
+                            obj.(parameter)(index) = value;
+                        case 'Fs_recorder'
                             obj.(parameter)(index) = value;
                         otherwise
                             error('reproductor_plus:setProps', 'The first argument must be the name of an existing parameter')

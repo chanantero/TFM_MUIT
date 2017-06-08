@@ -100,31 +100,38 @@ U_p_real = sphericalWave(k, A, r0, p);
 
 % Method 1
 U_surface = sphericalWave(k, A, r0, r_surface);
-% Kirchhoff's integral
 r_r0 = r_surface - repmat(r0, numPointsSurface, 1);
-grad_U = A*gradGreenFunction(r_r0, k);
-
-[U1, U2] = kirchhoffIntegral(k, r_surface, dS_vec, U_surface, grad_U, p);
-
-% Hardcoded
-r = p;
-U = U_surface;
-area_dS = dS;
-
-r_rs = repmat(r, numPointsSurface, 1) - r_surface;
-r_rs_mod = modVec(r_rs);
-
-G = exp(-1i*k*r_rs_mod)./r_rs_mod;
-grad_G = scaleVector(-r_rs, exp(-1i*k*r_rs_mod)./r_rs_mod.^2.*(-1i*k - 1./r_rs_mod));
-
-U_r = 1/(4*pi)*sum( area_dS.* (U.*dot(n, grad_G, 2) - G.*dot(n, grad_U, 2)) );
-aux = area_dS.* (U.*dot(n, grad_G, 2) - G.*dot(n, grad_U, 2));
-aux1 = U.*dot(n, grad_G, 2).*area_dS/(4*pi);
-aux2 = - G.*dot(n, grad_U, 2).*area_dS/(4*pi);
+grad_U = sphericalWave_grad( k, A, r0, r_surface );
+[U, A, B] = kirchhoffIntegral(k, r_surface, dS_vec, U_surface, grad_U, p);
 
 % Method 2 (Simulator)
-obj.setKirchhoffIntegralScenario(r0, 1, r_surface, -n, dS)
-obj.simulate();
-obj.animate(1,t);
-obj.sourceCoefficients(1) = 0;
+obj = simulator;
+obj.setKirchhoffIntegralScenario(r0, 1, r_surface, n, dS)
+U = obj.calculate(p);
+
+% Hardcoded
+measurePointPositions = p;
+
+r_measure = p;
+dS = dS_vec;
+Usurf = U_surface;
+grad_Usurf = grad_U;
+
+numMeasurePoints = size(r_measure, 1);
+numPointsSurface = size(r_surface, 1);
+area_dS = modVec(dS);
+n = scaleVector(dS, 1./area_dS);
+
+U = zeros(numMeasurePoints, 1);
+for l = 1:numMeasurePoints
+    r = r_measure(l, :);
+    rel_r = repmat(r, numPointsSurface, 1) - r_surface;
+    
+    G = GreenFunction(rel_r, k);
+    grad_G = gradGreenFunction(-rel_r, k); % The minus sign is because we must find the derivate of (x - x0)
+    A = G .* sum(n.*grad_Usurf, 2);
+    B = Usurf .* sum(n.*grad_G, 2);
+    U(l) = 1/(4*pi)*sum( area_dS.* (A - B) );
+end
+
 

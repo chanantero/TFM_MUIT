@@ -20,12 +20,12 @@ switch mode
         
 %         distMatrix = sqrt(sum(difVector.^2, 3));
 %         
-%         CoefSourcesMat = repmat(permute(CoefSources, [2, 1]), [numPoints, 1]);
+        CoefSourcesMat = repmat(permute(CoefSources, [2, 1]), [numPoints, 1]);
 %         A = CoefSourcesMat .* exp(-1i*k*distMatrix)./(distMatrix.^2).*(-1i*k - 1./distMatrix);
 %         
 %         U = permute(sum(repmat(A, [1 1 3]) .* difVector, 2), [1, 3, 2]);
         
-        U = repmat(CoefSourcesMat, [1 1 3]) .* gradG(difVector, k, 3);
+        U = permute(repmat(CoefSourcesMat, [1 1 3]) .* gradGreenFunction(difVector, k, 3), [1 3 2]);
         
     case 'loop'
         % With loop to avoid overflow of memory. It returns a column vector, not a
@@ -39,7 +39,7 @@ switch mode
 %             A = CoefSources.*exp(-1i*k*dist)./(dist.^2).*(-1i*k - 1./dist);
 %             U(l, :) = sum(difVector * repmat(A, 1, 3), 1);
 
-            U(l, :) = repmat(CoefSources, 1, 3).*gradG(difVector, k);
+            U(l, :) = repmat(CoefSources, 1, 3).*gradGreenFunction(difVector, k);
 
         end
 end
