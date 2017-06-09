@@ -35,7 +35,7 @@ classdef simulator < handle
     methods
         function obj = simulator(parentFig)
             if nargin == 1
-                obj.ax = axes(parentFig, 'CLim', [-1 1]);
+                obj.ax = axes(parentFig, 'CLim', [-0.1 0.1]);
                 colormap(obj.ax, 'gray');
             end
             obj.setDefaultProperties();
@@ -254,7 +254,7 @@ classdef simulator < handle
             % Calculate the coeffients of monopoles and dipoles
             % (Kirchhoff Integral)
             monopoleCoeff = 1/(4*pi)*surfacePointsArea.*directDer_U;
-            dipoleCoeff = 1/(4*pi)*surfacePointsArea.*U;
+            dipoleCoeff = -1/(4*pi)*surfacePointsArea.*U;
             
             
         end
@@ -289,7 +289,7 @@ classdef simulator < handle
             rotVecNorm = sqrt(sum(rotVec(2:end).^2, 2));
             rotVec(2:end) = rotVec(2:end)./repmat(rotVecNorm, 1, 3);
             
-            theta = rotVec(:, 1);
+            theta = -rotVec(:, 1);
             x = rotVec(:, 2);
             y = rotVec(:, 3);
             z = rotVec(:, 4);

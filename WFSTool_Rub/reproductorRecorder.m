@@ -1,4 +1,4 @@
-classdef reproductor < matlab.System
+classdef reproductorRecorder < matlab.System
     
     % The user can set this properties when the object is not locked, i.e,
     % when playingState is stopped
@@ -71,7 +71,7 @@ classdef reproductor < matlab.System
         recorded
     end
     
-    properties(Dependent)
+    properties(Dependent, SetAccess = private)
         Fs_reader % Sampling frequency of readers.
         numReaders
         numPlayers
@@ -93,14 +93,7 @@ classdef reproductor < matlab.System
     methods(Access = protected)
         
         function setupImpl(obj)
-            
-%             % Calculate Fs_player automatically
-%             firstPlayer = zeros(obj.numPlayers, 1);
-%             for k = 1:obj.numPlayers
-%                 firstPlayer(k) = find(obj.comMatrix(:, k), 1, 'first');
-%             end
-%             obj.Fs_player(k) = obj.Fs_reader(firstPlayer(k));
-            
+                    
             obj.setPropertiesSignalProviders();
             
             obj.setPropertiesPlayers();
@@ -162,7 +155,7 @@ classdef reproductor < matlab.System
             
             % Record
             for k = 1:numRec
-                obj.recorded{k} = step(obj.recorder{k});
+                obj.recorded{k} = [obj.recorded{k}; step(obj.recorder{k})];
             end
             
             % Update discrete state
@@ -209,10 +202,6 @@ classdef reproductor < matlab.System
         
         function numRecorders = get.numRecorders(obj)
             numRecorders = numel(obj.recorder);
-        end
-        
-        function set.numRecorders(obj, N)
-            obj.setNumRecorders(N)
         end
         
         function numRecorderChannels = get.numRecorderChannels(obj)
@@ -365,7 +354,7 @@ classdef reproductor < matlab.System
             
             for k = 1:obj.numRecorders
                 reset(obj.recorder{k})
-                obj.recorded{k} = zeros(0, obj.numRecorders);
+                obj.recorded{k} = zeros(0, obj.numRecorders(k));
             end
             
             obj.count = 0;
@@ -408,7 +397,7 @@ classdef reproductor < matlab.System
             for k = 1:obj.numRecorders
                 obj.setProps('driver_recorder', 'DirectSound', k);
                 obj.setProps('device_recorder', 'Default', k);
-                obj.setProps('Fs_recorder', '44100', k);
+                obj.setProps('Fs_recorder', 44100, k);
             end
         end
         
@@ -449,6 +438,7 @@ classdef reproductor < matlab.System
             for k = 1:numRecorders
                 obj.recorder{k} = audioDeviceReader;
             end
+            obj.recorded = cell(numRecorders, 1);
             
             obj.setRecorderDefaultProperties();
         end
@@ -646,7 +636,7 @@ classdef reproductor < matlab.System
     
     methods(Access = public)
         
-        function obj = reproductor()
+        function obj = reproductorRecorder()
             
             obj.playingState = playingStateClass('stopped');
             
@@ -665,8 +655,7 @@ classdef reproductor < matlab.System
             obj.setDefaultProperties();
             
             % Recording object
-            obj.recorder = {audioDeviceReader};
-            obj.setRecorderDefaultProperties();
+            obj.setNumRecorders(1);
             
         end
         
@@ -820,11 +809,11 @@ classdef reproductor < matlab.System
                         case 'FsGenerator'
                             obj.(parameter)(index) = value;
                         case 'numRecorders'
-                            obj.
+                            obj.setNumRecorders(value);
                         case 'driver_recorder'
-                            obj.(parameter)(index) = value;
+                            obj.(parameter){index} = value;
                         case 'device_recorder'
-                            obj.(parameter)(index) = value;
+                            obj.(parameter){index} = value;
                         case 'Fs_recorder'
                             obj.(parameter)(index) = value;
                         otherwise

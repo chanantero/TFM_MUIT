@@ -33,7 +33,7 @@ classdef WFSTool_noiseChannel < handle
             fig = figure('Units', 'pixels', 'Position', [0 50 1200 600]);
             obj.fig = fig;
             
-            obj.player = reproductor();
+            obj.player = reproductorRecorder();
             obj.reprodPanel = reproductionPanel_noiseChannel(fig, @(action) obj.orderCallback(action));
             obj.scenarioObj = scenario(fig);
             obj.propPanel = propertiesPanel(fig, [0.05 0.1 0.4 0.2]);

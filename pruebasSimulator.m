@@ -134,4 +134,62 @@ for l = 1:numMeasurePoints
     U(l) = 1/(4*pi)*sum( area_dS.* (A - B) );
 end
 
+s = numPointsSurface + 1 + 1;
+sourceCoef*4*pi/area_dS(s-1 -numPointsSurface)
+Usurf(1)
 
+G(s-numMeasurePoints)*radPatCoef
+sum(n(s-25001,:).*grad_G(s-25001, :), 2)
+U_aux(s)
+
+plot(imag(A/(4*pi).*area_dS./U_aux((2:1+numPointsSurface)).'))
+plot(real(B/(4*pi).*area_dS./U_aux((2:1+numPointsSurface)+numPointsSurface).'))
+
+
+%% Sencilla
+
+% Source
+r0 = [0 0 0];
+k = 1;
+A = 1;
+
+% Closed surface parameters
+Lim = [25 50];
+numPoints = 100;
+XLim_surface = Lim;
+YLim_surface = Lim;
+ZLim_surface = [-10 10];
+XnumPoints_surface = numPoints;
+YnumPoints_surface = numPoints;
+ZnumPoints_surface = 50;
+
+[r_surface, dS_vec] = prism(XLim_surface, YLim_surface, ZLim_surface, XnumPoints_surface, YnumPoints_surface, ZnumPoints_surface);
+numPointsSurface = size(r_surface, 1);
+dS = modVec(dS_vec);
+n = scaleVector(dS_vec, 1./dS);
+
+% Real measure
+p = [35, 35, 0];
+U_p_real = sphericalWave(k, A, r0, p);
+
+% Representation Plane
+XLim_plane = [20 55];
+YLim_plane = [20 55];
+XnumPoints_plane = 20;
+YnumPoints_plane = 20;
+
+obj = simulator(figure);
+obj.XLim = XLim_plane;
+obj.YLim = YLim_plane;
+obj.XnumPoints = XnumPoints_plane;
+obj.YnumPoints = YnumPoints_plane;
+obj.setKirchhoffIntegralScenario(r0, 1, r_surface, n, dS)
+
+U = obj.calculate(p);
+
+obj.simulate()
+t = 0:0.25:20;
+f = 1;
+obj.animate(f, t)
+
+obj.sourceCoefficients(1) = 1;
