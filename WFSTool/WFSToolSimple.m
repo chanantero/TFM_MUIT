@@ -15,23 +15,25 @@ classdef WFSToolSimple < handle
         amplitude
         phase
         frequency
-        
-        % Theoretical model
-        sourcePos
-        sourceOrient
-        sourceCoef
-        
-        
+                
         % Infrastructure variables
         fig
         player
         reprodPanel
         scenarioObj
         propPanel
+        simulObj
+        
+        % Other
+        ax
     end
     
     properties(Dependent)
         numSources
+    end
+    
+    properties(Constant)
+        c = 340; % m/s
     end
     
     % Getters and setters
@@ -51,6 +53,13 @@ classdef WFSToolSimple < handle
             obj.reprodPanel = reproductionPanel_noiseChannel(fig, @(action) obj.orderCallback(action));
             obj.scenarioObj = scenario(fig);
             obj.propPanel = propertiesPanel(fig, [0.05 0.1 0.4 0.2]);
+            obj.simulObj = simulator;
+            obj.ax = obj.scenarioObj.ax;
+            obj.simulObj.ax = obj.ax;
+            obj.simulObj.generateMeasurePoints();
+            obj.simulObj.simulate();
+            obj.ax.Children = flip(obj.ax.Children);
+            
             
             obj.changed = struct('virtual', false, 'real', false, 'signalsSpec', false);
             
@@ -123,6 +132,15 @@ classdef WFSToolSimple < handle
             obj.changed.signalsSpec = true;
         end
         
+        function simulate(obj)
+            % Configure simulator object
+            obj.createTheoreticalModel();
+            
+            % Simulate
+            obj.simulObj.generateMeasurePoints();
+            obj.simulObj.simulate();
+        end
+                
     end
     
     methods(Access = private)
@@ -185,103 +203,6 @@ classdef WFSToolSimple < handle
             obj.changed.virtual = false;         
         end
         
-        function updateProcessorVariables_noiseChannel(obj)
-            % The processors need the getDelayFun and getAttenFun
-            % functions, and these are connected to the scenario
-            
-            % Update scenario based on the virtual sources
-            indVirt = find(obj.virtual);
-            obj.scenarioObj.setNumSources(numel(indVirt));
-            
-            % What processors exist?
-            indExist = find(obj.player.comMatrix);
-            
-            % Assign delay and attenuation functions
-            for k = 1:numel(indExist)
-                index = indExist(k);
-                
-                delayFun = @() obj.delayFunction(index);
-                obj.player.setProps('getDelayFun', delayFun, [index, 1]);
-                
-                attenFun = @() obj.attenuationFunction(index);
-                obj.player.setProps('getAttenFun', attenFun, [index, 1]);
-            end           
-            
-            obj.updateForcedDisabledLoudspeakers();
-            
-        end
-        
-        function delays = delayFunction(obj, index)
-            numChannels = obj.scenarioObj.numLoudspeakers;
-            indVirt = find(obj.virtual);
-            
-            if obj.virtual(index)
-                virtualDelays = obj.scenarioObj.delays(:, (indVirt == indVirt(index)));
-            else
-                virtualDelays = zeros(numChannels, 1);
-            end
-            
-            if obj.real(index)
-                % delays(obj.channelNumber(index)) = 0;
-                realDelays = zeros(numChannels, 1);
-                delays = [virtualDelays, realDelays];
-            else
-                delays = virtualDelays;
-            end
-            
-        end
-        
-        function attenuations = attenuationFunction(obj, index)
-            numChannels = size(obj.scenarioObj.attenuations, 1);
-            indVirt = find(obj.virtual);
-            
-            if obj.virtual(index)
-                virtualAttenuations = obj.virtualVolume(index)*obj.scenarioObj.attenuations(:, (indVirt == indVirt(index)));
-            else
-                virtualAttenuations = zeros(numChannels, 1);
-            end
-            
-            if obj.real(index)
-                % attenuations(obj.channelNumber(index)) = obj.realVolume(index);
-                realAttenuations = zeros(numChannels, 1);
-                realAttenuations(obj.channelNumber(index)) = -obj.realVolume(index);
-                attenuations = [virtualAttenuations, realAttenuations];
-            else
-                attenuations = virtualAttenuations;
-            end
-            
-        end
-        
-        function updateGUIConnectionsStuff(obj)
-            % The devices need to have some variables specified:
-            % driver and device
-            
-            % Update player GUI controls based on the real sources
-            %             indReal = [1, find(any(obj.player.comMatrix(:, 2:end), 1))+1];
-            indReal = find(any(obj.player.comMatrix, 1));
-            setFrameDurationFunc = @(frameDuration) obj.player.setProps('frameDuration', frameDuration);
-            setVolumeFunc = @(volume, index) obj.setVolume(volume, indReal(index));
-            setDeviceFunc = @(device, index) obj.player.setProps('device', device, indReal(index));
-            setDriverFunc = @(driver, index) obj.player.setProps('driver', driver, indReal(index));
-            getAvailableDevicesFunc = @(index) obj.player.player{indReal(index)}.getAvailableDevices();
-            labels = cell(numel(indReal), 1);
-            for k = 1:numel(indReal)
-                labels{k} = sprintf('Device %d', indReal(k)-1);
-            end
-            if ~isempty(indReal) && indReal(1) == 1
-                labels{1} = 'WFS Array';
-            end
-            
-            obj.propPanel.setFunctions(setFrameDurationFunc, setVolumeFunc, setDeviceFunc, setDriverFunc, getAvailableDevicesFunc, labels);
-            
-        end
-        
-        function setVolume(obj, volume, indPlayer)
-            comMatCoef = obj.player.comMatrixCoef;
-            comMatCoef(:, indPlayer) = volume;
-            obj.player.setProps('comMatrixCoef', comMatCoef);
-        end
-        
         function updateSignalParameteres(obj)
             for k = 1:obj.numSources
                 signalSpec = obj.signalsSpec{k};
@@ -317,7 +238,119 @@ classdef WFSToolSimple < handle
             
             obj.changed.signalsSpec = false;
         end
+                
+        function updateProcessorVariables_noiseChannel(obj)
+            % The processors need the getDelayFun and getAttenFun
+            % functions, and these are connected to the scenario
+            
+            % Update scenario based on the virtual sources
+            activeSources = obj.virtual | obj.real;
+            obj.scenarioObj.setNumSources(sum(activeSources));
+            
+            % What processors exist?
+            indExist = find(obj.player.comMatrix);
+            
+            % Assign delay and attenuation functions
+            for k = 1:numel(indExist)
+                index = indExist(k);
+                
+                delayFun = @() obj.delayFunction(index);
+                obj.player.setProps('getDelayFun', delayFun, [index, 1]);
+                
+                attenFun = @() obj.attenuationFunction(index);
+                obj.player.setProps('getAttenFun', attenFun, [index, 1]);
+            end           
+            
+            obj.updateForcedDisabledLoudspeakers();
+            
+        end
         
+        function updateForcedDisabledLoudspeakers(obj)
+            numLoudspeakers = obj.player.numChannels(1);
+            disabledLoudspeakers = false(numLoudspeakers, 1);
+            % Assign delay and attenuation functions
+            for k = 1:obj.numSources
+                if obj.real(k)
+                    chann = obj.channelNumber(k);
+                    if chann > 0 && chann <= numLoudspeakers
+                        disabledLoudspeakers(chann) = true;
+                    end
+                end
+            end
+            obj.scenarioObj.setForcedDisabledLoudspeakers(disabledLoudspeakers);
+        end
+                
+        function updateGUIConnectionsStuff(obj)
+            % The devices need to have some variables specified:
+            % driver and device
+            
+            % Update player GUI controls based on the real sources
+            %             indReal = [1, find(any(obj.player.comMatrix(:, 2:end), 1))+1];
+            indReal = find(any(obj.player.comMatrix, 1));
+            setFrameDurationFunc = @(frameDuration) obj.player.setProps('frameDuration', frameDuration);
+            setVolumeFunc = @(volume, index) obj.setVolume(volume, indReal(index));
+            setDeviceFunc = @(device, index) obj.player.setProps('device', device, indReal(index));
+            setDriverFunc = @(driver, index) obj.player.setProps('driver', driver, indReal(index));
+            getAvailableDevicesFunc = @(index) obj.player.player{indReal(index)}.getAvailableDevices();
+            labels = cell(numel(indReal), 1);
+            for k = 1:numel(indReal)
+                labels{k} = sprintf('Device %d', indReal(k)-1);
+            end
+            if ~isempty(indReal) && indReal(1) == 1
+                labels{1} = 'WFS Array';
+            end
+            
+            obj.propPanel.setFunctions(setFrameDurationFunc, setVolumeFunc, setDeviceFunc, setDriverFunc, getAvailableDevicesFunc, labels);
+            
+        end    
+        
+        function delays = delayFunction(obj, index)
+            numChannels = obj.scenarioObj.numLoudspeakers;
+            activeSources = find(obj.virtual | obj.real);
+            
+            if obj.virtual(index)
+                virtualDelays = obj.scenarioObj.delays(:, (activeSources == activeSources(index)));
+            else
+                virtualDelays = zeros(numChannels, 1);
+            end
+            
+            if obj.real(index)
+                % delays(obj.channelNumber(index)) = 0;
+                realDelays = zeros(numChannels, 1);
+                delays = [virtualDelays, realDelays];
+            else
+                delays = virtualDelays;
+            end
+            
+        end
+        
+        function attenuations = attenuationFunction(obj, index)
+            numChannels = size(obj.scenarioObj.attenuations, 1);
+            activeSources = find(obj.virtual | obj.real);
+            
+            if obj.virtual(index)
+                virtualAttenuations = obj.virtualVolume(index)*obj.scenarioObj.attenuations(:, (activeSources == activeSources(index)));
+            else
+                virtualAttenuations = zeros(numChannels, 1);
+            end
+            
+            if obj.real(index)
+                % attenuations(obj.channelNumber(index)) = obj.realVolume(index);
+                realAttenuations = zeros(numChannels, 1);
+                realAttenuations(obj.channelNumber(index)) = -obj.realVolume(index);
+                attenuations = [virtualAttenuations, realAttenuations];
+            else
+                attenuations = virtualAttenuations;
+            end
+            
+        end
+             
+        function setVolume(obj, volume, indPlayer)
+            comMatCoef = obj.player.comMatrixCoef;
+            comMatCoef(:, indPlayer) = volume;
+            obj.player.setProps('comMatrixCoef', comMatCoef);
+        end
+              
         function orderCallback(obj, order)
             % Based on the user order and the state of the player, a
             % command for the player is created
@@ -354,12 +387,20 @@ classdef WFSToolSimple < handle
                     loudspeakersOrientation = double.empty(0,3);
                     roomPosition = [0 0 1 1];
                     obj.scenarioObj.setScenario(sourcePosition, loudspeakersPosition, loudspeakersOrientation, roomPosition);
+                    
+                    obj.simulObj.XLim = [roomPosition(1), roomPosition(1) + roomPosition(3)];
+                    obj.simulObj.YLim = [roomPosition(2), roomPosition(2) + roomPosition(4)];
+                    
                 case 2
                     sourcePosition = obj.scenarioObj.sourcesPosition;
                     loudspeakersPosition = [-0.1 0 0; 0.1 0 0];
                     loudspeakersOrientation = [1 0 0; -1 0 0];
                     roomPosition = [-2, -2, 4, 4];
                     obj.scenarioObj.setScenario(sourcePosition, loudspeakersPosition, loudspeakersOrientation, roomPosition);
+                    
+                    obj.simulObj.XLim = [roomPosition(1), roomPosition(1) + roomPosition(3)];
+                    obj.simulObj.YLim = [roomPosition(2), roomPosition(2) + roomPosition(4)];
+                    
                 case 96
                     d = 0.18; % Separation between two contiguous loudspeakers. Size of one loudspeaker
                     nb = 8; % Bottom and upper sides of the octogon (2 sides)
@@ -381,6 +422,9 @@ classdef WFSToolSimple < handle
                     
                     obj.scenarioObj.setScenario(sourcePosition, loudspeakersPosition, loudspeakersOrientation, roomPosition);
                     
+                    obj.simulObj.XLim = [roomPosition(1), roomPosition(1) + roomPosition(3)];
+                    obj.simulObj.YLim = [roomPosition(2), roomPosition(2) + roomPosition(4)];
+                    
                 otherwise
                     warning('Wrong number of output channels. There is not possible scenario for that case')
             end
@@ -388,57 +432,64 @@ classdef WFSToolSimple < handle
             obj.updateForcedDisabledLoudspeakers();
         end
               
-        function updateForcedDisabledLoudspeakers(obj)
-            numLoudspeakers = obj.player.numChannels(1);
-            disabledLoudspeakers = false(numLoudspeakers, 1);
-            % Assign delay and attenuation functions
-            for k = 1:obj.numSources
-                if obj.real(k)
-                    chann = obj.channelNumber(k);
-                    if chann > 0 && chann <= numLoudspeakers
-                        disabledLoudspeakers(chann) = true;
-                    end
-                end
-            end
-            obj.scenarioObj.setForcedDisabledLoudspeakers(disabledLoudspeakers);
-        end
-        
         function createTheoreticalModel(obj)
-            numNoiseSources = obj.scenarioObj.numSources;
+             
+            indActiveSour = find(obj.real | obj.virtual);
+            numActiveSour = numel(indActiveSour);
+            indReal = find(obj.real);
+            numReal = numel(indReal);
+            indRealInActive = ismember(indActiveSour, indReal);
+            indVirtual = find(obj.virtual);
+            indVirtualInActive = ismember(indActiveSour, indVirtual);
+            
+            % Active sources
+            ampReal = obj.amplitude(indReal);
+            phaseReal = obj.amplitude(indReal);
+            nSrcCoef_real = ampReal.*exp(1i*phaseReal);
+            
+            nSrcPos_real = obj.scenarioObj.sourcesPosition(indRealInActive, :);
+            nSrcOrient_real = simulator.vec2rotVec(repmat([0 0 1], [numReal, 1]));
+                        
+            % Active array loudspeakers
+            delays = obj.scenarioObj.delays;
+            attenuations = obj.scenarioObj.attenuations;
+            
             numLoudspeakers = obj.scenarioObj.numLoudspeakers;
             
-            delays = scenObj.delays;
-            attenuations = scenObj.attenuations;
-                    
-            noiseSourceCoef = obj.amplitude.*exp(1i*obj.phase);
-            loudspeakerCoef = repmat(noiseSourceCoef.', [numLouds, 1]).*attenuations.*exp(-1i*2*pi*repmat(obj.frequency', [numLoudspeakers, 1]).*delays);
+            ampVirt = obj.amplitude(obj.virtual);
+            phaseVirt = obj.phase(obj.virtual);
+            freqVirt = obj.frequency(obj.virtual);
+            delaysVirt = delays(:, obj.virtual);
+            attenVirt = attenuations(:, obj.virtual);
             
-            noiseSourcePos = obj.scenarioObj.sourcesPosition;
-            loudspeakersPos = obj.scenarioObj.loudspeakersPosition;
+            nSrcCoef_virtual = ampVirt.*exp(1i*phaseVirt);
+            ldspkrCoef = repmat(nSrcCoef_virtual.', [numLoudspeakers, 1]).*attenVirt.*exp(-1i*2*pi*repmat(freqVirt', [numLoudspeakers, 1]).*delaysVirt);
             
-            noiseSourceOrient = simulator.vec2rotVec(repmat([0 0 1], [numNoiseSources, 1]));
-            loudspeakersOrient = simulator.vec2rotVec(obj.scenarioObj.loudspeakersOrientation);
+            ldspkrsPos = obj.scenarioObj.loudspeakersPosition;
+            ldspkrsOrient = simulator.vec2rotVec(obj.scenarioObj.loudspeakersOrientation);
             
-            % Unactive the loudspeakers whos channel is used for generating
-            % the noise
+                % Delete the unactive array loudspeakers
+            unactiveLdspkrs = false(numLoudspeakers, 1);
+            unactiveLdspkrs(obj.channelNumber(obj.real)) = true;
+            ldspkrCoef = ldspkrCoef(~unactiveLdspkrs, :);
+            ldspkrsPos = ldspkrsPos(~unactiveLdspkrs, :);
+            ldspkrsOrient = ldspkrsOrient(~unactiveLdspkrs, :);
+            numLoudspeakers_new = sum(~unactiveLdspkrs);
             
+            % Unify the coefficients in a single matrix
+            coef = zeros(numReal + numLoudspeakers_new, numActiveSour);
+            coef(1:numReal, indRealInActive) = diag(nSrcCoef_real);
+            coef(numReal+1:end, indVirtualInActive) = ldspkrCoef;
             
-            obj.sourceCoef = [noiseSourceCoef; loudspeakerCoef];
-            obj.sourcePos = [noiseSourcePos; loudspeakersPos];
-            obj.sourceOrient = [noiseSourceOrient, loudspeakersOrient];
+            % Set the variables
+            obj.simulObj.sourcePositions = [nSrcPos_real; ldspkrsPos];
+            obj.simulObj.sourceCoefficients = coef;
+            obj.simulObj.sourceOrientations = [nSrcOrient_real; ldspkrsOrient];
+            obj.simulObj.radPatFuns = repmat({@(x) simulator.monopoleRadPat(x)}, [numReal + numLoudspeakers_new, 1]);
+            obj.simulObj.k = 2*pi*obj.frequency(indActiveSour)/obj.c;
+
         end
         
-        function simulate(obj)
-            % Configure simulator object
-            simulObj.sourcePositions = obj.scenarioObj;
-            simulObj.sourceCoefficients = [sourceCoef; loudspeakerCoef];
-            simulObj.sourceOrientations = simulator.vec2rotVec([repmat([0 0 1], [numNoiseSources, 1]); loudspeakersOrientation]); % Mx4 matrix. Rotation vector: [angle of rotation, Xaxis, Yaxis, Zaxis]
-            simulObj.radPatFuns = repmat({@(x) simulator.monopoleRadPat(x)}, [numSources, 1]);
-            simulObj.k = 2*pi*freq/c;
-            
-            % Simulate
-            U = simulObj.calculate(measurePos);
-        end
         
     end
     

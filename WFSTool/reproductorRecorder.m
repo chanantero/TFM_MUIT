@@ -442,7 +442,6 @@ classdef reproductorRecorder < matlab.System
             for k = 1:numRecorders
                 obj.recorder{k} = audioRecorder;
             end
-            obj.recorded = cell(numRecorders, 1);
             
             obj.setRecorderDefaultProperties();
         end

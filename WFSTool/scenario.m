@@ -1,7 +1,7 @@
 classdef scenario < handle
             
     properties(SetAccess = private)
-        panel
+        ax
         enabledGUI
         
         sourcesPosition
@@ -51,7 +51,7 @@ classdef scenario < handle
             
             if nargin > 0
                 obj.enabledGUI = true;
-                obj.panel = obj.createGraphics(parent, @(ax) obj.mouseClickCallback(ax));
+                obj.ax = obj.createGraphics(parent, @(ax) obj.mouseClickCallback(ax));
                 
             else
                 obj.enabledGUI = false;
@@ -72,7 +72,7 @@ classdef scenario < handle
             obj.loudspeakersState = true(obj.numLoudspeakers, obj.numSources);
 
             if obj.enabledGUI
-                source = findobj(obj.panel, 'Tag', 'source');
+                source = findobj(obj.ax, 'Tag', 'source');
                 
                 source.XData = zeros(1, numSources);
                 source.YData = zeros(1, numSources);
@@ -86,7 +86,7 @@ classdef scenario < handle
         function setSourcePosition(obj, sourcePosition, index)
             if obj.enabledGUI
                 % Graphics
-                source = findobj(obj.panel, 'Tag', 'source');
+                source = findobj(obj.ax, 'Tag', 'source');
                 
                 source.XData(index) = sourcePosition(1);
                 source.YData(index) = sourcePosition(2);
@@ -103,12 +103,11 @@ classdef scenario < handle
         function setScenario(obj, sourcesPosition, loudspeakersPosition, loudspeakersOrientation, roomPosition)
             if obj.enabledGUI
                 % Graphics
-                ax = findobj(obj.panel, 'Type', 'Axes');
-                source = findobj(obj.panel, 'Tag', 'source');
-                loudspeakers = findobj(ax, 'Tag', 'loudspeakers');
+                source = findobj(obj.ax, 'Tag', 'source');
+                loudspeakers = findobj(obj.ax, 'Tag', 'loudspeakers');
                 
-                ax.XLim = [roomPosition(1), roomPosition(1)+roomPosition(3)];
-                ax.YLim = [roomPosition(2), roomPosition(2)+roomPosition(4)];
+                obj.ax.XLim = [roomPosition(1), roomPosition(1)+roomPosition(3)];
+                obj.ax.YLim = [roomPosition(2), roomPosition(2)+roomPosition(4)];
                 
                 source.XData = sourcesPosition(:, 1);
                 source.YData = sourcesPosition(:, 2);
@@ -163,7 +162,7 @@ classdef scenario < handle
     
     methods(Access = private)
         
-        function panel = createGraphics(obj, parent, callback)
+        function ax = createGraphics(obj, parent, callback)
             panel = uipanel(parent, 'BackgroundColor','white', 'Units', 'normalized', 'Position', [0.55 0.05 0.4 0.9]);
             
             ax = axes(panel, 'Units', 'normalized', 'Position', [0.05 0.05 0.9 0.8],...
@@ -231,7 +230,7 @@ classdef scenario < handle
                       0 1 0; % Forced Enabled
                       1 0 0]; % Forced Disabled
                               
-            scat = findobj(obj.panel, 'Tag', 'loudspeakers');
+            scat = findobj(obj.ax, 'Tag', 'loudspeakers');
             scat.CData = colors(activeState, :);
         end
         

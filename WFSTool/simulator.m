@@ -1,12 +1,12 @@
 classdef simulator < handle
         
+    % Tunable properties
     properties
         sourcePositions
         sourceCoefficients % (numSources x numFrequencies) matrix
         sourceOrientations % Mx4 matrix. Rotation vector: [angle of rotation, Xaxis, Yaxis, Zaxis]
         radPatFuns
         k % Propagation constant. numFrequencies-element vector
-        field % Result of simulation
         
         % Graphical
         ax
@@ -15,19 +15,27 @@ classdef simulator < handle
         XnumPoints
         YnumPoints
         z
-        measurePoints
+        measurePoints                
+    end
+    
+    properties(SetAccess = private)
+        field % Result of simulation
         imag % Result of simulation
-                
     end
     
     properties(Dependent)
         numSources
+        numFrequencies
     end
     
     % Getters and setters
     methods
         function numSources = get.numSources(obj)
             numSources = size(obj.sourcePositions, 1);
+        end
+        
+        function numFrequencies = get.numFrequencies(obj)
+            numFrequencies = numel(obj.k);
         end
     end
     
@@ -58,7 +66,7 @@ classdef simulator < handle
         end
         
         function simulate(obj)
-            obj.generateMeasurePoints();
+%             obj.generateMeasurePoints();
             
             % Simulate
             obj.field = obj.calculate(obj.measurePoints);
@@ -75,9 +83,13 @@ classdef simulator < handle
             % Reshape as an image
             U = reshape(obj.field, obj.XnumPoints, obj.YnumPoints).';
                        
-            cla(obj.ax)
-            obj.imag = image(obj.ax, 'XData', obj.XLim, 'YData', obj.YLim,...
-                'CData', real(U), 'CDataMapping', 'scaled');
+            if ~isempty(obj.imag) && isvalid(obj.imag)
+                obj.imag.CData = real(U);
+            else
+%                 cla(obj.ax)
+                obj.imag = image(obj.ax, 'XData', obj.XLim, 'YData', obj.YLim,...
+                    'CData', real(U), 'CDataMapping', 'scaled');
+            end
             
 %             % Draw sources
 %             obj.ax.NextPlot = 'Add';
