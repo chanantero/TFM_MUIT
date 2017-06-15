@@ -1,24 +1,23 @@
 classdef simulator < handle
         
     properties
-        ax
         sourcePositions
-        sourceCoefficients
+        sourceCoefficients % (numSources x numFrequencies) matrix
         sourceOrientations % Mx4 matrix. Rotation vector: [angle of rotation, Xaxis, Yaxis, Zaxis]
         radPatFuns
-        k % Propagation constant
+        k % Propagation constant. numFrequencies-element vector
+        field % Result of simulation
         
         % Graphical
+        ax
         XLim
         YLim
         XnumPoints
         YnumPoints
         z
         measurePoints
-        
-        % Results of simulation
-        field
-        imag
+        imag % Result of simulation
+                
     end
     
     properties(Dependent)
@@ -105,11 +104,12 @@ classdef simulator < handle
             % First dimension along measurePoints, second dimension along
             % the X, Y and Z coordinates, third dimension along sources
             numSour = obj.numSources;
+            numFreq = obj.numFrequencies;
             numMeasPoints = size(measurePointPositions, 1);
 
             U_aux = zeros(numMeasPoints, numSour);
             for s = 1:numSour
-                sourceCoef = obj.sourceCoefficients(s);
+                sourceCoef = obj.sourceCoefficients(s, :);
                 sourcePos = obj.sourcePositions(s, :);
                 sourceOrient = obj.sourceOrientations(s, :);
                 radPatFun = obj.radPatFuns{s};
@@ -123,7 +123,11 @@ classdef simulator < handle
                 relDir = quatrotate(quat, diffVec);
                 radPatCoef = radPatFun(relDir);
                 
-                U_aux(:, s) = sourceCoef*radPatCoef.*exp(-1i*obj.k*dist)./dist;
+                aux = zeros(numMeasPoints, numFreq);
+                for f = 1:obj.numFrequencies
+                    aux(:, f) = sourceCoef(:, f)*radPatCoef.*exp(-1i*obj.k(f)*dist)./dist;
+                end
+                U_aux(:, s) = sum(aux, 2);
             end
             U = sum(U_aux, 2);
                        
@@ -230,6 +234,7 @@ classdef simulator < handle
             
             obj.setSources(sourcePos, 'coefficient', sourceCoef, 'orientation', sourceOrient, 'radiationPattern', sourceRadPat);
         end
+        
     end
     
     methods(Static)

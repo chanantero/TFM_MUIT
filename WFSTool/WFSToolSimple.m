@@ -1,14 +1,28 @@
-classdef WFSTool_noiseChannel < handle
+classdef WFSToolSimple < handle
+    % One device, sinusoidal signals
     
     properties(SetAccess = private)
         changed % Variables changed since last update
+        
+        % High level variables
         virtual
         real
-        signalsSpec
         channelNumber
         virtualVolume
         realVolume
         
+        signalsSpec
+        amplitude
+        phase
+        frequency
+        
+        % Theoretical model
+        sourcePos
+        sourceOrient
+        sourceCoef
+        
+        
+        % Infrastructure variables
         fig
         player
         reprodPanel
@@ -24,12 +38,12 @@ classdef WFSTool_noiseChannel < handle
     methods
         function numSources = get.numSources(obj)
             numSources = numel(obj.signalsSpec);
-        end
+        end   
     end
     
     methods
         
-        function obj = WFSTool_noiseChannel()
+        function obj = WFSToolSimple()
             fig = figure('Units', 'pixels', 'Position', [0 50 1200 600]);
             obj.fig = fig;
             
@@ -73,6 +87,7 @@ classdef WFSTool_noiseChannel < handle
             end
             
             if obj.changed.signalsSpec
+                obj.updateSignalParameteres();
                 obj.updateSignalProvidersVariables();
             end
         end
@@ -161,6 +176,7 @@ classdef WFSTool_noiseChannel < handle
             comMat = WFSTool_noiseChannel.createCommutationMatrix(obj.virtual, obj.real);
             obj.player.setProps('comMatrix', comMat);
             
+            obj.updateSignalParameteres();
             obj.updateSignalProvidersVariables();
             obj.updateProcessorVariables_noiseChannel();
             obj.updateGUIConnectionsStuff();
@@ -266,11 +282,7 @@ classdef WFSTool_noiseChannel < handle
             obj.player.setProps('comMatrixCoef', comMatCoef);
         end
         
-        function updateSignalProvidersVariables(obj)
-            % Signal providers need to have some parameters specified based
-            % on the signals specifications
-            
-            % Assign signals
+        function updateSignalParameteres(obj)
             for k = 1:obj.numSources
                 signalSpec = obj.signalsSpec{k};
                 
@@ -278,26 +290,29 @@ classdef WFSTool_noiseChannel < handle
                 param = regexp(signalSpec, 'A:(?<Amplitude>(\d+\.\d+|\d+)) Ph:(?<Phase>(\d+\.\d+|\d+)) f:(?<Frequency>(\d+\.\d+|\d+))', 'names');
                 if isempty(param)
                     % It is not a complex number
-                    % Is it a file that exists?
-                    a = dir(signalSpec);
-                    if numel(a) > 0
-                        obj.player.setProps('mode', originType('file'), k);
-                        obj.player.setProps('audioFileName', signalSpec, k);
-                    else
-                        % No success. As default, treat it as a tone
-                        obj.player.setProps('mode', originType('sinusoidal'), k);
-                        obj.player.setProps('amplitude', 0, k);
-                        obj.player.setProps('phase', 0, k);
-                        obj.player.setProps('frequency', 1, k);
-                    end
+                    % As default, treat it as a tone
+                    obj.amplitude(k) = 0;
+                    obj.phase(k) = 0;
+                    obj.frequency(k) = 1;
                 else
                     % It is a complex number, set the
                     % properties
-                    obj.player.setProps('mode', originType('sinusoidal'), k);
-                    obj.player.setProps('amplitude', str2double(param.Amplitude), k);
-                    obj.player.setProps('phase', str2double(param.Phase), k);
-                    obj.player.setProps('frequency', str2double(param.Frequency), k);
+                    obj.amplitude(k) = str2double(param.Amplitude);
+                    obj.phase(k) = str2double(param.Phase);
+                    obj.frequency(k) = str2double(param.Frequency);
                 end
+            end
+        end
+        
+        function updateSignalProvidersVariables(obj)
+            % Signal providers need to have some parameters specified based
+            % on the signals specifications            
+            % Assign signals
+            for k = 1:obj.numSources
+                obj.player.setProps('mode', originType('sinusoidal'), k);
+                obj.player.setProps('amplitude', obj.amplitude(k), k);
+                obj.player.setProps('phase', obj.phase(k), k);
+                obj.player.setProps('frequency', obj.frequency(k), k);
             end
             
             obj.changed.signalsSpec = false;
@@ -386,6 +401,43 @@ classdef WFSTool_noiseChannel < handle
                 end
             end
             obj.scenarioObj.setForcedDisabledLoudspeakers(disabledLoudspeakers);
+        end
+        
+        function createTheoreticalModel(obj)
+            numNoiseSources = obj.scenarioObj.numSources;
+            numLoudspeakers = obj.scenarioObj.numLoudspeakers;
+            
+            delays = scenObj.delays;
+            attenuations = scenObj.attenuations;
+                    
+            noiseSourceCoef = obj.amplitude.*exp(1i*obj.phase);
+            loudspeakerCoef = repmat(noiseSourceCoef.', [numLouds, 1]).*attenuations.*exp(-1i*2*pi*repmat(obj.frequency', [numLoudspeakers, 1]).*delays);
+            
+            noiseSourcePos = obj.scenarioObj.sourcesPosition;
+            loudspeakersPos = obj.scenarioObj.loudspeakersPosition;
+            
+            noiseSourceOrient = simulator.vec2rotVec(repmat([0 0 1], [numNoiseSources, 1]));
+            loudspeakersOrient = simulator.vec2rotVec(obj.scenarioObj.loudspeakersOrientation);
+            
+            % Unactive the loudspeakers whos channel is used for generating
+            % the noise
+            
+            
+            obj.sourceCoef = [noiseSourceCoef; loudspeakerCoef];
+            obj.sourcePos = [noiseSourcePos; loudspeakersPos];
+            obj.sourceOrient = [noiseSourceOrient, loudspeakersOrient];
+        end
+        
+        function simulate(obj)
+            % Configure simulator object
+            simulObj.sourcePositions = obj.scenarioObj;
+            simulObj.sourceCoefficients = [sourceCoef; loudspeakerCoef];
+            simulObj.sourceOrientations = simulator.vec2rotVec([repmat([0 0 1], [numNoiseSources, 1]); loudspeakersOrientation]); % Mx4 matrix. Rotation vector: [angle of rotation, Xaxis, Yaxis, Zaxis]
+            simulObj.radPatFuns = repmat({@(x) simulator.monopoleRadPat(x)}, [numSources, 1]);
+            simulObj.k = 2*pi*freq/c;
+            
+            % Simulate
+            U = simulObj.calculate(measurePos);
         end
         
     end

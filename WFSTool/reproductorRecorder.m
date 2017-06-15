@@ -67,10 +67,6 @@ classdef reproductorRecorder < matlab.System
         numChannels
     end
     
-    properties(SetAccess = private)
-        recorded
-    end
-    
     properties(Dependent, SetAccess = private)
         Fs_reader % Sampling frequency of readers.
         numReaders
@@ -78,6 +74,7 @@ classdef reproductorRecorder < matlab.System
         numLinks
         numRecorders
         numRecorderChannels
+        recorded
     end
     
     % Private properties: objects
@@ -155,7 +152,7 @@ classdef reproductorRecorder < matlab.System
             
             % Record
             for k = 1:numRec
-                obj.recorded{k} = [obj.recorded{k}; step(obj.recorder{k})];
+                step(obj.recorder{k});
             end
             
             % Update discrete state
@@ -211,6 +208,14 @@ classdef reproductorRecorder < matlab.System
                 numRecorderChannels(k) = obj.recorder{k}.NumChannels;
             end
            
+        end
+        
+        function recorded = get.recorded(obj)
+            N = obj.numRecorders;
+            recorded = cell(N, 1);
+            for k = 1:N
+                recorded{k} = obj.recorder{k}.recorded;
+            end
         end
         
         function Fs = get.Fs_reader(obj)
@@ -354,7 +359,6 @@ classdef reproductorRecorder < matlab.System
             
             for k = 1:obj.numRecorders
                 reset(obj.recorder{k})
-                obj.recorded{k} = zeros(0, obj.numRecorders(k));
             end
             
             obj.count = 0;
@@ -436,7 +440,7 @@ classdef reproductorRecorder < matlab.System
         function setNumRecorders(obj, numRecorders)
             obj.recorder = cell(numRecorders, 1);
             for k = 1:numRecorders
-                obj.recorder{k} = audioDeviceReader;
+                obj.recorder{k} = audioRecorder;
             end
             obj.recorded = cell(numRecorders, 1);
             

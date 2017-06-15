@@ -2,6 +2,7 @@ classdef scenario < handle
             
     properties(SetAccess = private)
         panel
+        enabledGUI
         
         sourcesPosition
         activeSource
@@ -48,7 +49,14 @@ classdef scenario < handle
             loudspeakersOrientation = [1 0 0; -1 0 0];
             roomPosition = [-2, -2, 4, 4];
             
-            obj.panel = obj.createGraphics(parent, @(ax) obj.mouseClickCallback(ax));
+            if nargin > 0
+                obj.enabledGUI = true;
+                obj.panel = obj.createGraphics(parent, @(ax) obj.mouseClickCallback(ax));
+                
+            else
+                obj.enabledGUI = false;
+            end
+            
             obj.setScenario(sourcesPosition, loudspeakersPosition, loudspeakersOrientation, roomPosition);
             obj.activeSource = 1;
         end         
@@ -63,23 +71,27 @@ classdef scenario < handle
             end
             obj.loudspeakersState = true(obj.numLoudspeakers, obj.numSources);
 
-            source = findobj(obj.panel, 'Tag', 'source');
-
-            source.XData = zeros(1, numSources);
-            source.YData = zeros(1, numSources);
-            source.ZData = zeros(1, numSources);
-            source.CData = repmat(obj.sourceColor, numSources, 1);
-           
+            if obj.enabledGUI
+                source = findobj(obj.panel, 'Tag', 'source');
+                
+                source.XData = zeros(1, numSources);
+                source.YData = zeros(1, numSources);
+                source.ZData = zeros(1, numSources);
+                source.CData = repmat(obj.sourceColor, numSources, 1);
+            end
+            
             obj.updateDelaysAndAttenuations();
         end
         
         function setSourcePosition(obj, sourcePosition, index)
-            % Graphics
-            source = findobj(obj.panel, 'Tag', 'source');
-                 
-            source.XData(index) = sourcePosition(1);
-            source.YData(index) = sourcePosition(2);
-            source.ZData(index) = sourcePosition(3);
+            if obj.enabledGUI
+                % Graphics
+                source = findobj(obj.panel, 'Tag', 'source');
+                
+                source.XData(index) = sourcePosition(1);
+                source.YData(index) = sourcePosition(2);
+                source.ZData(index) = sourcePosition(3);
+            end
             
             % Other variables
             obj.sourcesPosition(index, :) = sourcePosition;
@@ -89,23 +101,25 @@ classdef scenario < handle
         end
         
         function setScenario(obj, sourcesPosition, loudspeakersPosition, loudspeakersOrientation, roomPosition)
-            % Graphics
-            ax = findobj(obj.panel, 'Type', 'Axes');
-            source = findobj(obj.panel, 'Tag', 'source');
-            loudspeakers = findobj(ax, 'Tag', 'loudspeakers');
-            
-            ax.XLim = [roomPosition(1), roomPosition(1)+roomPosition(3)];
-            ax.YLim = [roomPosition(2), roomPosition(2)+roomPosition(4)];
-            
-            source.XData = sourcesPosition(:, 1);
-            source.YData = sourcesPosition(:, 2);
-            source.ZData = sourcesPosition(:, 3);
-            source.CData = repmat(obj.sourceColor, size(sourcesPosition, 1), 1);
-            
-            loudspeakers.XData = loudspeakersPosition(:, 1);
-            loudspeakers.YData = loudspeakersPosition(:, 2);
-            loudspeakers.ZData = loudspeakersPosition(:, 3);
-            loudspeakers.CData = repmat([0 0 1], size(loudspeakersPosition, 1), 1);
+            if obj.enabledGUI
+                % Graphics
+                ax = findobj(obj.panel, 'Type', 'Axes');
+                source = findobj(obj.panel, 'Tag', 'source');
+                loudspeakers = findobj(ax, 'Tag', 'loudspeakers');
+                
+                ax.XLim = [roomPosition(1), roomPosition(1)+roomPosition(3)];
+                ax.YLim = [roomPosition(2), roomPosition(2)+roomPosition(4)];
+                
+                source.XData = sourcesPosition(:, 1);
+                source.YData = sourcesPosition(:, 2);
+                source.ZData = sourcesPosition(:, 3);
+                source.CData = repmat(obj.sourceColor, size(sourcesPosition, 1), 1);
+                
+                loudspeakers.XData = loudspeakersPosition(:, 1);
+                loudspeakers.YData = loudspeakersPosition(:, 2);
+                loudspeakers.ZData = loudspeakersPosition(:, 3);
+                loudspeakers.CData = repmat([0 0 1], size(loudspeakersPosition, 1), 1);
+            end
             
             % Other variable
             obj.sourcesPosition = sourcesPosition;
@@ -231,8 +245,10 @@ classdef scenario < handle
             % orientations
             obj.attenuations = obj.calcAttenuations(dist);
             
-            % Update graphics            
-            obj.updateLoudspeakersColor();
+            if obj.enabledGUI
+                % Update graphics
+                obj.updateLoudspeakersColor();
+            end
             
         end
         
