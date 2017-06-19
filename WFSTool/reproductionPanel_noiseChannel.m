@@ -216,7 +216,7 @@ classdef reproductionPanel_noiseChannel < handle
                     % Restart
                     obj.list.Data{row, 1} = 'A:0 Ph:0 f:1';
                 end
-                obj.signals = obj.list.Data(:, 1);
+                obj.signals{row} = newSignal;
                 
                 evntData = updatedValuesEvntData('signals');
                 notify(obj, 'updatedValues', evntData);

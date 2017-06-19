@@ -4,6 +4,7 @@ classdef signalProvider < matlab.System
     properties(Nontunable)
         mode % Read from audio file or generate sinusoidal signal
         SamplesPerFrame
+        SampleRate % Sampling frequency. Not aplicable when mode == file
         
         % Variables that are exclusive for the mode == file
         FileName
@@ -12,9 +13,20 @@ classdef signalProvider < matlab.System
         amplitude
         phase
         frequency
-        SampleRate % Sampling frequency
+        
+        % Variables that are exclussive for the mode == custom
+        customSignal
     end
 
+    properties(SetAccess = private)
+        stopSample % Sample at which the signal provider should reach the end. Only for mode == sinusoidal
+    end
+    
+    properties(Dependent)
+        numChannels
+        numSamples
+    end
+    
     properties(DiscreteState)
         count
     end
@@ -35,6 +47,8 @@ classdef signalProvider < matlab.System
                     setup(obj.fileReader)
                 case originType('sinusoidal')
                     obj.providerFunction = @() obj.toneGenerator();
+                case originType('custom')
+                    obj.providerFunction = @() obj.provideCustomSignal();
                 otherwise
                     error('signalProvider:setup', 'The variable mode is not recognized')
             end
@@ -58,7 +72,7 @@ classdef signalProvider < matlab.System
     % Getters and setters
     methods
         function SampleRate = get.SampleRate(obj)
-            if obj.mode % Sinusoidal
+            if obj.mode == originType('file') || obj.mode == originType('custom') % Sinusoidal or custom
                 SampleRate = obj.SampleRate;
             else %File
 %                 SampleRate = obj.fileReader.SampleRate;
@@ -72,10 +86,40 @@ classdef signalProvider < matlab.System
         end
         
         function flag = isDone(obj)
-            if obj.mode
-                flag = false;
+            if obj.mode == originType('file')
+                if obj.count * obj.SamplesPerFrame >= obj.stopSample
+                    flag = true;
+                end
+            elseif obj.mode == originType('custom')
+                if obj.count * obj.SamplesPerFrame >= size(obj.customSignal, 1)
+                    flag = true;
+                else
+                    flag = false;
+                end
             else
                 flag = isDone(obj.fileReader);
+            end
+        end
+        
+        function numChannels = get.numChannels(obj)
+            if obj.mode == originType('file')
+                inf = audioinfo(obj.FileName);
+                numChannels = inf.NumChannels;
+            elseif obj.mode == originType('custom')
+                numChannels = size(obj.customSignal, 2);
+            else
+                numChannels = 1;
+            end
+        end
+        
+        function numSamples = get.numSamples(obj)
+            if obj.mode == originType('file')
+                inf = audioinfo(obj.FileName);
+                numSamples = inf.TotalSamples;
+            elseif obj.mode == originType('custom')
+                numSamples = size(obj.customSignal, 1);
+            else
+                numSamples = Inf;
             end
         end
         
@@ -113,13 +157,33 @@ classdef signalProvider < matlab.System
             y = step(obj.fileReader);
         end
         
+        function y = provideCustomSignal(obj)
+            if obj.isDone()
+                y = zeros(obj.SamplesPerFrame, obj.numChannels);
+            else
+                over = obj.count+1 * obj.SamplesPerFrame - obj.numSamples;
+                if over > 0
+                    ind = obj.count*obj.SamplesPerFrame + (1:obj.SamplesPerFrame - over)';
+                    y = zeros(obj.SamplesPerFrame, obj.numChannels);
+                    y(1:obj.SamplesPerFrame - over) = obj.customSignal(ind, :);                    
+                else
+                    ind = obj.count*obj.SamplesPerFrame + (1:obj.SamplesPerFrame)';
+                    y = obj.customSignal(ind, :);
+                end
+            end
+        end
+        
         function y = toneGenerator(obj)
-            A = obj.amplitude;
-            Ph = obj.phase; % Initial phase
-            f = obj.frequency;
-            t = (obj.count*obj.SamplesPerFrame + (0:obj.SamplesPerFrame-1)')/obj.SampleRate;
-            
-            y = A*cos(2*pi*f*t + Ph);
+            if obj.isDone
+                y = zeros(obj.SamplesPerFrame, 1);
+            else
+                A = obj.amplitude;
+                Ph = obj.phase; % Initial phase
+                f = obj.frequency;
+                t = (obj.count*obj.SamplesPerFrame + (0:obj.SamplesPerFrame-1)')/obj.SampleRate;
+                
+                y = A*cos(2*pi*f*t + Ph);
+            end
         end
         
     end

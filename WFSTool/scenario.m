@@ -7,6 +7,9 @@ classdef scenario < handle
         sourcesPosition
         activeSource
         
+        receiversPosition
+        activeReceiver
+        
         loudspeakersPosition
         loudspeakersOrientation
         loudspeakersState % Logical. True is enabled, false is disabled
@@ -20,12 +23,14 @@ classdef scenario < handle
     
     properties(Dependent)
         numSources
+        numReceivers
         numLoudspeakers
     end
     
     properties (Constant)
         c = 343;
         sourceColor = [0 0 1];
+        receiverColor = [1 1 0];
     end
     
     % Getters and setters
@@ -34,6 +39,10 @@ classdef scenario < handle
             numSources = size(obj.sourcesPosition, 1);
         end
         
+        function numReceivers = get.numReceivers(obj)
+            numReceivers = size(obj.receiversPosition, 1);
+        end
+                
         function numLoudspeakers = get.numLoudspeakers(obj)
             numLoudspeakers = size(obj.loudspeakersPosition, 1);
         end
@@ -45,6 +54,7 @@ classdef scenario < handle
             
             % Default
             sourcesPosition = [0 1 0];
+            receiversPosition = double.empty(0, 3);
             loudspeakersPosition = [-0.1 0 0; 0.1 0 0];
             loudspeakersOrientation = [1 0 0; -1 0 0];
             roomPosition = [-2, -2, 4, 4];
@@ -57,9 +67,8 @@ classdef scenario < handle
                 obj.enabledGUI = false;
             end
             
-            obj.setScenario(sourcesPosition, loudspeakersPosition, loudspeakersOrientation, roomPosition);
-            obj.activeSource = 1;
-        end         
+            obj.setScenario(sourcesPosition, receiversPosition, loudspeakersPosition, loudspeakersOrientation, roomPosition);
+        end
         
         function setNumSources(obj, numSources)
             
@@ -83,6 +92,25 @@ classdef scenario < handle
             obj.updateDelaysAndAttenuations();
         end
         
+        function setNumReceivers(obj, numReceivers)
+            obj.receiversPosition = zeros(numReceivers, 3);
+            if numReceivers > 0
+                obj.activeReceiver = 1;
+            else
+                obj.activeReceiver = [];
+            end
+
+            if obj.enabledGUI
+                receiver = findobj(obj.ax, 'Tag', 'receiver');
+                
+                receiver.XData = zeros(1, numReceivers);
+                receiver.YData = zeros(1, numReceivers);
+                receiver.ZData = zeros(1, numReceivers);
+                receiver.CData = repmat(obj.receiverColor, numReceivers, 1);
+            end
+            
+        end
+        
         function setSourcePosition(obj, sourcePosition, index)
             if obj.enabledGUI
                 % Graphics
@@ -100,10 +128,26 @@ classdef scenario < handle
 
         end
         
-        function setScenario(obj, sourcesPosition, loudspeakersPosition, loudspeakersOrientation, roomPosition)
+        function setReceiverPosition(obj, receiverPosition, index)
+            if obj.enabledGUI
+                % Graphics
+                receiver = findobj(obj.ax, 'Tag', 'receiver');
+                
+                receiver.XData(index) = receiverPosition(1);
+                receiver.YData(index) = receiverPosition(2);
+                receiver.ZData(index) = receiverPosition(3);
+            end
+            
+            % Other variables
+            obj.receiverPosition(index, :) = receiverPosition;
+            
+        end
+              
+        function setScenario(obj, sourcesPosition, receiversPosition, loudspeakersPosition, loudspeakersOrientation, roomPosition)
             if obj.enabledGUI
                 % Graphics
                 source = findobj(obj.ax, 'Tag', 'source');
+                receiver = findobj(obj.ax, 'Tag', 'receiver');
                 loudspeakers = findobj(obj.ax, 'Tag', 'loudspeakers');
                 
                 obj.ax.XLim = [roomPosition(1), roomPosition(1)+roomPosition(3)];
@@ -113,6 +157,11 @@ classdef scenario < handle
                 source.YData = sourcesPosition(:, 2);
                 source.ZData = sourcesPosition(:, 3);
                 source.CData = repmat(obj.sourceColor, size(sourcesPosition, 1), 1);
+                
+                receiver.XData = receiversPosition(:, 1);
+                receiver.YData = receiversPosition(:, 2);
+                receiver.ZData = receiversPosition(:, 3);
+                receiver.CData = repmat(obj.receiverColor, size(receiversPosition, 1), 1);
                 
                 loudspeakers.XData = loudspeakersPosition(:, 1);
                 loudspeakers.YData = loudspeakersPosition(:, 2);
@@ -126,6 +175,12 @@ classdef scenario < handle
                 obj.activeSource = 1;
             else
                 obj.activeSource = [];
+            end
+            obj.receiversPosition = receiversPosition;
+            if obj.numReceivers > 0
+                obj.activeReceiver = 1;
+            else
+                obj.activeReceiver = [];
             end
             obj.loudspeakersPosition = loudspeakersPosition;
             obj.loudspeakersOrientation = loudspeakersOrientation;
@@ -175,6 +230,10 @@ classdef scenario < handle
             source = scatter(ax, 0, 0, 50, obj.sourceColor);
             source.Tag = 'source';
             source.ButtonDownFcn = @(hObj, ~) obj.sourcesCallback(hObj);
+            
+            receiver = scatter(ax, 0, 0, 50, obj.receiverColor, '^');
+            receiver.Tag = 'receiver';
+            receiver.ButtonDownFcn = @(hObj, ~) obj.receiversCallback(hObj);
             
             loudspeakers = scatter(ax, 0, 1, 'k', 'MarkerEdgeColor', [0 0 0], 'MarkerFaceColor', 'flat');
             loudspeakers.Tag = 'loudspeakers';

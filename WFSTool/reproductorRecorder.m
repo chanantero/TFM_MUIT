@@ -7,14 +7,16 @@ classdef reproductorRecorder < matlab.System
         comMatrix % Commutation matrix. numReaders x numPlayers.
         
         % Signal provider settings
-        mode % file or sinusoidal
+        mode % file, sinusoidal or customSignal
+        FsGenerator % Sampling frequency for the sinusoidal signal (For mode == sinusoidal or mode == customSignal)
         % mode == file
         audioFileName % Cell string array with as many elements as signalReaders
         % mode == sinusoidal
         amplitude
         phase
         frequency
-        FsGenerator % Sampling frequency for the sinusoidal signal
+        % mode == customSignal
+        customSignal
         
         % Process settings
         modeProc % realTime or predefined
@@ -242,6 +244,7 @@ classdef reproductorRecorder < matlab.System
                 obj.signalReader{k}.phase = obj.phase(k);
                 obj.signalReader{k}.frequency = obj.frequency(k);
                 obj.signalReader{k}.SampleRate = obj.FsGenerator(k);
+                obj.signalReader{k}.customSignal = obj.customSignal{k};
             end
             
             obj.frameSizeReading = floor(obj.frameDuration*obj.Fs_reader);
@@ -819,6 +822,8 @@ classdef reproductorRecorder < matlab.System
                             obj.(parameter){index} = value;
                         case 'Fs_recorder'
                             obj.(parameter)(index) = value;
+                        case 'customSignal'
+                            obj.(parameter){index} = value;
                         otherwise
                             error('reproductor_plus:setProps', 'The first argument must be the name of an existing parameter')
                     end
@@ -829,7 +834,6 @@ classdef reproductorRecorder < matlab.System
                 for k = 1:numel(parameters)
                     parameter = parameters{k};
                     value = values{k};
-                    index = indices{k};
                     
                     switch parameter
                         case 'comMatrixCoef'
