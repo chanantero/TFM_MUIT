@@ -10,9 +10,9 @@ classdef WFSToolSimple < handle
         channelNumber
         virtualVolume
         realVolume
+        signalsSpec
                 
         % Scenario variables
-        signalsSpec
         amplitude
         phase
         frequency
@@ -80,8 +80,8 @@ classdef WFSToolSimple < handle
             obj.changed.signalsSpec = true;
             obj.updateEverything();
             
-            obj.simulObj.XnumPoints = 100;
-            obj.simulObj.YnumPoints = 100;
+            obj.simulObj.XnumPoints = 200;
+            obj.simulObj.YnumPoints = 200;
             obj.simulate();
             obj.simulObj.imag.HitTest = 'off';
             obj.ax.Children = flip(obj.ax.Children);
@@ -165,7 +165,7 @@ classdef WFSToolSimple < handle
             
             % Determine the complex coefficients of the source signal for
             % each channel
-            amp = onex(numChannels, 1);
+            amp = ones(numChannels, 1);
             t_ini = (preludeSamples + samplesPerChannel*(0:numChannels - 1))/SampleRate;
             phas = 2*pi*frequency*t_ini - pi/2;
             sourceCoef = amp*exp(1i*phas);
@@ -176,22 +176,30 @@ classdef WFSToolSimple < handle
             obj.player.executeOrder('play');
             
             % Analyse
-            signals = obj.player.recorded;
-            SampleRateRec = obj.player.Fs_recorder;
-            numRecorders = numel(signals);
-            for k = 1:numRecorders
-                iqSignal = real2IQ(signals{k}, SampleRateRec(k), frequency);
-                
+            signals = obj.player.recorded(1); % Only the first recorder device (one device for reproduction, one for recording)
+            SampleRateRec = obj.player.Fs_recorder(1);
+            iqSignal = real2IQ(signals, SampleRateRec, frequency);
+            numMicroph = size(signal, 2);
+            acPath = zeros(numChannels, numMicroph);
+            for l = 1:numMicroph
                 % Extract the received complex coefficients
-                [recCoef, ~] = pulseSignalParameters(iqSignal);
+                [recCoef, ~] = pulseSignalParameters(iqSignal(:, l));
                 
                 % Calculate the acoustic path: relation between the source
                 % coefficients and the received coefficients
-                acPath = recCoef./sourceCoef;
+                acPath(:, l) = recCoef./sourceCoef;
             end
-                        
+                                   
         end
         
+        function compareRecordedAndSimul(obj, frequency)
+            % Real situation
+            acPath = acousticPathsTest(obj, frequency);
+            
+            % Simulation
+            microphonePos = obj.scenObj.receiversPosition;
+            U = calculate(obj, microphonePos);
+        end
     end
     
     methods(Access = private)
@@ -364,15 +372,17 @@ classdef WFSToolSimple < handle
             numChannels = obj.scenarioObj.numLoudspeakers;
             activeSources = find(obj.virtual | obj.real);
             
+            delayShift = angle(obj.sourceCorr)/(2*pi*obj.frequency(index));
             if obj.virtual(index)
-                virtualDelays = obj.scenarioObj.delays(:, (activeSources == activeSources(index)));
+                virtualDelays = obj.scenarioObj.delays(:, (activeSources == activeSources(index))) + delayShift;
             else
                 virtualDelays = zeros(numChannels, 1);
             end
             
             if obj.real(index)
                 % delays(obj.channelNumber(index)) = 0;
-                realDelays = zeros(numChannels, 1);
+                delayShift = angle(obj.sourceCorr(obj.channelNumber(index)))/(2*pi*obj.frequency(index));
+                realDelays = zeros(numChannels, 1) + delayShift;
                 delays = [virtualDelays, realDelays];
             else
                 delays = virtualDelays;
@@ -385,7 +395,7 @@ classdef WFSToolSimple < handle
             activeSources = find(obj.virtual | obj.real);
             
             if obj.virtual(index)
-                virtualAttenuations = obj.virtualVolume(index)*obj.scenarioObj.attenuations(:, (activeSources == activeSources(index)));
+                virtualAttenuations = obj.virtualVolume(index)*obj.scenarioObj.attenuations(:, (activeSources == activeSources(index)))./abs(obj.sourceCorr);
             else
                 virtualAttenuations = zeros(numChannels, 1);
             end
@@ -393,7 +403,7 @@ classdef WFSToolSimple < handle
             if obj.real(index)
                 % attenuations(obj.channelNumber(index)) = obj.realVolume(index);
                 realAttenuations = zeros(numChannels, 1);
-                realAttenuations(obj.channelNumber(index)) = -obj.realVolume(index);
+                realAttenuations(obj.channelNumber(index)) = -obj.realVolume(index)/abs(obj.sourceCorr(obj.channelNumber(index)));
                 attenuations = [virtualAttenuations, realAttenuations];
             else
                 attenuations = virtualAttenuations;
@@ -434,9 +444,9 @@ classdef WFSToolSimple < handle
             
         end
         
-        function changeScenario(obj, numChannels)
-            numChannels = numChannels(1);
-            switch numChannels
+        function changeScenario(obj, numLoudspeakers)
+            numLoudspeakers = numLoudspeakers(1);
+            switch numLoudspeakers
                 case 0
                     sourcePosition = [0 0 0];
                     loudspeakersPosition = double.empty(0,3);
@@ -487,7 +497,7 @@ classdef WFSToolSimple < handle
             
             obj.updateForcedDisabledLoudspeakers();
         end
-              
+    
         function createTheoreticalModel(obj)
              
             indActiveSour = find(obj.real | obj.virtual);
@@ -547,7 +557,7 @@ classdef WFSToolSimple < handle
             obj.simulObj.sourceCoefficients = coef;
             obj.simulObj.sourceOrientations = [nSrcOrient_real; ldspkrsOrient];
             obj.simulObj.radPatFuns = repmat({@(x) simulator.monopoleRadPat(x)}, [numReal + numLoudspeakers_new, 1]);
-            obj.simulObj.k = 2*pi*obj.frequency(indActiveSour)/obj.c;
+            obj.simulObj.freq = obj.frequency(indActiveSour);
 
         end
         

@@ -6,7 +6,7 @@ classdef simulator < handle
         sourceCoefficients % (numSources x numFrequencies) matrix
         sourceOrientations % Mx4 matrix. Rotation vector: [angle of rotation, Xaxis, Yaxis, Zaxis]
         radPatFuns
-        k % Propagation constant. numFrequencies-element vector
+        freq
         
         % Graphical
         ax
@@ -23,9 +23,15 @@ classdef simulator < handle
         imag % Result of simulation
     end
     
+    properties(Constant)
+        c = 340;
+    end
+    
     properties(Dependent)
         numSources
         numFrequencies
+        numMeasurePoints
+        k % Propagation constant. numFrequencies-element vector
     end
     
     % Getters and setters
@@ -34,8 +40,16 @@ classdef simulator < handle
             numSources = size(obj.sourcePositions, 1);
         end
         
+        function numMeasurePoints = get.numMeasurePoints(obj)
+            numMeasurePoints = size(obj.measurePoints, 1);
+        end
+        
         function numFrequencies = get.numFrequencies(obj)
-            numFrequencies = numel(obj.k);
+            numFrequencies = numel(obj.freq);
+        end
+        
+        function k = get.k(obj)
+            k = 2*pi*obj.freq/obj.c;
         end
     end
     
@@ -57,7 +71,7 @@ classdef simulator < handle
             obj.setSources(sourcePos, 'coefficient', sourceCoeff, 'orientation', sourceOrient,...
                 'radiationPattern', radPatFun);
             
-            obj.k = 1;
+            obj.freq = 340;
             obj.XLim = [-2 2];
             obj.YLim = [-2 2];
             obj.XnumPoints = 20;
@@ -69,7 +83,8 @@ classdef simulator < handle
 %             obj.generateMeasurePoints();
             
             % Simulate
-            obj.field = obj.calculate(obj.measurePoints);
+            U = obj.calculate(obj.measurePoints);
+            obj.field = permute(sum(U, 2), [1 3 2]); % (numMeasPoints x numFrequencies)
                      
             obj.draw();
         end
@@ -81,7 +96,7 @@ classdef simulator < handle
         
         function draw(obj)
             % Reshape as an image
-            U = reshape(obj.field, obj.XnumPoints, obj.YnumPoints).';
+            U = reshape(sum(obj.field, 2), obj.XnumPoints, obj.YnumPoints).';
                        
             if ~isempty(obj.imag) && isvalid(obj.imag)
                 obj.imag.CData = real(U);
@@ -98,13 +113,15 @@ classdef simulator < handle
 %             obj.ax.NextPlot = 'Replace';
         end
        
-        function animate(obj, f, t)
-            incrT = diff(t);
+        function animate(obj, t, stretchingFactor)
+            t_ = t*stretchingFactor;
+            
+            incrT = diff(t_);
             incrT = [incrT, incrT(end)];
             
             for l = 1:numel(t)
-                U = obj.field*exp(1i*2*pi*f*t(l));
-                U = reshape(U, obj.XnumPoints, obj.YnumPoints).';
+                U = obj.field.*repmat(exp(1i*2*pi*obj.freq'*t(l)), [obj.numMeasurePoints, 1]);
+                U = reshape(sum(U, 2), obj.XnumPoints, obj.YnumPoints).';
                 obj.imag.CData = real(U);
                 pause(incrT(l))
             end
@@ -119,7 +136,7 @@ classdef simulator < handle
             numFreq = obj.numFrequencies;
             numMeasPoints = size(measurePointPositions, 1);
 
-            U_aux = zeros(numMeasPoints, numSour);
+            U = zeros(numMeasPoints, numSour, obj.numFrequencies);
             for s = 1:numSour
                 sourceCoef = obj.sourceCoefficients(s, :);
                 sourcePos = obj.sourcePositions(s, :);
@@ -135,13 +152,14 @@ classdef simulator < handle
                 relDir = quatrotate(quat, diffVec);
                 radPatCoef = radPatFun(relDir);
                 
-                aux = zeros(numMeasPoints, numFreq);
+                aux = zeros(numMeasPoints, 1, numFreq);
                 for f = 1:obj.numFrequencies
-                    aux(:, f) = sourceCoef(:, f)*radPatCoef.*exp(-1i*obj.k(f)*dist)./dist;
+                    aux(:, 1, f) = sourceCoef(:, f)*radPatCoef.*exp(-1i*obj.k(f)*dist)./dist;
                 end
-                U_aux(:, s) = sum(aux, 2);
+                U(:, s, :) = aux;
             end
-            U = sum(U_aux, 2);
+            
+%             U = permute(sum(U, 2), [1 3 2]); % (numMeasPoints x numFrequencies)
                        
         end
         

@@ -66,7 +66,7 @@ classdef reproductorRecorder < matlab.System
     % can be viewed by other objects
     properties(SetAccess = private, SetObservable, AbortSet)
         playingState % Playing state
-        numChannels
+        numChannels % Number of channels of the player objects
     end
     
     properties(Dependent, SetAccess = private)
@@ -74,8 +74,8 @@ classdef reproductorRecorder < matlab.System
         numReaders
         numPlayers
         numLinks
-        numRecorders
-        numRecorderChannels
+        numRecorders 
+        numRecorderChannels % Number of channels of the recorder objects
         recorded
     end
     
@@ -117,13 +117,19 @@ classdef reproductorRecorder < matlab.System
             audioInput = cell(numReader, 1);
             for k = 1:numReader
                 audioInput{k} = step(obj.signalReader{k});
-                audioInput{k} = mean(audioInput{k}, 2); % From Stereo to Mono
+                if obj.mode(k) ~= originTypes('customSignal')
+                    audioInput{k} = mean(audioInput{k}, 2); % From Stereo to Mono
+                end
             end
             
             % Process
             audioProc = cell(numLink, 1);
             for k = 1:numLink
-                audioProc{k} = step(obj.processor{k}, audioInput{indReader(k)}, delays{k}, attenuations{k});
+                if obj.mode(indReader(k)) ~= originTypes('customSignal')
+                    audioProc{k} = step(obj.processor{k}, audioInput{indReader(k)}, delays{k}, attenuations{k});
+                else
+                    audioProc{k} = audioInput{indReader(k)};
+                end
             end
             
             % Transform Frequency

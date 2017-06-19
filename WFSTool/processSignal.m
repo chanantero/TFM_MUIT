@@ -52,12 +52,9 @@ classdef processSignal < matlab.System & matlab.system.mixin.FiniteSource
             for l = 1:numComp
                 
                 delay = delays(:, :, l);
-                attenuation = attenuations(:, :, l);
-                
                 delaySamples = round(delay*obj.Fs);
-                atten = attenuation;
-                
-                
+                atten = attenuations(:, :, l);
+                               
                 % Apply Delay
                 indices = obj.numStoredSamples + repmat((1:numSamples)', 1, numChann) - delaySamples;
                 minIndices(l) = min(indices(:));
