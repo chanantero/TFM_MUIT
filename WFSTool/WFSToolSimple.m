@@ -33,7 +33,6 @@ classdef WFSToolSimple < handle
     
     properties(Dependent)
         numSources
-        numReceivers
     end
     
     properties(Constant)
@@ -152,23 +151,9 @@ classdef WFSToolSimple < handle
             numChannels = obj.player.numChannels(1);
             preludeSamples = SampleRate; % Prelude of samples of silence
             
-            cicleSamples = ceil(SampleRate/frequency*soundCicles);
-            silenceSamples = ceil(SampleRate/frequency*silenceCicles);
-            samplesPerChannel = cicleSamples + silenceSamples;
-            
-            signal = zeros(preludeSamples + numChannels*samplesPerChannel, numChannels);
-            for k = 1:numChannels
-                ind = preludeSamples + (k - 1)*samplesPerChannel + (1:cicleSamples);
-                t = (0:cicleSamples - 1)/SampleRate;
-                signal(ind, k) = sin(2*pi*frequency*t);
-            end
-            
-            % Determine the complex coefficients of the source signal for
-            % each channel
-            amp = ones(numChannels, 1);
-            t_ini = (preludeSamples + samplesPerChannel*(0:numChannels - 1))/SampleRate;
-            phas = 2*pi*frequency*t_ini - pi/2;
-            sourceCoef = amp*exp(1i*phas);
+            [signal, sourceCoef] = successiveChannelSinusoids( ones(numChannels, 1), -pi/2*ones(numChannels, 1), frequency, SampleRate, soundCicles, silenceCicles );
+            signal = [zeros(preludeSamples, numChannels); signal];
+            sourceCoef = sourceCoef*exp(-1i*2*pi*frequency*preludeSamples/SampleRate);
             
             % Reproduce and record
             obj.player.setProps('customSignal', signal, 1);
@@ -198,8 +183,65 @@ classdef WFSToolSimple < handle
             
             % Simulation
             microphonePos = obj.scenObj.receiversPosition;
-            U = calculate(obj, microphonePos);
+            obj.createTheoreticalModel();
+            U = calculate(obj, microphonePos); % Assume there is only one frequency (numMeasurePoints x numSources x numFrequencies)
+            
+            % Compare
+            aux = U.'./acPath;
+            
+            ax = axes(figure);
+            scatter(ax, 1:numChannels, abs(aux) )
         end
+        
+        function exportInformation(obj)
+            
+            % Base variables  
+            sBase = obj.getBaseVariables();
+            
+            % Theoretical Scenario Variables
+            sScen = obj.getTheoreticalScenarioVariables();
+
+            % Simulation Results Variables
+            simulField = obj.simulObj.field;
+            
+            % Experimental Results Variables
+            
+            
+        end
+               
+        function s = getBaseVariables(obj)
+            numLoudspeakers = obj.scenarioObj.numLoudspeakers;
+            numNoiseSources = obj.scenarioObj.numSources;
+            numReceivers = obj.scenarioObj.numReceivers;
+            
+            % Base variables  
+            s.loudspeakersPos = obj.scenarioObj.loudspeakersPosition;
+            s.loudspeakersOrient = obj.scenarioObj.loudspeakersOrientation;
+            s.loudspeakersRadPat = repmat({@(x) simulator.monopoleRadPat(x)}, [numLoudspeakers, 1]); % Assumption
+            s.noiseSourcesPos = obj.scenarioObj.sourcesPosition;
+            s.noiseSourcesOrient = simulator.vec2rotVec(repmat([0 0 1], [numNoiseSources, 1]));
+            s.noiseSourcesRadPat = repmat({@(x) simulator.monopoleRadPat(x)}, [numLoudspeakers, 1]); % Assumption
+            s.noiseSourcesCoeff = obj.amplitude.*exp(1i*obj.phase);
+            s.virtual = obj.virtual; % Virtual source indices
+            s.real = obj.real; % Real source indices
+            s.channelReal = obj.channelNumber; % Channel for real sources
+            s.freq = obj.frequency;
+            s.receiverPos = obj.scenarioObj.receiversPosition;
+            s.receiversOrient = simulator.vec2rotVec(repmat([0 0 1], [numReceivers, 1]));
+            s.receiversRadpat = repmat({@(x) simulator.monopoleRadPat(x)}, [numReceivers, 1]); % Assumption
+            s.sourcesCorrectionCoeff = obj.sourceCorr;
+            s.receiversCorrectionCoeff = obj.receiverCorr;   
+            s.realVolume = obj.realVolume; 
+            s.virutalVolume = obj.virtualVolume;
+        end
+        
+        function s = getTheoreticalScenarioVariables(obj)
+            s.sourcesPos = obj.simulObj.sourcePositions;
+            s.sourceOrient = obj.simulObj.sourceOrientations;
+            s.sourceRadPat = obj.simulObj.radPatFuns;
+            s.sourcesCoeff = obj.simulObj.sourceCoefficients;
+        end
+        
     end
     
     methods(Access = private)
@@ -551,6 +593,75 @@ classdef WFSToolSimple < handle
             coef = zeros(numReal + numLoudspeakers_new, numActiveSour);
             coef(1:numReal, indRealInActive) = diag(nSrcCoef_real);
             coef(numReal+1:end, indVirtualInActive) = ldspkrCoef;
+            
+            % Set the variables in the simulation object
+            obj.simulObj.sourcePositions = [nSrcPos_real; ldspkrsPos];
+            obj.simulObj.sourceCoefficients = coef;
+            obj.simulObj.sourceOrientations = [nSrcOrient_real; ldspkrsOrient];
+            obj.simulObj.radPatFuns = repmat({@(x) simulator.monopoleRadPat(x)}, [numReal + numLoudspeakers_new, 1]);
+            obj.simulObj.freq = obj.frequency(indActiveSour);
+
+        end
+        
+        function fromBase2TheoreticalScenario(obj)
+            
+            indActiveSour = find(obj.real | obj.virtual);
+            numActiveSour = numel(indActiveSour);
+            indReal = find(obj.real);
+            numReal = numel(indReal);
+            indRealInActive = ismember(indActiveSour, indReal);
+            indVirtual = find(obj.virtual);
+            numVirtual = numel(indVirtual);
+            indVirtualInActive = ismember(indActiveSour, indVirtual);
+            
+            % Active sources
+            ampReal = obj.amplitude(indReal).*obj.realVolume(indReal);
+            phaseReal = obj.phase(indReal);
+            nSrcCoef_real = ampReal.*exp(1i*phaseReal);
+            
+            nSrcPos_real = obj.scenarioObj.sourcesPosition(indRealInActive, :);
+            nSrcOrient_real = simulator.vec2rotVec(repmat([0 0 1], [numReal, 1]));
+                        
+            % Active array loudspeakers
+            delays = obj.scenarioObj.delays;
+            attenuations = obj.scenarioObj.attenuations;
+
+            numLoudspeakers = obj.scenarioObj.numLoudspeakers;
+
+            if numVirtual == 0
+                ldspkrCoef = double.empty(numLoudspeakers, 0);
+            else
+                ampVirt = obj.amplitude(indVirtual).*obj.virtualVolume(indVirtual);
+                phaseVirt = obj.phase(indVirtual);
+                freqVirt = obj.frequency(indVirtual);
+                delaysVirt = delays(:, indVirtual);
+                attenVirt = attenuations(:, indVirtual);
+                
+                nSrcCoef_virtual = ampVirt.*exp(1i*phaseVirt);
+                ldspkrCoef = repmat(nSrcCoef_virtual.', [numLoudspeakers, 1]).*attenVirt.*exp(-1i*2*pi*repmat(freqVirt', [numLoudspeakers, 1]).*delaysVirt);
+            end
+            
+            ldspkrsPos = obj.scenarioObj.loudspeakersPosition;
+            ldspkrsOrient = simulator.vec2rotVec(obj.scenarioObj.loudspeakersOrientation);
+            
+            % Delete the unactive array loudspeakers
+            unactiveLdspkrs = false(numLoudspeakers, 1);
+            unactiveLdspkrs(obj.channelNumber(indReal)) = true;
+            ldspkrCoef = ldspkrCoef(~unactiveLdspkrs, :);
+            ldspkrsPos = ldspkrsPos(~unactiveLdspkrs, :);
+            ldspkrsOrient = ldspkrsOrient(~unactiveLdspkrs, :);
+            numLoudspeakers_new = sum(~unactiveLdspkrs);
+                        
+            % Unify the coefficients in a single matrix
+            coef = zeros(numReal + numLoudspeakers_new, numActiveSour);
+            coef(1:numReal, indRealInActive) = diag(nSrcCoef_real);
+            coef(numReal+1:end, indVirtualInActive) = ldspkrCoef;
+            
+            % Index vector. The i-th element indicates which is the
+            % corresponding channel in the WFS array.
+            
+            
+            sourcesPos = [nSrcPos_real; ldspkrsPos];
             
             % Set the variables in the simulation object
             obj.simulObj.sourcePositions = [nSrcPos_real; ldspkrsPos];
