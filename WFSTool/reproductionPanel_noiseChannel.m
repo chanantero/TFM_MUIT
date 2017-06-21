@@ -234,7 +234,13 @@ classdef reproductionPanel_noiseChannel < handle
                 notify(obj, 'updatedValues', evntData);
             elseif column == 4
                 % The number of the channels for the sources have changed
-                obj.channelNumber = cell2mat(obj.list.Data(:, 4));
+                candidate = cell2mat(obj.list.Data(:, 4));
+                if sum(obj.real) > numel(unique(candidate(obj.real)));
+                    % Repeated channel
+                    obj.list.Data(row, column) = eventData.PreviousData;
+                else
+                    obj.channelNumber = candidate;
+                end
                 
                 evntData = updatedValuesEvntData('channelNumber');
                 notify(obj, 'updatedValues', evntData);

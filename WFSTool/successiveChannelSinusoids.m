@@ -1,27 +1,53 @@
-function [signal, complexCoef] = successiveChannelSinusoids( amplitude, phase, frequency, SampleRate, soundCicles, silenceCicles )
-% amplitude: numChannels-element vector
-% phase: numChannels-element vector
-% frequency. Scalar.
-% SampleRate. Scalar.
-% soundCicles. Scalar.
-% silenceCicles. Scalar.
+function signal = successiveChannelSinusoids( amplitude, phase, frequency, SampleRate, soundSamples, silenceSamples )
 
-numChannels = numel(amplitude);
+numChann = size(amplitude, 1);
+numFreq = numel(frequency);
 
-cicleSamples = ceil(SampleRate/frequency*soundCicles);
-silenceSamples = ceil(SampleRate/frequency*silenceCicles);
-samplesPerChannel = cicleSamples + silenceSamples;
+% First, reproduce in each channel and silence the rest
+amp = amplitude(:);
+phase = phase(:);
+freq = kron(frequency(:), ones(numChann, 1));
 
-signal = zeros(numChannels*samplesPerChannel, numChannels);
-for k = 1:numChannels
-    ind = (k - 1)*samplesPerChannel + (1:cicleSamples);
-    t = (0:cicleSamples - 1)/SampleRate;
-    signal(ind, k) = amplitude(k) * cos(2*pi*frequency*t + phase(k));
+samplesPerChannel = soundSamples + silenceSamples;
+numCicles = numChann * numFreq;
+totalSamples = numCicles * samplesPerChannel;
+t = (0:totalSamples - 1)'/SampleRate;
+
+signal = zeros(totalSamples, numChann);
+for k = 1:numCicles
+    c = rem(k, numChann);
+    if c == 0; c = numChann; end
+    ind = (k - 1)*samplesPerChannel + (1:soundSamples)';
+    signal(ind, c) = amp(k) * cos(2*pi*freq(k)*t(ind) + phase(k));
 end
 
-% Determine the complex coefficients of the source signal for each channel
-t_ini = samplesPerChannel*(0:numChannels - 1)/SampleRate;
-phas = phase - 2*pi*frequency*t_ini;
-complexCoef = amplitude*exp(1i*phas);
-
 end
+
+% function [signal] = successiveChannelSinusoids( amplitude, phase, frequency, SampleRate, soundCicles, silenceCicles )
+% % amplitude: numChannels-element vector
+% % phase: numChannels-element vector
+% % frequency. numFrequencies-element vector.
+% % SampleRate. Scalar.
+% % soundCicles. Scalar.
+% % silenceCicles. Scalar.
+% 
+% numChannels = numel(amplitude);
+% 
+% cicleSamples = ceil(SampleRate/frequency*soundCicles);
+% silenceSamples = ceil(SampleRate/frequency*silenceCicles);
+% samplesPerChannel = cicleSamples + silenceSamples;
+% totalSamples = numChannels*samplesPerChannel;
+% 
+% signal = zeros(totalSamples, numChannels);
+% t = (0:totalSamples - 1)'/SampleRate;
+% for k = 1:numChannels
+%     ind = (k - 1)*samplesPerChannel + (1:cicleSamples);
+%     signal(ind, k) = amplitude(k) * cos(2*pi*frequency*t(ind) + phase(k));
+% end
+% 
+% % Determine the complex coefficients of the source signal for each channel
+% % t_ini = samplesPerChannel*(0:numChannels - 1)/SampleRate;
+% % phas = phase - 2*pi*frequency*t_ini;
+% % complexCoef = amplitude*exp(1i*phas);
+% 
+% end

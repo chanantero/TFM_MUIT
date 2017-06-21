@@ -86,7 +86,7 @@ classdef signalProvider < matlab.System
         end
         
         function flag = isDone(obj)
-            if obj.mode == originType('file')
+            if obj.mode == originType('sinusoidal')
                 if obj.count * obj.SamplesPerFrame >= obj.stopSample
                     flag = true;
                 end
@@ -96,7 +96,7 @@ classdef signalProvider < matlab.System
                 else
                     flag = false;
                 end
-            else
+            elseif obj.mode == originType('file')
                 flag = isDone(obj.fileReader);
             end
         end

@@ -19,6 +19,7 @@ classdef reproductorRecorder < matlab.System
         customSignal
         
         % Process settings
+        enableProc % Enable processing
         modeProc % realTime or predefined
         % modeProc == realTime
         getDelayFun % Cell array of functions with as many elements as processors
@@ -117,7 +118,7 @@ classdef reproductorRecorder < matlab.System
             audioInput = cell(numReader, 1);
             for k = 1:numReader
                 audioInput{k} = step(obj.signalReader{k});
-                if obj.mode(k) ~= originTypes('customSignal')
+                if obj.enableProc
                     audioInput{k} = mean(audioInput{k}, 2); % From Stereo to Mono
                 end
             end
@@ -125,7 +126,7 @@ classdef reproductorRecorder < matlab.System
             % Process
             audioProc = cell(numLink, 1);
             for k = 1:numLink
-                if obj.mode(indReader(k)) ~= originTypes('customSignal')
+                if obj.enableProc
                     audioProc{k} = step(obj.processor{k}, audioInput{indReader(k)}, delays{k}, attenuations{k});
                 else
                     audioProc{k} = audioInput{indReader(k)};
@@ -656,6 +657,7 @@ classdef reproductorRecorder < matlab.System
             obj.signalReader = {signalProvider()};
             
             % Processing object
+            obj.enableProc = true;
             obj.processor = {processSignal()};
             obj.procParamProvider = {delayAndAttenProvider()};
             
@@ -830,6 +832,8 @@ classdef reproductorRecorder < matlab.System
                             obj.(parameter)(index) = value;
                         case 'customSignal'
                             obj.(parameter){index} = value;
+                        case 'enableProc'
+                            obj.(parameter) = value;
                         otherwise
                             error('reproductor_plus:setProps', 'The first argument must be the name of an existing parameter')
                     end
