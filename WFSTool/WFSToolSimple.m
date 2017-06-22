@@ -78,12 +78,13 @@ classdef WFSToolSimple < handle
             obj.changed.virtual = true;
             obj.changed.real = true;
             obj.changed.signalsSpec = true;
+            obj.changed.activeReceivers = true;
+            obj.changed.numSources = true;
             obj.updateEverything();
             
             obj.simulObj.XnumPoints = 200;
             obj.simulObj.YnumPoints = 200;
-            obj.simulate();
-            obj.simulObj.imag.HitTest = 'off';
+            obj.simulateOnAxis();
             obj.ax.Children = flip(obj.ax.Children);
             
             uicontrol(fig, 'Style', 'pushbutton',...
@@ -91,8 +92,8 @@ classdef WFSToolSimple < handle
         end
         
         function updateEverything(obj)
-            
-            if obj.changed.virtual || obj.changed.real
+                       
+            if obj.changed.numSources
                 rightSize = [obj.numSources, 1];
                 virtualRight = all(size(obj.virtual) == rightSize);
                 realRight = all(size(obj.real) == rightSize);
@@ -103,7 +104,34 @@ classdef WFSToolSimple < handle
                 assert(virtualRight && realRight && signalsRight && channelNumberRight...
                     && virtualVolumeRight && realVolumeRight, 'WFSTool2:updateEverything', 'The signals specifications and the virtual and real flags must have the same size')
                 
-                obj.updateComMat();
+                comMat = true(obj.numSources, 1); % Only for WFSToolSimple
+                obj.player.setProps('comMatrix', comMat);
+                
+                obj.updateSignalParameteres();
+                obj.updateSignalProvidersVariables();
+                obj.updateProcessorVariables_noiseChannel();
+                obj.updateGUIConnectionsStuff();
+                
+                obj.changed.real = false;
+                obj.changed.virtual = false;
+                obj.changed.numSources = false;
+            end
+            
+            if obj.changed.virtual || obj.changed.real                
+                rightSize = [obj.numSources, 1];
+                virtualRight = all(size(obj.virtual) == rightSize);
+                realRight = all(size(obj.real) == rightSize);
+                signalsRight = all(size(obj.signalsSpec) == rightSize);
+                channelNumberRight = all(size(obj.channelNumber) == rightSize);
+                virtualVolumeRight = all(size(obj.virtualVolume) == rightSize);
+                realVolumeRight = all(size(obj.virtualVolume) == rightSize);
+                assert(virtualRight && realRight && signalsRight && channelNumberRight...
+                    && virtualVolumeRight && realVolumeRight, 'WFSTool2:updateEverything', 'The signals specifications and the virtual and real flags must have the same size')
+                
+                obj.updateProcessorVariables_noiseChannel();
+
+                obj.changed.real = false;
+                obj.changed.virtual = false;         
             end
             
             if obj.changed.signalsSpec
@@ -317,8 +345,8 @@ classdef WFSToolSimple < handle
             s.sourcesCoeff = obj.simulObj.sourceCoefficients;
             s.frequencies = obj.frequency;
             s.receiverPos = obj.scenarioObj.receiversPosition;
-            s.receiversOrient = simulator.vec2rotVec(repmat([0 0 1], [numReceivers, 1]));
-            s.receiversRadpat = repmat({@(x) simulator.monopoleRadPat(x)}, [numReceivers, 1]); % Assumption
+            s.receiversOrient = simulator.vec2rotVec(repmat([0 0 1], [obj.numReceivers, 1]));
+            s.receiversRadpat = repmat({@(x) simulator.monopoleRadPat(x)}, [obj.numReceivers, 1]); % Assumption
             s.sourcesCorrectionCoeff = obj.sourceCorr;
             s.receiversCorrectionCoeff = obj.receiverCorr;   
         end
@@ -362,9 +390,7 @@ classdef WFSToolSimple < handle
                     obj.virtualVolume = obj.reprodPanel.virtualVolume;
                     obj.realVolume = obj.reprodPanel.virtualVolume;
                     
-                    obj.changed.virtual = true;
-                    obj.changed.real = true;
-                    obj.changed.signalsSpec = true;
+                    obj.changed.numSources = true;
                 case 'virtual'
                     obj.virtual = obj.reprodPanel.virtual;
                     obj.changed.virtual = true;
@@ -383,21 +409,21 @@ classdef WFSToolSimple < handle
             obj.updateEverything();
         end
         
-        function updateComMat(obj)
+        function updateComMat(obj)            
             % Update commutation matrix
-            comMat = WFSTool_noiseChannel.createCommutationMatrix(obj.virtual, obj.real);
+            comMat = WFSToolSimple.createCommutationMatrix(obj.virtual, obj.real);
             obj.player.setProps('comMatrix', comMat);
             
             obj.updateSignalParameteres();
             obj.updateSignalProvidersVariables();
             obj.updateProcessorVariables_noiseChannel();
             obj.updateGUIConnectionsStuff();
-            obj.updateRecorderVariables();
             
             obj.changed.real = false;
-            obj.changed.virtual = false;         
+            obj.changed.virtual = false;
+            obj.changed.numSources = false;
         end
-        
+                
         function updateRecorderVariables(obj)
             obj.scenarioObj.setNumReceivers(numel(obj.activeReceivers));
         end
@@ -527,16 +553,13 @@ classdef WFSToolSimple < handle
             activeSources = find(obj.virtual | obj.real);
             
             if obj.virtual(index)
-                virtualDelays = obj.scenarioObj.delays(:, (activeSources == activeSources(index)));
+                delays = obj.scenarioObj.delays(:, (activeSources == activeSources(index)));
             else
-                virtualDelays = zeros(numChannels, 1);
+                delays= zeros(numChannels, 1);
             end
             
             if obj.real(index)              
-                realDelays = zeros(numChannels, 1);
-                delays = [virtualDelays, realDelays];
-            else
-                delays = virtualDelays;
+                delays(obj.channelNumber(index)) = 0;
             end
         end
         
@@ -545,17 +568,13 @@ classdef WFSToolSimple < handle
             activeSources = find(obj.virtual | obj.real);
             
             if obj.virtual(index)
-                virtualAttenuations = obj.virtualVolume(index)*obj.scenarioObj.attenuations(:, (activeSources == activeSources(index)));
+                attenuations = obj.virtualVolume(index)*obj.scenarioObj.attenuations(:, (activeSources == activeSources(index)));
             else
-                virtualAttenuations = zeros(numChannels, 1);
+                attenuations = zeros(numChannels, 1);
             end
             
             if obj.real(index)
-                realAttenuations = zeros(numChannels, 1);
-                realAttenuations(obj.channelNumber(index)) = -obj.realVolume(index);
-                attenuations = [virtualAttenuations, realAttenuations];
-            else
-                attenuations = virtualAttenuations;
+                attenuations(obj.channelNumber(index)) = -obj.realVolume(index);
             end
         end
         
@@ -571,7 +590,7 @@ classdef WFSToolSimple < handle
                 pha = obj.phase(k);
                 sourceCoef = amp * exp(1i*pha);
                 
-                complexCoeff(:, k) = sourceCoef * atten * exp(-1i*2*pi*obj.frequency(k)*delays);
+                complexCoeff(:, k) = sourceCoef * atten .* exp(-1i*2*pi*obj.frequency(k)*delays);
             end
         end
         
@@ -624,21 +643,21 @@ classdef WFSToolSimple < handle
                     loudspeakersPosition = double.empty(0,3);
                     loudspeakersOrientation = double.empty(0,3);
                     roomPosition = [0 0 1 1];
-                    obj.scenarioObj.setScenario(sourcePosition, loudspeakersPosition, loudspeakersOrientation, roomPosition);
+                    obj.scenarioObj.setScenario(sourcePosition, [], loudspeakersPosition, loudspeakersOrientation, roomPosition);
                     
                     obj.simulObj.XLim = [roomPosition(1), roomPosition(1) + roomPosition(3)];
                     obj.simulObj.YLim = [roomPosition(2), roomPosition(2) + roomPosition(4)];
-                                        
+                    delete(obj.simulObj.imag);
                 case 2
                     sourcePosition = obj.scenarioObj.sourcesPosition;
                     loudspeakersPosition = [-0.1 0 0; 0.1 0 0];
                     loudspeakersOrientation = [1 0 0; -1 0 0];
                     roomPosition = [-2, -2, 4, 4];
-                    obj.scenarioObj.setScenario(sourcePosition, loudspeakersPosition, loudspeakersOrientation, roomPosition);
+                    obj.scenarioObj.setScenario(sourcePosition, [], loudspeakersPosition, loudspeakersOrientation, roomPosition);
                     
                     obj.simulObj.XLim = [roomPosition(1), roomPosition(1) + roomPosition(3)];
                     obj.simulObj.YLim = [roomPosition(2), roomPosition(2) + roomPosition(4)];
-                    
+                    delete(obj.simulObj.imag);
                 case 96
                     d = 0.18; % Separation between two contiguous loudspeakers. Size of one loudspeaker
                     nb = 8; % Bottom and upper sides of the octogon (2 sides)
@@ -658,11 +677,11 @@ classdef WFSToolSimple < handle
                     xmargin = 0.2 * xDim; ymargin = 0.2 * yDim;
                     roomPosition = [xmin - xmargin, ymin - ymargin, xDim + 2*xmargin, yDim + 2*ymargin];
                     
-                    obj.scenarioObj.setScenario(sourcePosition, loudspeakersPosition, loudspeakersOrientation, roomPosition);
+                    obj.scenarioObj.setScenario(sourcePosition, [], loudspeakersPosition, loudspeakersOrientation, roomPosition);
                     
                     obj.simulObj.XLim = [roomPosition(1), roomPosition(1) + roomPosition(3)];
                     obj.simulObj.YLim = [roomPosition(2), roomPosition(2) + roomPosition(4)];
-                    
+                    delete(obj.simulObj.imag);
                 otherwise
                     warning('Wrong number of output channels. There is not possible scenario for that case')
             end

@@ -765,11 +765,9 @@ classdef reproductorRecorder < matlab.System
                             % the setup and release
                             player_this = obj.player{index};
                             player_this.driver = value;
-                            setup(player_this, []);
-                            release(player_this);
-                            
+                                                        
                             % Get devices for the new driver and set it
-                            audioDevices = player_this.getAvailableDevices();
+                            audioDevices = player_this.getAudioDevices();
                             obj.setProps('device', audioDevices{1}, index);
                             
                         case 'device'

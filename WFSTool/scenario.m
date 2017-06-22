@@ -10,6 +10,8 @@ classdef scenario < handle
         receiversPosition
         activeReceiver
         
+        lastActive
+        
         loudspeakersPosition
         loudspeakersOrientation
         loudspeakersState % Logical. True is enabled, false is disabled
@@ -144,6 +146,10 @@ classdef scenario < handle
         end
               
         function setScenario(obj, sourcesPosition, receiversPosition, loudspeakersPosition, loudspeakersOrientation, roomPosition)
+            if isempty(receiversPosition)
+                receiversPosition = double.empty(0, 3);
+            end
+            
             if obj.enabledGUI
                 % Graphics
                 source = findobj(obj.ax, 'Tag', 'source');
@@ -182,6 +188,7 @@ classdef scenario < handle
             else
                 obj.activeReceiver = [];
             end
+            obj.lastActive = 'source';
             obj.loudspeakersPosition = loudspeakersPosition;
             obj.loudspeakersOrientation = loudspeakersOrientation;
             obj.loudspeakersState = true(obj.numLoudspeakers, obj.numSources);
@@ -248,14 +255,26 @@ classdef scenario < handle
             x = axes.CurrentPoint(1, 1);
             y = axes.CurrentPoint(1, 2);
             
-            source = findobj(axes, 'Tag', 'source');
-            source.XData(obj.activeSource) = x;
-            source.YData(obj.activeSource) = y;
-            
-            obj.sourcesPosition(obj.activeSource, 1) = x;
-            obj.sourcesPosition(obj.activeSource, 2) = y;
-                                 
-            obj.updateDelaysAndAttenuations();
+            switch obj.lastActive
+                case 'source'
+                    source = findobj(axes, 'Tag', 'source');
+                    source.XData(obj.activeSource) = x;
+                    source.YData(obj.activeSource) = y;
+                    
+                    obj.sourcesPosition(obj.activeSource, 1) = x;
+                    obj.sourcesPosition(obj.activeSource, 2) = y;
+                    
+                    obj.updateDelaysAndAttenuations();
+                    
+                case 'receiver'
+                    receiver = findobj(axes, 'Tag', 'receiver');
+                    receiver.XData(obj.activeReceiver) = x;
+                    receiver.YData(obj.activeReceiver) = y;
+                    
+                    obj.receiversPosition(obj.activeReceiver, 1) = x;
+                    obj.receiversPosition(obj.activeReceiver, 2) = y;
+                    
+            end
         end
         
         function loudspeakersCallback(obj, scat)
@@ -276,6 +295,18 @@ classdef scenario < handle
             % Which is the closest loudspeaker to the current point?
             [~, ind] = min(sum((repmat(point(1,:), size(obj.sourcesPosition, 1), 1) - obj.sourcesPosition).^2, 2));
             obj.activeSource = ind;
+            
+            obj.lastActive = 'source';
+        end
+        
+        function receiversCallback(obj, scat)
+            point = scat.Parent.CurrentPoint;
+            
+            % Which is the closest loudspeaker to the current point?
+            [~, ind] = min(sum((repmat(point(1,:), size(obj.receiversPosition, 1), 1) - obj.receiversPosition).^2, 2));
+            obj.activeReceiver = ind;
+            
+            obj.lastActive = 'receiver';
         end
         
         function updateLoudspeakersColor(obj)            
@@ -331,8 +362,8 @@ classdef scenario < handle
             cosAlfa = obj.calcCosAlfa();
             
             % Calculate active loudspeakers
-%             obj.loudspeakersState = cosAlfa > 0; % Buscamos los altavoces que deberían estar activos
-            obj.loudspeakersState(:) = true;
+            obj.loudspeakersState = cosAlfa > 0; % Buscamos los altavoces que deberían estar activos
+%             obj.loudspeakersState(:) = true;
 
             atten = obj.calcPhysicalAttenuation(distances, cosAlfa);
                       

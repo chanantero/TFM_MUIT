@@ -102,8 +102,12 @@ classdef simulator < handle
                 obj.imag.CData = real(U);
             else
 %                 cla(obj.ax)
+                obj.ax.NextPlot = 'Add';
                 obj.imag = image(obj.ax, 'XData', obj.XLim, 'YData', obj.YLim,...
                     'CData', real(U), 'CDataMapping', 'scaled');
+                obj.imag.HitTest = 'off';
+                obj.ax.Children = obj.ax.Children([2:end, 1]);
+                obj.ax.NextPlot = 'Replace';
             end
             
 %             % Draw sources
@@ -149,7 +153,7 @@ classdef simulator < handle
                 rotVec = sourceOrient;
                 rotVec(1) = -rotVec(1);
                 quat = simulator.rotVec2quat(rotVec);
-                relDir = quatrotate(quat, diffVec);
+                relDir = diffVec; % quatrotate no va incluído en el matlab del laboratorio. relDir = quatrotate(quat, diffVec);
                 radPatCoef = radPatFun(relDir);
                 
                 aux = zeros(numMeasPoints, 1, numFreq);

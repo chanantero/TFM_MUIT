@@ -52,7 +52,19 @@ classdef audioPlayer < matlab.System
         end
         
         function devices = getAvailableDevices(obj)
-            devices = getAudioDevices(obj.deviceWriter);
+%             devices = getAudioDevices(obj.deviceWriter);
+            
+            % If there is not set method for driver, use the next two lines
+            aux = audioDeviceWriter('Driver', obj.driver);
+            devices = getAudioDevices(aux);
+        end
+        
+        function devices = getAudioDevices(obj)
+%             devices = getAudioDevices(obj.deviceWriter);
+            
+            % If there is not set method for driver, use the next two lines
+            aux = audioDeviceWriter('Driver', obj.driver);
+            devices = getAudioDevices(aux);
         end
         
         function numChannels = get.numChannels(obj)
@@ -69,11 +81,7 @@ classdef audioPlayer < matlab.System
     methods(Access = protected)
         function setupImpl(obj)
             % Perform one-time calculations, such as computing constants
-            obj.deviceWriter.SampleRate = obj.Fs;
-            obj.deviceWriter.Driver = obj.driver;
-            obj.deviceWriter.Device = obj.device;
-%             obj.deviceWriter.SupportVariableSizeInput = true; % Por qué
-%             no iba sin esto y ahora sí que va?
+            obj.setDeviceWriterProperties();
             
             setup(obj.deviceWriter, zeros(obj.frameSize, obj.numChannels));
         end
@@ -106,5 +114,15 @@ classdef audioPlayer < matlab.System
             release(obj.deviceWriter);
         end
                 
+    end
+    
+    methods(Access = private)
+        function setDeviceWriterProperties(obj)
+            obj.deviceWriter.SampleRate = obj.Fs;
+            obj.deviceWriter.Driver = obj.driver;
+            obj.deviceWriter.Device = obj.device;
+%             obj.deviceWriter.SupportVariableSizeInput = true; % Por qué
+%             no iba sin esto y ahora sí que va?
+        end
     end
 end
