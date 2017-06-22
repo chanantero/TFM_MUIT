@@ -3,7 +3,7 @@ function [ values, pulseLimits ] = pulseSignalParameters( x )
 N = size(x, 1);
 
 % Calculate the median (mediana)
-xSort = sort(x);
+xSort = sort(abs(x));
 median = xSort(floor(N/2 + 1));
 threshold = median;
 

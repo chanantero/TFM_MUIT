@@ -1,4 +1,4 @@
-function signal = successiveChannelSinusoids( amplitude, phase, frequency, SampleRate, soundSamples, silenceSamples )
+function [signal, startInd, endInd] = successiveChannelSinusoids( amplitude, phase, frequency, SampleRate, soundSamples, silenceSamples )
 
 numChann = size(amplitude, 1);
 numFreq = numel(frequency);
@@ -20,6 +20,10 @@ for k = 1:numCicles
     ind = (k - 1)*samplesPerChannel + (1:soundSamples)';
     signal(ind, c) = amp(k) * cos(2*pi*freq(k)*t(ind) + phase(k));
 end
+
+% Set the markers vector. Starting indices of 
+startInd = (0:numCicles-1)'*samplesPerChannel + 1;
+endInd = (0:numCicles-1)'*samplesPerChannel + soundSamples;
 
 end
 

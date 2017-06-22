@@ -1,4 +1,4 @@
-function x = coefficients2signal( coefficients, frequency, SampleRate )
+function [x, startInd, endInd] = coefficients2signal( coefficients, frequency, SampleRate )
 % coefficients. (numChannels x numFreq)
 % frequency. numFreq-element vector
 
@@ -10,7 +10,7 @@ amplitude = abs(coefficients);
 phase = angle(coefficients);
 soundSamples = ceil(10*SampleRate/min(frequency));
 silenceSamples = ceil(10*SampleRate/min(frequency));
-x_pre = successiveChannelSinusoids( amplitude, phase, frequency, SampleRate, soundSamples, silenceSamples );
+[x_pre, startInd_pre, endInd_pre] = successiveChannelSinusoids( amplitude, phase, frequency, SampleRate, soundSamples, silenceSamples );
 numPre = size(x_pre, 1);
 
 % Then, reproduce everything at the same time
@@ -26,4 +26,8 @@ end
 x_main = sum(x_main, 3);
 
 x = [x_pre; x_main];
+
+% Set the time vector
+startInd = [startInd_pre; numPre + 1];
+endInd = [endInd_pre; numPre + numSamples_main];
 end

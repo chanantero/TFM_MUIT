@@ -196,7 +196,7 @@ classdef WFSToolSimple < handle
             
             ax = axes(figure);
             scatter(ax, 1:numChannels, abs(aux) )
-        end
+        end 
         
         function fromBase2TheoreticalScenario(obj)
             
@@ -234,13 +234,18 @@ classdef WFSToolSimple < handle
             x = coefficients2signal( s.sourcesCoeff, s.frequencies, SampleRate );
                       
             obj.player.setProps('mode', 'customSignal');
-            obj.player.setProps('customSignal', x);
-            obj.player.setProps('FsGenerator', SampleRate);
-            obj.player.setProps('enableProc', true);
+            obj.player.setProps('customSignal', x, 1);
+            real_comMat = obj.player.comMatrix;
+            prov_comMat = false(size(real_comMat)); prov_comMat(1) = true;
+            obj.player.setProps('comMatrix', prov_comMat);
+            obj.player.setProps('FsGenerator', SampleRate, 1);
+            obj.player.setProps('enableProc', false);
             
             obj.player.executeOrder('play'); 
             
-            obj.player.setProps('enableProc', false);
+            obj.player.setProps('enableProc', true);
+            obj.player.setProps('mode', 'sinusoidal');
+            obj.player.setProps('comMatrix', real_comMat);
         end
         
         function simulate(obj)
@@ -250,7 +255,16 @@ classdef WFSToolSimple < handle
             obj.simulObj.simulate();
         end
         
-        function [sBase, sScen, sSimul, sExp] = exportInformation(obj)
+        function saveInformation(obj)
+            defaultName = datestr(now, 'yyyy-mm-dd_HH-MM-SS');
+            [FileName,PathName, ~] = uiputfile('*.m', 'Save Information', defaultName);
+            
+            s = obj.exportInformation();
+    
+            save([PathName, FileName], s);
+        end
+                   
+        function s = exportInformation(obj)
             
             % Base variables  
             sBase = obj.getBaseVariables();
@@ -264,6 +278,10 @@ classdef WFSToolSimple < handle
             % Experimental Results Variables
             sExp = obj.getExperimentalResultVariables();
             
+            s.Base = sBase;
+            s.TheoreticalScenario = sScen;
+            s.Simulation = sSimul;
+            s.Experiment = sExp;
         end
                
         function s = getBaseVariables(obj)
@@ -308,7 +326,10 @@ classdef WFSToolSimple < handle
         function s = getExperimentalResultVariables(obj)
             recorded = obj.player.recorded{1}; % Only one recorder device
             
-            s.recordedField = recorded(:, obj.activeReceivers);
+            s.reproducedSignal = obj.player.signalReader{1}.customSignal;
+            s.reproducedSignal_SampleRate = obj.player.Fs_player(1);
+            s.recordedSignal = recorded(:, obj.activeReceivers);
+            s.recordedSignal_SampleRate = obj.player.Fs_recorder(1);
         end
         
         function s = getSimulationResultVariables(obj)
@@ -488,55 +509,63 @@ classdef WFSToolSimple < handle
         end    
         
         function delays = delayFunction(obj, index)
-            numChannels = obj.scenarioObj.numLoudspeakers;
-            activeSources = find(obj.virtual | obj.real);
-            
+                      
+            delays = obj.getDelays(index);
             delayShift = angle(obj.sourceCorr)/(2*pi*obj.frequency(index));
-            if obj.virtual(index)
-                virtualDelays = obj.scenarioObj.delays(:, (activeSources == activeSources(index))) + delayShift;
-            else
-                virtualDelays = zeros(numChannels, 1);
-            end
-            
-            if obj.real(index)
-                % delays(obj.channelNumber(index)) = 0;
-                delayShift = angle(obj.sourceCorr(obj.channelNumber(index)))/(2*pi*obj.frequency(index));
-                realDelays = zeros(numChannels, 1) + delayShift;
-                delays = [virtualDelays, realDelays];
-            else
-                delays = virtualDelays;
-            end
+            delays = delays + delayShift;
             
         end
         
         function attenuations = attenuationFunction(obj, index)
+            
+            attenuations = obj.getAttenuations(index)./abs(obj.sourceCorr);
+            
+        end
+             
+        function delays = getDelays(obj, index)
+            numChannels = obj.scenarioObj.numLoudspeakers;
+            activeSources = find(obj.virtual | obj.real);
+            
+            if obj.virtual(index)
+                virtualDelays = obj.scenarioObj.delays(:, (activeSources == activeSources(index)));
+            else
+                virtualDelays = zeros(numChannels, 1);
+            end
+            
+            if obj.real(index)              
+                realDelays = zeros(numChannels, 1);
+                delays = [virtualDelays, realDelays];
+            else
+                delays = virtualDelays;
+            end
+        end
+        
+        function attenuations = getAttenuations(obj, index)
             numChannels = size(obj.scenarioObj.attenuations, 1);
             activeSources = find(obj.virtual | obj.real);
             
             if obj.virtual(index)
-                virtualAttenuations = obj.virtualVolume(index)*obj.scenarioObj.attenuations(:, (activeSources == activeSources(index)))./abs(obj.sourceCorr);
+                virtualAttenuations = obj.virtualVolume(index)*obj.scenarioObj.attenuations(:, (activeSources == activeSources(index)));
             else
                 virtualAttenuations = zeros(numChannels, 1);
             end
             
             if obj.real(index)
-                % attenuations(obj.channelNumber(index)) = obj.realVolume(index);
                 realAttenuations = zeros(numChannels, 1);
-                realAttenuations(obj.channelNumber(index)) = -obj.realVolume(index)/abs(obj.sourceCorr(obj.channelNumber(index)));
+                realAttenuations(obj.channelNumber(index)) = -obj.realVolume(index);
                 attenuations = [virtualAttenuations, realAttenuations];
             else
                 attenuations = virtualAttenuations;
             end
-            
         end
-             
+        
         function complexCoeff = getComplexCoeff(obj)
             numFreq = obj.numSources;
             numSour = obj.scenarioObj.numLoudspeakers;
             complexCoeff = zeros(numSour, numFreq);
             for k = 1:numFreq
-                delays = obj.delayFunction(k);
-                atten = obj.attenuationFunction(k);
+                delays = obj.getDelays(k);
+                atten = obj.getAttenuations(k);
                 
                 amp = obj.amplitude(k);
                 pha = obj.phase(k);
