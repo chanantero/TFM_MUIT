@@ -65,6 +65,14 @@ classdef audioRecorder < matlab.System
             
             obj.setDefaultProperties();
         end
+        
+        function devices = getAudioDevices(obj)
+%             devices = getAudioDevices(obj.audioDeviceReaderObj);
+            
+            % If there is not set method for driver, use the next two lines
+            aux = audioDeviceReader('Driver', obj.Driver);
+            devices = getAudioDevices(aux);
+        end
     end
     
     methods(Access = private)
@@ -74,5 +82,6 @@ classdef audioRecorder < matlab.System
             obj.SampleRate = 44100;
             obj.SamplesPerFrame = 44100;
         end
+        
     end
 end

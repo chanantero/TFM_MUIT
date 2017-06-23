@@ -23,8 +23,8 @@ classdef reproductionPanel_noiseChannel < handle
     end
     
     methods
-        function obj = reproductionPanel_noiseChannel(parent, orderCallback)
-            obj.panel = obj.createPanel(parent, @(buttonTag) obj.buttonCallback(buttonTag),...
+        function obj = reproductionPanel_noiseChannel(parent, position, orderCallback)
+            obj.panel = obj.createPanel(parent, position, @(buttonTag) obj.buttonCallback(buttonTag),...
                 @(eventData) obj.changeSelection(eventData),...
                 @() obj.setTrackCallback(),...
                 @(eventData) obj.cellEditCallback(eventData),...
@@ -103,8 +103,8 @@ classdef reproductionPanel_noiseChannel < handle
     
     methods(Access = private)
         
-        function panel = createPanel(~, parent, buttonCallback, listSelectionCallback, setTrackCallback, cellEditCallback, setNumSourcesCallback)
-            panel = uipanel(parent, 'BackgroundColor','white', 'Units', 'normalized', 'Position', [0.05, 0.5, 0.4, 0.4]);
+        function panel = createPanel(~, parent, position, buttonCallback, listSelectionCallback, setTrackCallback, cellEditCallback, setNumSourcesCallback)
+            panel = uipanel(parent, 'BackgroundColor','white', 'Units', 'normalized', 'Position', position);
             menu = uicontextmenu;
             list_ = uitable(panel, 'Units', 'Normalized', 'Position', [0.05, 0.2, 0.9, 0.7], ...
                 'ColumnName',{'Signal', 'Virtual', 'Real', 'Channel nº', 'Virtual volume', 'Real Volume'}, 'ColumnFormat', {'char', 'logical', 'logical', 'numeric', 'numeric', 'numeric'}, 'Tag', 'list',...
@@ -250,7 +250,7 @@ classdef reproductionPanel_noiseChannel < handle
                 evntData = updatedValuesEvntData('virtualVolume');
                 notify(obj, 'updatedValues', evntData);
             elseif column == 6
-                obj.virtualVolume = cell2mat(obj.list.Data(:, 6));
+                obj.realVolume = cell2mat(obj.list.Data(:, 6));
                 
                 evntData = updatedValuesEvntData('realVolume');
                 notify(obj, 'updatedValues', evntData);

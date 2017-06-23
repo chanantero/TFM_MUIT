@@ -14,7 +14,7 @@ classdef WFSToolSimple < handle
         signalsSpec
         sourceCorr % Correction factor from adimensional variable to physic variable
         receiverCorr % Correction factor from physics magnitude of pressure to adimiensional units
-        activeReceivers % Active channels of the receiver device
+        activeReceiverChannels % Active channels of the receiver device
         
         amplitude
         phase
@@ -26,6 +26,7 @@ classdef WFSToolSimple < handle
         reprodPanel
         scenarioObj
         propPanel
+        recordPanel
         simulObj
                 
         % Other
@@ -34,6 +35,7 @@ classdef WFSToolSimple < handle
     
     properties(Dependent)
         numSources
+        numReceivers
     end
     
     properties(Constant)
@@ -45,6 +47,10 @@ classdef WFSToolSimple < handle
         function numSources = get.numSources(obj)
             numSources = numel(obj.signalsSpec);
         end   
+        
+        function numReceivers = get.numReceivers(obj)
+            numReceivers = numel(obj.activeReceiverChannels);
+        end
     end
     
     methods
@@ -54,9 +60,10 @@ classdef WFSToolSimple < handle
             obj.fig = fig;
             
             obj.player = reproductorRecorder();
-            obj.reprodPanel = reproductionPanel_noiseChannel(fig, @(action) obj.orderCallback(action));
+            obj.reprodPanel = reproductionPanel_noiseChannel(fig, [0.05, 0.7, 0.4, 0.3], @(action) obj.orderCallback(action));
             obj.scenarioObj = scenario(fig);
             obj.propPanel = propertiesPanel(fig, [0.05 0.1 0.4 0.2]);
+            obj.recordPanel = recorderPanel(fig, [0.05 0.35 0.4 0.3]);
             obj.simulObj = simulator;
             obj.ax = obj.scenarioObj.ax;
             obj.simulObj.ax = obj.ax;
@@ -67,6 +74,7 @@ classdef WFSToolSimple < handle
             
             addlistener(obj.player, 'numChannels', 'PostSet', @(~, eventData) obj.changeScenario(eventData.AffectedObject.numChannels(1)));
             addlistener(obj.reprodPanel, 'updatedValues', @(~, evntData) obj.reprodPanelListener(evntData.type));
+            addlistener(obj.recordPanel, 'updatedValues', @(~, evntData) obj.recordPanelListener(evntData.type));
             addlistener(obj.player, 'playingState', 'PostSet', @(~, eventData) obj.GUIenabling(eventData.AffectedObject.playingState));
             
             obj.signalsSpec = obj.reprodPanel.signals;
@@ -82,6 +90,8 @@ classdef WFSToolSimple < handle
             obj.changed.numSources = true;
             obj.updateEverything();
             
+            obj.updateGUIConnectionsStuff_1Device();
+            
             obj.simulObj.XnumPoints = 200;
             obj.simulObj.YnumPoints = 200;
             obj.simulateOnAxis();
@@ -95,26 +105,29 @@ classdef WFSToolSimple < handle
                        
             if obj.changed.numSources
                 rightSize = [obj.numSources, 1];
+                
                 virtualRight = all(size(obj.virtual) == rightSize);
                 realRight = all(size(obj.real) == rightSize);
                 signalsRight = all(size(obj.signalsSpec) == rightSize);
                 channelNumberRight = all(size(obj.channelNumber) == rightSize);
                 virtualVolumeRight = all(size(obj.virtualVolume) == rightSize);
                 realVolumeRight = all(size(obj.virtualVolume) == rightSize);
+                
                 assert(virtualRight && realRight && signalsRight && channelNumberRight...
                     && virtualVolumeRight && realVolumeRight, 'WFSTool2:updateEverything', 'The signals specifications and the virtual and real flags must have the same size')
                 
-                comMat = true(obj.numSources, 1); % Only for WFSToolSimple
+                comMat = WFSToolSimple.createCommutationMatrix(obj.virtual, obj.real);
                 obj.player.setProps('comMatrix', comMat);
                 
                 obj.updateSignalParameteres();
                 obj.updateSignalProvidersVariables();
-                obj.updateProcessorVariables_noiseChannel();
-                obj.updateGUIConnectionsStuff();
-                
+                obj.updateScenario(obj.real, obj.virtual, obj.reprodPanel.real, obj.reprodPanel.virtual);
+                obj.updateDelayAndAttenFunctions();
+
                 obj.changed.real = false;
                 obj.changed.virtual = false;
                 obj.changed.numSources = false;
+                
             end
             
             if obj.changed.virtual || obj.changed.real                
@@ -128,8 +141,9 @@ classdef WFSToolSimple < handle
                 assert(virtualRight && realRight && signalsRight && channelNumberRight...
                     && virtualVolumeRight && realVolumeRight, 'WFSTool2:updateEverything', 'The signals specifications and the virtual and real flags must have the same size')
                 
-                obj.updateProcessorVariables_noiseChannel();
-
+                obj.updateScenario(obj.real, obj.virtual, obj.reprodPanel.real, obj.reprodPanel.virtual);
+                obj.updateDelayAndAttenFunctions();
+               
                 obj.changed.real = false;
                 obj.changed.virtual = false;         
             end
@@ -261,19 +275,22 @@ classdef WFSToolSimple < handle
             s = obj.getTheoreticalScenarioVariables();
             x = coefficients2signal( s.sourcesCoeff, s.frequencies, SampleRate );
                       
-            obj.player.setProps('mode', 'customSignal');
-            obj.player.setProps('customSignal', x, 1);
             real_comMat = obj.player.comMatrix;
-            prov_comMat = false(size(real_comMat)); prov_comMat(1) = true;
+%             prov_comMat = false(size(real_comMat)); prov_comMat(1) = true;
+            prov_comMat = true;
             obj.player.setProps('comMatrix', prov_comMat);
+            obj.player.setProps('mode', originType('custom'), 1);
+            obj.player.setProps('customSignal', x, 1);           
             obj.player.setProps('FsGenerator', SampleRate, 1);
             obj.player.setProps('enableProc', false);
             
             obj.player.executeOrder('play'); 
             
             obj.player.setProps('enableProc', true);
-            obj.player.setProps('mode', 'sinusoidal');
             obj.player.setProps('comMatrix', real_comMat);
+            for k = 1:obj.player.numReaders
+                obj.player.setProps('mode', originType('sinusoidal'), k);
+            end
         end
         
         function simulate(obj)
@@ -356,13 +373,72 @@ classdef WFSToolSimple < handle
             
             s.reproducedSignal = obj.player.signalReader{1}.customSignal;
             s.reproducedSignal_SampleRate = obj.player.Fs_player(1);
-            s.recordedSignal = recorded(:, obj.activeReceivers);
+            s.recordedSignal = recorded(:, obj.activeReceiverChannels);
             s.recordedSignal_SampleRate = obj.player.Fs_recorder(1);
         end
         
         function s = getSimulationResultVariables(obj)
             s.simulatedField = obj.scenarioObj.field;
         end
+        
+        function changeScenario(obj, numLoudspeakers)
+            
+            if ~ismember(numLoudspeakers, [0 2 96])
+                numLoudspeakers = 0;
+            end
+            
+            switch numLoudspeakers
+                case 0
+                    sourcePosition = [0 0 0];
+                    loudspeakersPosition = double.empty(0,3);
+                    loudspeakersOrientation = double.empty(0,3);
+                    roomPosition = [0 0 1 1];
+                    obj.scenarioObj.setScenario(sourcePosition, [], loudspeakersPosition, loudspeakersOrientation, roomPosition);
+                    
+                    obj.simulObj.XLim = [roomPosition(1), roomPosition(1) + roomPosition(3)];
+                    obj.simulObj.YLim = [roomPosition(2), roomPosition(2) + roomPosition(4)];
+                    delete(obj.simulObj.imag);
+                case 2
+                    sourcePosition = obj.scenarioObj.sourcesPosition;
+                    loudspeakersPosition = [-0.1 0 0; 0.1 0 0];
+                    loudspeakersOrientation = [1 0 0; -1 0 0];
+                    roomPosition = [-2, -2, 4, 4];
+                    obj.scenarioObj.setScenario(sourcePosition, [], loudspeakersPosition, loudspeakersOrientation, roomPosition);
+                    
+                    obj.simulObj.XLim = [roomPosition(1), roomPosition(1) + roomPosition(3)];
+                    obj.simulObj.YLim = [roomPosition(2), roomPosition(2) + roomPosition(4)];
+                    delete(obj.simulObj.imag);
+                case 96
+                    d = 0.18; % Separation between two contiguous loudspeakers. Size of one loudspeaker
+                    nb = 8; % Bottom and upper sides of the octogon (2 sides)
+                    nd = 8; % Diagonal sides of the octogon (4 sides)
+                    nl = 24; % Lateral side of the octogon (2 sides)
+                    betabd = 45; % Deviation angle between bottom/upper and diagonal sides
+                    
+                    [ x, y, alfa ] = octogon(d, nb, nd, nl, betabd);
+                    z = zeros(numel(x), 1);
+                    loudspeakersPosition = [x, y, z];
+                    loudspeakersOrientation = [cosd(alfa), sind(alfa), zeros(numel(alfa), 1)];
+                    
+                    sourcePosition = [0, 0, 0];
+                    
+                    xmin = min(x); xmax = max(x); ymin = min(y); ymax = max(y);
+                    xDim = xmax - xmin; yDim = ymax - ymin;
+                    xmargin = 0.2 * xDim; ymargin = 0.2 * yDim;
+                    roomPosition = [xmin - xmargin, ymin - ymargin, xDim + 2*xmargin, yDim + 2*ymargin];
+                    
+                    obj.scenarioObj.setScenario(sourcePosition, [], loudspeakersPosition, loudspeakersOrientation, roomPosition);
+                    
+                    obj.simulObj.XLim = [roomPosition(1), roomPosition(1) + roomPosition(3)];
+                    obj.simulObj.YLim = [roomPosition(2), roomPosition(2) + roomPosition(4)];
+                    delete(obj.simulObj.imag);
+                otherwise
+                    warning('Wrong number of output channels. There is not possible scenario for that case')
+            end
+            
+            obj.updateForcedDisabledLoudspeakers();
+        end
+         
     end
     
     methods(Access = private)
@@ -383,19 +459,15 @@ classdef WFSToolSimple < handle
                     obj.signalsSpec = obj.reprodPanel.signals;
                     obj.changed.signalsSpec = true;
                 case 'numSources'
-                    obj.virtual = obj.reprodPanel.virtual;
-                    obj.real = obj.reprodPanel.real;
                     obj.signalsSpec = obj.reprodPanel.signals;
                     obj.channelNumber = obj.reprodPanel.channelNumber;
                     obj.virtualVolume = obj.reprodPanel.virtualVolume;
-                    obj.realVolume = obj.reprodPanel.virtualVolume;
+                    obj.realVolume = obj.reprodPanel.realVolume;
                     
                     obj.changed.numSources = true;
                 case 'virtual'
-                    obj.virtual = obj.reprodPanel.virtual;
                     obj.changed.virtual = true;
                 case 'real'
-                    obj.real = obj.reprodPanel.real;
                     obj.changed.real = true;
                 case 'channelNumber'
                     obj.channelNumber = obj.reprodPanel.channelNumber;
@@ -403,10 +475,39 @@ classdef WFSToolSimple < handle
                 case 'virtualVolume'
                     obj.virtualVolume = obj.reprodPanel.virtualVolume;
                 case 'realVolume'
-                    obj.realVolume = obj.reprodPanel.virtualVolume;
+                    obj.realVolume = obj.reprodPanel.realVolume;
             end
             
             obj.updateEverything();
+        end
+        
+        function recordPanelListener(obj, ~)
+            obj.activeReceiverChannels = obj.recordPanel.activeChannels;
+            obj.updateRecorderVariables();
+        end
+        
+        function updateScenario(obj, oldReal, oldVirtual, newReal, newVirtual)
+            oldN = numel(oldReal);
+            newN = numel(newReal);
+            if oldN ~= newN
+                obj.scenarioObj.setNumSources(newN);
+            else
+                indActive = find(oldReal | oldVirtual);
+                indNewActive = find(newReal | newVirtual);
+                
+                [a, b] = ismember(indNewActive, indActive);
+                newPositions = zeros(numel(indNewActive), 3);
+                newPositions(a, :) = obj.scenarioObj.sourcesPosition(b(a), :);
+                
+                obj.scenarioObj.setNumSources(size(newPositions, 1));
+                obj.scenarioObj.setSourcePosition(newPositions, 1:numel(indNewActive));
+            end
+            
+            obj.real = newReal;
+            obj.virtual = newVirtual;
+            
+            obj.updateForcedDisabledLoudspeakers();
+                       
         end
         
         function updateComMat(obj)            
@@ -425,7 +526,7 @@ classdef WFSToolSimple < handle
         end
                 
         function updateRecorderVariables(obj)
-            obj.scenarioObj.setNumReceivers(numel(obj.activeReceivers));
+            obj.scenarioObj.setNumReceivers(numel(obj.activeReceiverChannels));      
         end
         
         function updateSignalParameteres(obj)
@@ -469,18 +570,11 @@ classdef WFSToolSimple < handle
             obj.changed.signalsSpec = false;
         end
                 
-        function updateProcessorVariables_noiseChannel(obj)
-            % The processors need the getDelayFun and getAttenFun
-            % functions, and these are connected to the scenario
-            
-            % Update scenario based on the virtual sources
-            activeSources = obj.virtual | obj.real;
-            obj.scenarioObj.setNumSources(sum(activeSources));
-            
+        function updateDelayAndAttenFunctions(obj)
             % What processors exist?
             indExist = find(obj.player.comMatrix);
             
-            % Assign delay and attenuation functions
+            % Assign delay and attenuation functions            
             for k = 1:numel(indExist)
                 index = indExist(k);
                 
@@ -489,14 +583,24 @@ classdef WFSToolSimple < handle
                 
                 attenFun = @() obj.attenuationFunction(index);
                 obj.player.setProps('getAttenFun', attenFun, [index, 1]);
-            end           
-            
-            obj.updateForcedDisabledLoudspeakers();
-            
+            end
         end
         
+        function updateProcessorVariables_noiseChannel(obj)
+            % The processors need the getDelayFun and getAttenFun
+            % functions, and these are connected to the scenario
+            
+            % Update scenario based on the virtual sources
+            activeSources = obj.virtual | obj.real;
+            obj.scenarioObj.setNumSources(sum(activeSources));
+            obj.updateForcedDisabledLoudspeakers();
+            
+            obj.updateDelayAndAttenFunctions();
+            
+        end
+
         function updateForcedDisabledLoudspeakers(obj)
-            numLoudspeakers = obj.player.numChannels(1);
+            numLoudspeakers = obj.scenarioObj.numLoudspeakers;
             disabledLoudspeakers = false(numLoudspeakers, 1);
             % Assign delay and attenuation functions
             for k = 1:obj.numSources
@@ -513,26 +617,63 @@ classdef WFSToolSimple < handle
         function updateGUIConnectionsStuff(obj)
             % The devices need to have some variables specified:
             % driver and device
+            % It creates a panel for configuring this variables as well as
+            % the frame duration and the volume of each writing device, and
+            % restart this properties to some defaults
             
             % Update player GUI controls based on the real sources
             %             indReal = [1, find(any(obj.player.comMatrix(:, 2:end), 1))+1];
-            indReal = find(any(obj.player.comMatrix, 1));
+            indWriters = find(any(obj.player.comMatrix, 1));
+            obj.updateReproductorRecorderGUI_Writers(indWriters);
+            
+            indRec = 1:obj.player.numRecorders;
+            obj.updateReproductorRecorderGUI_Readers(indRec);
+        end    
+        
+        function updateGUIConnectionsStuff_1Device(obj)
+            % The devices need to have some variables specified:
+            % driver and device
+            % It creates a panel for configuring this variables as well as
+            % the frame duration and the volume of each writing device, and
+            % restart this properties to some defaults
+            
+            % Update player GUI controls based on the real sources
+            obj.updateReproductorRecorderGUI_Writers(1); % Only for WFSToolSimple. One device always active: WFS Array.
+            
+            obj.updateReproductorRecorderGUI_Readers(1);
+            
+        end
+        
+        function updateReproductorRecorderGUI_Writers(obj, indWritingDevices)
             setFrameDurationFunc = @(frameDuration) obj.player.setProps('frameDuration', frameDuration);
-            setVolumeFunc = @(volume, index) obj.setVolume(volume, indReal(index));
-            setDeviceFunc = @(device, index) obj.player.setProps('device', device, indReal(index));
-            setDriverFunc = @(driver, index) obj.player.setProps('driver', driver, indReal(index));
-            getAvailableDevicesFunc = @(index) obj.player.player{indReal(index)}.getAvailableDevices();
-            labels = cell(numel(indReal), 1);
-            for k = 1:numel(indReal)
-                labels{k} = sprintf('Device %d', indReal(k)-1);
+            setVolumeFunc = @(volume, index) obj.setVolume(volume, indWritingDevices(index));
+            setDeviceFunc = @(device, index) obj.player.setProps('device', device, indWritingDevices(index));
+            setDriverFunc = @(driver, index) obj.player.setProps('driver', driver, indWritingDevices(index));
+            getAvailableDevicesFunc = @(index) obj.player.player{indWritingDevices(index)}.getAudioDevices();
+            labels = cell(numel(indWritingDevices), 1);
+            for k = 1:numel(indWritingDevices)
+                labels{k} = sprintf('Device %d', indWritingDevices(k)-1);
             end
-            if ~isempty(indReal) && indReal(1) == 1
+            if ~isempty(indWritingDevices) && indWritingDevices(1) == 1
                 labels{1} = 'WFS Array';
             end
             
-            obj.propPanel.setFunctions(setFrameDurationFunc, setVolumeFunc, setDeviceFunc, setDriverFunc, getAvailableDevicesFunc, labels);
+            obj.propPanel.setFunctionsWriters(setFrameDurationFunc, setVolumeFunc, setDeviceFunc, setDriverFunc, getAvailableDevicesFunc, labels);
             
-        end    
+        end
+        
+        function updateReproductorRecorderGUI_Readers(obj, indReadingDevices)
+            setDeviceFunc = @(device, index) obj.player.setProps('device_recorder', device, indReadingDevices(index));
+            setDriverFunc = @(driver, index) obj.player.setProps('driver_recorder', driver, indReadingDevices(index));
+            getAvailableDevicesFunc = @(index) obj.player.recorder{indReadingDevices(index)}.getAudioDevices();
+            labels = cell(numel(indReadingDevices), 1);
+            for k = 1:numel(indReadingDevices)
+                labels{k} = sprintf('Recorder %d', indReadingDevices(k));
+            end
+                        
+            obj.propPanel.setFunctionsReaders(setDeviceFunc, setDriverFunc, getAvailableDevicesFunc, labels);
+            
+        end
         
         function delays = delayFunction(obj, index)
                       
@@ -634,61 +775,7 @@ classdef WFSToolSimple < handle
             end
             
         end
-        
-        function changeScenario(obj, numLoudspeakers)
-            numLoudspeakers = numLoudspeakers(1);
-            switch numLoudspeakers
-                case 0
-                    sourcePosition = [0 0 0];
-                    loudspeakersPosition = double.empty(0,3);
-                    loudspeakersOrientation = double.empty(0,3);
-                    roomPosition = [0 0 1 1];
-                    obj.scenarioObj.setScenario(sourcePosition, [], loudspeakersPosition, loudspeakersOrientation, roomPosition);
-                    
-                    obj.simulObj.XLim = [roomPosition(1), roomPosition(1) + roomPosition(3)];
-                    obj.simulObj.YLim = [roomPosition(2), roomPosition(2) + roomPosition(4)];
-                    delete(obj.simulObj.imag);
-                case 2
-                    sourcePosition = obj.scenarioObj.sourcesPosition;
-                    loudspeakersPosition = [-0.1 0 0; 0.1 0 0];
-                    loudspeakersOrientation = [1 0 0; -1 0 0];
-                    roomPosition = [-2, -2, 4, 4];
-                    obj.scenarioObj.setScenario(sourcePosition, [], loudspeakersPosition, loudspeakersOrientation, roomPosition);
-                    
-                    obj.simulObj.XLim = [roomPosition(1), roomPosition(1) + roomPosition(3)];
-                    obj.simulObj.YLim = [roomPosition(2), roomPosition(2) + roomPosition(4)];
-                    delete(obj.simulObj.imag);
-                case 96
-                    d = 0.18; % Separation between two contiguous loudspeakers. Size of one loudspeaker
-                    nb = 8; % Bottom and upper sides of the octogon (2 sides)
-                    nd = 8; % Diagonal sides of the octogon (4 sides)
-                    nl = 24; % Lateral side of the octogon (2 sides)
-                    betabd = 45; % Deviation angle between bottom/upper and diagonal sides
-                    
-                    [ x, y, alfa ] = octogon(d, nb, nd, nl, betabd);
-                    z = zeros(numel(x), 1);
-                    loudspeakersPosition = [x, y, z];
-                    loudspeakersOrientation = [cosd(alfa), sind(alfa), zeros(numel(alfa), 1)];
-                    
-                    sourcePosition = [0, 0, 0];
-                    
-                    xmin = min(x); xmax = max(x); ymin = min(y); ymax = max(y);
-                    xDim = xmax - xmin; yDim = ymax - ymin;
-                    xmargin = 0.2 * xDim; ymargin = 0.2 * yDim;
-                    roomPosition = [xmin - xmargin, ymin - ymargin, xDim + 2*xmargin, yDim + 2*ymargin];
-                    
-                    obj.scenarioObj.setScenario(sourcePosition, [], loudspeakersPosition, loudspeakersOrientation, roomPosition);
-                    
-                    obj.simulObj.XLim = [roomPosition(1), roomPosition(1) + roomPosition(3)];
-                    obj.simulObj.YLim = [roomPosition(2), roomPosition(2) + roomPosition(4)];
-                    delete(obj.simulObj.imag);
-                otherwise
-                    warning('Wrong number of output channels. There is not possible scenario for that case')
-            end
-            
-            obj.updateForcedDisabledLoudspeakers();
-        end
-            
+           
         function simulateOnAxis(obj)
             % Configure simulator object
             obj.fromBase2TheoreticalScenario();

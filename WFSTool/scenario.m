@@ -113,18 +113,38 @@ classdef scenario < handle
             
         end
         
-        function setSourcePosition(obj, sourcePosition, index)
+        function deleteSources(obj, ind)
+            preserve = true(obj.numSources, 1); preserve(ind) = false;
+            obj.sourcesPosition = obj.sourcesPosition(preserve, :);
+        end
+        
+        function addSources(obj, newSourcesPosition)
+            obj.sourcesPosition = [obj.sourcesPosition; newSourcesPosition];
+        end
+        
+        function reorderSources(obj, ind)
+            obj.sourcesPosition = obj.sourcesPosition(ind, :);
+        end
+        
+        function setSourcePosition(obj, sourcesPosition, indices)
+            
             if obj.enabledGUI
                 % Graphics
                 source = findobj(obj.ax, 'Tag', 'source');
-                
-                source.XData(index) = sourcePosition(1);
-                source.YData(index) = sourcePosition(2);
-                source.ZData(index) = sourcePosition(3);
             end
             
-            % Other variables
-            obj.sourcesPosition(index, :) = sourcePosition;
+            for k = 1:numel(indices)
+                index = indices(k);
+                
+                if obj.enabledGUI
+                    source.XData(index) = sourcesPosition(k, 1);
+                    source.YData(index) = sourcesPosition(k, 2);
+                    source.ZData(index) = sourcesPosition(k, 3);
+                end
+                
+                % Other variables
+                obj.sourcesPosition(index, :) = sourcesPosition(k, :);
+            end
             
             obj.updateDelaysAndAttenuations();
 

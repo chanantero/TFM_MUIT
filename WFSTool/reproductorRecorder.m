@@ -65,7 +65,7 @@ classdef reproductorRecorder < matlab.System
     % Reading properties
     % The user cannot set this properties directly, but are useful information that
     % can be viewed by other objects
-    properties(SetAccess = private, SetObservable, AbortSet)
+    properties(SetAccess = private, SetObservable) %, AbortSet)
         playingState % Playing state
         numChannels % Number of channels of the player objects
     end
@@ -190,10 +190,12 @@ classdef reproductorRecorder < matlab.System
                 end
             end
         end
+        
     end
     
     % Getters and setters
     methods
+        
         function numPlayers = get.numPlayers(obj)
             numPlayers = numel(obj.player);
         end
