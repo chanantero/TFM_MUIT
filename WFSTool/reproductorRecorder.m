@@ -65,7 +65,7 @@ classdef reproductorRecorder < matlab.System
     % Reading properties
     % The user cannot set this properties directly, but are useful information that
     % can be viewed by other objects
-    properties(SetAccess = private, SetObservable) %, AbortSet)
+    properties(SetAccess = private, SetObservable, AbortSet)
         playingState % Playing state
         numChannels % Number of channels of the player objects
     end
@@ -102,6 +102,22 @@ classdef reproductorRecorder < matlab.System
             
             obj.setPropertiesRecorder();
                    
+            for k = 1:obj.numReaders
+                setup(obj.signalReader{k})
+            end
+            
+            for k = 1:obj.numLinks
+                setup(obj.processor{k}, [], [], [])
+                setup(obj.procParamProvider{k});
+            end
+            
+            for k = 1:obj.numPlayers
+                setup(obj.player{k}, [])
+            end
+            
+            for k = 1:obj.numRecorders
+                setup(obj.recorder{k})
+            end
         end
         
         function [numUnderrun, tics] = stepImpl(obj, delays, attenuations)
@@ -113,7 +129,7 @@ classdef reproductorRecorder < matlab.System
             [indReader, indPlayer] = obj.getLinkSubInd();
             numLink = obj.numLinks;
             numRec = obj.numRecorders;
-            
+                       
             % Read from file
             audioInput = cell(numReader, 1);
             for k = 1:numReader
@@ -158,7 +174,7 @@ classdef reproductorRecorder < matlab.System
             for k = indPlay
                 [numUnderrun(k), tics(k)] = step(obj.player{k}, audioOutput{k});
             end
-            
+                         
             % Record
             for k = 1:numRec
                 step(obj.recorder{k});
@@ -376,7 +392,7 @@ classdef reproductorRecorder < matlab.System
             obj.count = 0;
         end
         
-        function setDefaultProperties(obj)
+        function setReproductorDefaultProperties(obj)
             
             for k = 1:obj.numReaders
                 obj.setProps('audioFileName', '', k);
@@ -393,9 +409,7 @@ classdef reproductorRecorder < matlab.System
                 obj.setProps('driver', 'DirectSound', k);
                 obj.setProps('device', 'Default', k);
             end
-            
-            obj.setProps('frameDuration', 0.25, k);
-            
+                        
             [readInd, playInd] = obj.getLinkSubInd();
             for k = 1:obj.numLinks
                 ind = [readInd(k), playInd(k)];
@@ -408,13 +422,17 @@ classdef reproductorRecorder < matlab.System
             end
             
         end
-        
+ 
         function setRecorderDefaultProperties(obj)         
             for k = 1:obj.numRecorders
                 obj.setProps('driver_recorder', 'DirectSound', k);
                 obj.setProps('device_recorder', 'Default', k);
                 obj.setProps('Fs_recorder', 44100, k);
             end
+        end
+        
+        function setOtherDefaultProperties(obj)
+            obj.setProps('frameDuration', 0.25);
         end
         
         function setCommutationMatrixCoef(obj, comMatCoef)
@@ -446,7 +464,7 @@ classdef reproductorRecorder < matlab.System
                 obj.player{k} = audioPlayer;
             end
             
-            obj.setDefaultProperties();
+            obj.setReproductorDefaultProperties();
         end
         
         function setNumRecorders(obj, numRecorders)
@@ -484,7 +502,7 @@ classdef reproductorRecorder < matlab.System
             numPlay = obj.numPlayers;
             
             % Timing control
-            margin = 0.25;
+            margin = 0.5;
             counter = 0;
             minPause = 0.01;
             minBufferDepletionTime = 0;
@@ -493,8 +511,14 @@ classdef reproductorRecorder < matlab.System
             offset = zeros(numPlay, 1);
             t_eps = cell(numPlay, 1); % Times of the ending of loading to the buffer queue
             numUnderruns = cell(numPlay, 1);
+            % Recorder timing
+            del = 2; % Delay of the reproduction with respect to the recording in seconds
                         
             [~, playerIndex] = obj.getLinkSubInd();
+            
+            for k = 1:obj.numRecorders
+                step(obj.recorder{k});
+            end
             
             finish = false;
             while ~finish % Only reproduce if it is playing
@@ -515,7 +539,7 @@ classdef reproductorRecorder < matlab.System
                     % Step
                     try
                         [numUnderrun, t_ep] = step(obj, delays, attenuations);
-                        
+                                                
                         % Delay between writing devices control
                         for k = 1:obj.numPlayers
                             if numel(t_eps{k}) == 20
@@ -565,8 +589,17 @@ classdef reproductorRecorder < matlab.System
                         done(k) = isDone(obj.signalReader{k});
                     end
                     if all(done)
+               
+                        % Record to overcompensate delays
+                        N = ceil(del/obj.frameDuration);
+                        for k = 1:obj.numRecorders
+                            for n = 1:N
+                                step(obj.recorder{k});
+                            end
+                        end
+                        
                         finish = true;
-                        obj.playingState = playingStateClass('stopped');
+                        release(obj)
                     end
                 end
                 
@@ -606,6 +639,7 @@ classdef reproductorRecorder < matlab.System
                     switch action
                         case 'lock'
                             setup(obj, {}, {});
+                            reset(obj);
                             obj.playingState = playingStateClass('paused');
                         case 'unlock'
                             % It is already stopped, so do nothing
@@ -668,10 +702,12 @@ classdef reproductorRecorder < matlab.System
             
             obj.comMatrix = true;
             obj.comMatrixCoef = 1;
-            obj.setDefaultProperties();
+            obj.setReproductorDefaultProperties();
             
             % Recording object
             obj.setNumRecorders(1);
+            
+            obj.setOtherDefaultProperties();
             
         end
         

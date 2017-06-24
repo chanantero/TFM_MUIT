@@ -19,6 +19,8 @@ classdef recorderPanel < handle
                 @(eventData) obj.cellEditCallback(eventData),...
                 @(x) obj.setNumActiveChannelsCallback(x));
             obj.list = findobj(obj.panel, 'Tag', 'list');
+            
+            obj.setNumActiveChannelsCallback(0);
         end
         
         function disableGUI(obj)
@@ -49,7 +51,7 @@ classdef recorderPanel < handle
             % Number of sources uicontrol
             uicontrol(panel, 'Style', 'text', 'String', 'Nº active recorder channels', 'Units', 'normalized',...
                 'Position', [0 0.9 0.2 0.1]);
-            uicontrol(panel, 'Style', 'edit', 'String', 'prueba', 'Units', 'normalized', 'Position', [0.2 0.9 0.1 0.1],...
+            uicontrol(panel, 'Style', 'edit', 'String', '0', 'Units', 'normalized', 'Position', [0.2 0.9 0.1 0.1],...
                 'Tag', 'numSources', 'Callback', @(hObject, ~, ~) setNumChannelsCallback(str2double(hObject.String)));
         end
                       

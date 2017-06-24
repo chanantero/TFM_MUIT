@@ -92,8 +92,8 @@ classdef propertiesPanel < handle
                 setDriverFunc(driver, ind);
                 
                 % Get devices for the new driver
-                obj.deviceMenus(ind).String = getAvailableDevicesFunc(ind);
-                obj.deviceMenus(ind).Value = 1;
+                obj.readerDeviceMenus(ind).String = getAvailableDevicesFunc(ind);
+                obj.readerDeviceMenus(ind).Value = 1;
             end
             
         end

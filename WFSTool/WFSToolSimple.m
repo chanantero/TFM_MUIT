@@ -19,6 +19,12 @@ classdef WFSToolSimple < handle
         amplitude
         phase
         frequency
+        
+        % Simulation results
+        simulField
+        
+        % Experimental results
+        reprodSignal
                                 
         % Infrastructure variables
         fig
@@ -76,7 +82,7 @@ classdef WFSToolSimple < handle
             addlistener(obj.reprodPanel, 'updatedValues', @(~, evntData) obj.reprodPanelListener(evntData.type));
             addlistener(obj.recordPanel, 'updatedValues', @(~, evntData) obj.recordPanelListener(evntData.type));
             addlistener(obj.player, 'playingState', 'PostSet', @(~, eventData) obj.GUIenabling(eventData.AffectedObject.playingState));
-            
+                                 
             obj.signalsSpec = obj.reprodPanel.signals;
             obj.virtual = obj.reprodPanel.virtual;
             obj.real = obj.reprodPanel.real;
@@ -88,17 +94,16 @@ classdef WFSToolSimple < handle
             obj.changed.signalsSpec = true;
             obj.changed.activeReceivers = true;
             obj.changed.numSources = true;
-            obj.updateEverything();
-            
-            obj.updateGUIConnectionsStuff_1Device();
+            obj.updateEverything();          
             
             obj.simulObj.XnumPoints = 200;
             obj.simulObj.YnumPoints = 200;
             obj.simulateOnAxis();
-            obj.ax.Children = flip(obj.ax.Children);
             
             uicontrol(fig, 'Style', 'pushbutton',...
                 'Units', 'normalized', 'Position', [0.6 0.95 0.1 0.05], 'String', 'Simulate', 'Callback', @(hObject, eventData) obj.simulateOnAxis());
+            uicontrol(fig, 'Style', 'pushbutton',...
+                'Units', 'normalized', 'Position', [0.75 0.95 0.1 0.05], 'String', 'Save', 'Callback', @(~, ~) obj.saveInformation());
         end
         
         function updateEverything(obj)
@@ -106,8 +111,8 @@ classdef WFSToolSimple < handle
             if obj.changed.numSources
                 rightSize = [obj.numSources, 1];
                 
-                virtualRight = all(size(obj.virtual) == rightSize);
-                realRight = all(size(obj.real) == rightSize);
+                virtualRight = all(size(obj.reprodPanel.virtual) == rightSize);
+                realRight = all(size(obj.reprodPanel.real) == rightSize);
                 signalsRight = all(size(obj.signalsSpec) == rightSize);
                 channelNumberRight = all(size(obj.channelNumber) == rightSize);
                 virtualVolumeRight = all(size(obj.virtualVolume) == rightSize);
@@ -118,6 +123,8 @@ classdef WFSToolSimple < handle
                 
                 comMat = WFSToolSimple.createCommutationMatrix(obj.virtual, obj.real);
                 obj.player.setProps('comMatrix', comMat);
+                
+                obj.updateGUIConnectionsStuff_1Device();
                 
                 obj.updateSignalParameteres();
                 obj.updateSignalProvidersVariables();
@@ -240,6 +247,26 @@ classdef WFSToolSimple < handle
             scatter(ax, 1:numChannels, abs(aux) )
         end 
         
+        function processResults(obj)
+            f = figure;
+            axReprod = axes(f, 'Units', 'normalized', 'OuterPosition', [0.1 0.6 0.8 0.3]);
+            axRecord = axes(f, 'Units', 'normalized', 'OuterPosition', [0.1 0.1 0.8 0.3]);
+            
+            s = obj.getExperimentalResultVariables();
+                        
+            numReprodSamples = size(s.reproducedSignal, 1);
+            reprodSampleRate = s.reproducedSignal_SampleRate;
+            
+            numRecordSamples = size(s.recordedSignal, 1);
+            recordSampleRate = s.recordedSignal_SampleRate;
+            
+            tReprod = (0:numReprodSamples - 1)/reprodSampleRate;
+            tRecord = (0:numRecordSamples - 1)/recordSampleRate;
+            
+            plot(axReprod, tReprod, s.reproducedSignal);
+            plot(axRecord, tRecord, s.recordedSignal);
+        end
+        
         function fromBase2TheoreticalScenario(obj)
             
             indActiveSour = find(obj.real | obj.virtual);
@@ -276,37 +303,52 @@ classdef WFSToolSimple < handle
             x = coefficients2signal( s.sourcesCoeff, s.frequencies, SampleRate );
                       
             real_comMat = obj.player.comMatrix;
-%             prov_comMat = false(size(real_comMat)); prov_comMat(1) = true;
+            writingDrivers = obj.player.driver;
+            writingDevices = obj.player.device;
             prov_comMat = true;
             obj.player.setProps('comMatrix', prov_comMat);
             obj.player.setProps('mode', originType('custom'), 1);
             obj.player.setProps('customSignal', x, 1);           
             obj.player.setProps('FsGenerator', SampleRate, 1);
             obj.player.setProps('enableProc', false);
+            obj.player.setProps('driver', writingDrivers{1}, 1);
+            obj.player.setProps('device', writingDevices{1}, 1);
             
             obj.player.executeOrder('play'); 
             
             obj.player.setProps('enableProc', true);
             obj.player.setProps('comMatrix', real_comMat);
-            for k = 1:obj.player.numReaders
-                obj.player.setProps('mode', originType('sinusoidal'), k);
+            obj.updateSignalProvidersVariables();
+            for k = 1:obj.player.numPlayers
+                obj.player.setProps('driver', writingDrivers{k}, k);
+                obj.player.setProps('device', writingDevices{k}, k);
             end
+            
+            obj.reprodSignal = x;
         end
         
         function simulate(obj)
             obj.simulObj.measurePoints = obj.scenarioObj.receiversPosition;
             obj.simulObj.freq = obj.frequency;
             
-            obj.simulObj.simulate();
+            obj.simulField = obj.simulObj.calculate(obj.simulObj.measurePoints);
+            
         end
         
         function saveInformation(obj)
             defaultName = datestr(now, 'yyyy-mm-dd_HH-MM-SS');
-            [FileName,PathName, ~] = uiputfile('*.m', 'Save Information', defaultName);
+            [FileName,PathName, ~] = uiputfile('*.mat', 'Save Information', ['../Data/', defaultName]);
             
-            s = obj.exportInformation();
-    
-            save([PathName, FileName], s);
+            if FileName ~= 0
+                
+                [~, ~, ext] = fileparts(FileName);
+                if isempty(ext)
+                    FileName = [FileName, '.mat'];
+                end
+                
+                s = obj.exportInformation();
+                save([PathName, FileName], 's');            
+            end
         end
                    
         function s = exportInformation(obj)
@@ -332,7 +374,6 @@ classdef WFSToolSimple < handle
         function s = getBaseVariables(obj)
             numLoudspeakers = obj.scenarioObj.numLoudspeakers;
             numNoiseSources = obj.scenarioObj.numSources;
-            numReceivers = obj.scenarioObj.numReceivers;
             
             % Base variables  
             s.loudspeakersPos = obj.scenarioObj.loudspeakersPosition;
@@ -347,8 +388,8 @@ classdef WFSToolSimple < handle
             s.channelReal = obj.channelNumber; % Channel for real sources
             s.freq = obj.frequency;
             s.receiverPos = obj.scenarioObj.receiversPosition;
-            s.receiversOrient = simulator.vec2rotVec(repmat([0 0 1], [numReceivers, 1]));
-            s.receiversRadpat = repmat({@(x) simulator.monopoleRadPat(x)}, [numReceivers, 1]); % Assumption
+            s.receiversOrient = simulator.vec2rotVec(repmat([0 0 1], [obj.numReceivers, 1]));
+            s.receiversRadpat = repmat({@(x) simulator.monopoleRadPat(x)}, [obj.numReceivers, 1]); % Assumption
             s.sourcesCorrectionCoeff = obj.sourceCorr;
             s.receiversCorrectionCoeff = obj.receiverCorr;   
             s.realVolume = obj.realVolume; 
@@ -371,17 +412,19 @@ classdef WFSToolSimple < handle
         function s = getExperimentalResultVariables(obj)
             recorded = obj.player.recorded{1}; % Only one recorder device
             
-            s.reproducedSignal = obj.player.signalReader{1}.customSignal;
+            s.reproducedSignal = obj.reprodSignal;
             s.reproducedSignal_SampleRate = obj.player.Fs_player(1);
             s.recordedSignal = recorded(:, obj.activeReceiverChannels);
             s.recordedSignal_SampleRate = obj.player.Fs_recorder(1);
         end
         
         function s = getSimulationResultVariables(obj)
-            s.simulatedField = obj.scenarioObj.field;
+            s.simulatedField = obj.simulField;
         end
         
         function changeScenario(obj, numLoudspeakers)
+            
+            disp('hola')
             
             if ~ismember(numLoudspeakers, [0 2 96])
                 numLoudspeakers = 0;
@@ -674,7 +717,7 @@ classdef WFSToolSimple < handle
             obj.propPanel.setFunctionsReaders(setDeviceFunc, setDriverFunc, getAvailableDevicesFunc, labels);
             
         end
-        
+      
         function delays = delayFunction(obj, index)
                       
             delays = obj.getDelays(index);
@@ -788,8 +831,9 @@ classdef WFSToolSimple < handle
     end
     
     methods(Static)
-        function comMat = createCommutationMatrix(virtual, real)
-            comMat = virtual | real;
+        function comMat = createCommutationMatrix(virtual, ~)
+%             comMat = virtual | real;
+            comMat = true(numel(virtual), 1);
         end
     end
 end

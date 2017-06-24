@@ -161,11 +161,11 @@ classdef signalProvider < matlab.System
             if obj.isDone()
                 y = zeros(obj.SamplesPerFrame, obj.numChannels);
             else
-                over = obj.count+1 * obj.SamplesPerFrame - obj.numSamples;
+                over = (obj.count+1) * obj.SamplesPerFrame - obj.numSamples;
                 if over > 0
                     ind = obj.count*obj.SamplesPerFrame + (1:obj.SamplesPerFrame - over)';
                     y = zeros(obj.SamplesPerFrame, obj.numChannels);
-                    y(1:obj.SamplesPerFrame - over) = obj.customSignal(ind, :);                    
+                    y(1:obj.SamplesPerFrame - over, :) = obj.customSignal(ind, :);                    
                 else
                     ind = obj.count*obj.SamplesPerFrame + (1:obj.SamplesPerFrame)';
                     y = obj.customSignal(ind, :);
