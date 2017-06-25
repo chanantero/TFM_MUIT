@@ -1,7 +1,7 @@
-function rat = compareSimulationAndExperiment( freqs, xOriginCoef, x, x_limitSamples, xSampleRate, y, ySampleRate, simul )
+function rat = compareSimulationAndExperiment( freqs, xOriginCoef, x, xPulseLimits, xSampleRate, y, ySampleRate, simul )
 % Compare the simulation results with the experimental results.
 % x. Reproduced signal. (numSamplesX x numChannelsX) matrix.
-% xOriginCoef. Complex coefficients from which x was synthesized. (numChannelsX x
+% xOriginCoef. Complex coefficients from which x was synthesized. (numPulses x numChannelsX x
 % numFrequencies) matrix.
 % freqs. Frequency of each sinusoidal signal. numFrequencies-element vector
 % y. Received signal. (numSamplesY x numChannelsY) matrix
@@ -11,41 +11,18 @@ function rat = compareSimulationAndExperiment( freqs, xOriginCoef, x, x_limitSam
 % channel while the rest of channels is silent. The last one is the
 % complete signal on all channels.
 
-numChannelsX = size(x, 2); % Number of channels of the reproduction device
-numChannelsY = size(y, 2); % Number of channels of the recorder device
-numFrequencies = numel(freq);
 
-% Pulses that should be detected in y. This is, pulses that are in x but
-% counting the contribution of all x channels together
-xGroupCoef = cell(numFrequencies, 1);
-xGroupPulseLimits = cell(numFrequencies, 1);
-for f_ind = 1:numFrequencies
+% Get a pulse coefficient matrix of y that corresponds to the coefficient
+% matrix of x
+yPulseCoefMat = signal2pulseCoefficientMatrix(freq, xPulseCoefMat, xPulseLimits, xSampleRate, y, ySampleRate);
+
+%  Identify the coefficients detected for each y channel, each x channel
+%  (loudspeaker) and each frequency.
+yCoef = zeros(numChannelsX, numChannelsY, numFrequencies);
+for cy = 1:numChannelsY
+    % Pulses corresponding to the f-th frequency
     
-end
-
-tol = 0.1; % Tolerance
-[corrInd, y_coef, y_pulseLimits] = associateSinPulses(freqs, xPulseLimits, xSampleRate, y, ySampleRate, tol);
-
-% Map the corresponding indices into the original x signal pulse structure
-
-
-divInd;
-
-y_coef = zeros(numChannelsX, numFrequencies, numChannelsY);
-for f = 1:numFrequencies
-    y_part = y(divInd(f):divInd(f+1), :);
-    iq = real2IQ(y_part, y_SampleRate, freq(f));
-        
-    for r = 1:numChannelsY
-        [ values, pulseLimits ] = pulseSignalParameters( iq(:, r) );
-        % We expect numChannels pulses, and hence, values
-        % Divide each real value by it's source coefficient
-        if numel(values) == numChannelsX
-            y_coef(:, f, r) = values.';
-        else
-            error('compareSimulationAndExperiment:WrongSignal', 'Wrong number of pulses detected')
-        end
-    end
+    % Each of those pulses correspond to one channel of x (loudspeaker)
     
 end
 

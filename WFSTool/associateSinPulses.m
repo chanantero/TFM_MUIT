@@ -1,7 +1,9 @@
 function [corrInd, y_coef, y_pulseLimits] = associateSinPulses(freqs, xPulseLimits, xSampleRate, y, ySampleRate, durationTolerance)
 
 % y. Received signal. (numRecSamples x numChannels) matrix
-% originSignalLimits. Sample limits of the pulses in the original signal x. numFrequencies-element cell column vector.
+% xPulseLimits. Sample limits of the pulses in the original signal x. 
+% numFrequencies-element cell column vector. The i-th cell contains the sample
+% limits for the i-th frequency.
 
 numFrequencies = numel(freqs);
 numChannelsY = size(y, 2);
