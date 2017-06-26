@@ -1,15 +1,16 @@
 function yPulseCoefMat = signal2pulseCoefficientMatrix(freq, xPulseCoefMat, xPulseLimits, xSampleRate, y, ySampleRate)
 % freq. Frequencies
 % xPulseCoefMat. Original pulse coefficient matrix. (numPulsesX x
-% numChannelsX x 
+% numChannelsX x numFrequencies
 % y. Received signal.
 
+numPulsesX = size(xPulseLimits, 1);
 numChannelsY = size(y, 2); % Number of channels of the recorder device
 numFrequencies = numel(freq);
 
 % Pulses that should be detected in y. This is, pulses that are in x but
 % counting the contribution of all x channels together
-activePulses = zeros(numPulsesX, numFrequencies);
+activePulses = false(numPulsesX, numFrequencies);
 xGroupPulseLimits = cell(numFrequencies, 1);
 for f_ind = 1:numFrequencies
     xCoefMat1freq = xPulseCoefMat(:, :, f_ind);
@@ -19,7 +20,7 @@ for f_ind = 1:numFrequencies
 end
 
 tol = 0.1; % Tolerance
-[corrInd, y_coef, ~] = associateSinPulses(freqs, xGroupPulseLimits, xSampleRate, y, ySampleRate, tol);
+[corrInd, y_coef, ~] = associateSinPulses(freq, xGroupPulseLimits, xSampleRate, y, ySampleRate, tol);
 
 % Map the corresponding indices into the original x signal pulse structure.
 % Remember that the pulse limits in y can be very different from the ones

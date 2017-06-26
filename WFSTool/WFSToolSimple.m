@@ -24,6 +24,7 @@ classdef WFSToolSimple < handle
         simulField
         
         % Experimental results
+        pulseLimits
         reprodSignal
                                 
         % Infrastructure variables
@@ -195,56 +196,38 @@ classdef WFSToolSimple < handle
         function setActiveReceivers(obj, value)
             obj.activeReceivers = value;
         end
-        
-        function acPath = acousticPathsTest(obj, frequency)
-            
-            % Generate the signal
-            soundCicles = 1; % Number of sinusoidal periods for each loudspeaker
-            SampleRate = 44100;
-            silenceCicles = 10; % Number of periods of silence between loudspeakers
-            numChannels = obj.player.numChannels(1);
-            preludeSamples = SampleRate; % Prelude of samples of silence
-            
-            [signal, sourceCoef] = successiveChannelSinusoids( ones(numChannels, 1), -pi/2*ones(numChannels, 1), frequency, SampleRate, soundCicles, silenceCicles );
-            signal = [zeros(preludeSamples, numChannels); signal];
-            sourceCoef = sourceCoef*exp(-1i*2*pi*frequency*preludeSamples/SampleRate);
-            
-            % Reproduce and record
-            obj.player.setProps('customSignal', signal, 1);
-            obj.player.setProps('FsGenerator', SampleRate, 1);
-            obj.player.executeOrder('play');
-            
-            % Analyse
-            signals = obj.player.recorded(1); % Only the first recorder device (one device for reproduction, one for recording)
-            SampleRateRec = obj.player.Fs_recorder(1);
-            iqSignal = real2IQ(signals, SampleRateRec, frequency);
-            numMicroph = size(signal, 2);
-            acPath = zeros(numChannels, numMicroph);
-            for l = 1:numMicroph
-                % Extract the received complex coefficients
-                [recCoef, ~] = pulseSignalParameters(iqSignal(:, l));
                 
-                % Calculate the acoustic path: relation between the source
-                % coefficients and the received coefficients
-                acPath(:, l) = recCoef./sourceCoef;
+        function compareRecordedAndSimul(obj)
+            
+            sTheo = obj.getTheoreticalScenarioVariables();
+            frequencies = sTheo.frequencies;
+            sourcesCoef = sTheo.sourcesCoeff;
+            sExp = obj.getExperimentalResultVariables();
+            sSimul = obj.getSimulationResultVariables();
+            
+            analyzer = WFSanalyzer();
+            analyzer.representRecordedSignal(sExp.recordedSignal, sExp.recordedSignal_SampleRate,...
+                sExp.reproducedSignal, sExp.reproducedSignal_SampleRate);
+            
+            numChan = size(sourcesCoef, 1);
+            numFreq = numel(frequencies);
+            
+            chanInd = repmat((1:numChan)', [numFreq, 1]);
+            freqInd = kron(1:frequencies, ones(numChan, 1));
+            pulseInd = 1:numChan*numFreq;
+            numPulses = numChan*numFreq + 1;
+            
+            pulseCoefMat = zeros(numPulses, numChan, numFreq);
+            for p = 1:numPulses - 1
+                pulseCoefMat(p, chanInd(p), freqInd(p)) = sourcesCoef(chanInd(p), freqInd(p));
             end
-                                   
-        end
-        
-        function compareRecordedAndSimul(obj, frequency)
-            % Real situation
-            acPath = acousticPathsTest(obj, frequency);
             
-            % Simulation
-            microphonePos = obj.scenObj.receiversPosition;
-            obj.createTheoreticalModel();
-            U = calculate(obj, microphonePos); % Assume there is only one frequency (numMeasurePoints x numSources x numFrequencies)
-            
-            % Compare
-            aux = U.'./acPath;
+            [~, rat] = compareSimulationAndExperiment( frequencies, pulseCoefMat, sExp.pulseLimits, sExp.reproducedSignal_SampleRate, pulseInd, chanInd, freqInd, sExp.recordedSignal, sExp.recordedSignal_SampleRate, sSimul.simulatedField );
             
             ax = axes(figure);
-            scatter(ax, 1:numChannels, abs(aux) )
+            for f = 1:numel(frequencies)
+                scatter(ax, permute(rat(:, 1, :), [1, 3, 2]));
+            end
         end 
         
         function processResults(obj)
@@ -300,8 +283,10 @@ classdef WFSToolSimple < handle
             SampleRate = 44100;
             
             s = obj.getTheoreticalScenarioVariables();
-            x = coefficients2signal( s.sourcesCoeff, s.frequencies, SampleRate );
-                      
+            [x, startInd, endInd] = coefficients2signal( s.sourcesCoeff, s.frequencies, SampleRate );
+            
+            obj.pulseLimits = [startInd, endInd];
+            
             real_comMat = obj.player.comMatrix;
             writingDrivers = obj.player.driver;
             writingDevices = obj.player.device;
@@ -416,6 +401,7 @@ classdef WFSToolSimple < handle
             s.reproducedSignal_SampleRate = obj.player.Fs_player(1);
             s.recordedSignal = recorded(:, obj.activeReceiverChannels);
             s.recordedSignal_SampleRate = obj.player.Fs_recorder(1);
+            s.pulseLimits = obj.pulseLimits;
         end
         
         function s = getSimulationResultVariables(obj)

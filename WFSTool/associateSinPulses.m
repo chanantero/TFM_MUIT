@@ -13,7 +13,13 @@ y_coef = cell(numFrequencies, numChannelsY);
 y_pulseLimits = cell(numFrequencies, numChannelsY);
 for f_ind = 1:numFrequencies
     f = freqs(f_ind);
-    iq = real2IQ(y, ySampleRate, f, 5);
+    iq = real2IQ(y, ySampleRate, f, 500);
+    
+    % For Debugging
+    % Recover the signal
+%     aux = WFSanalyzer;
+%     aux.analyzeSignal(y, ySampleRate);
+
     
     for cy = 1:numChannelsY
         [ y_coef{f_ind, cy}, y_pulseLimits{f_ind, cy} ] = pulseSignalParameters( iq(:, cy) );
@@ -29,7 +35,7 @@ for f_ind = 1:numFrequencies
         
     for cy = 1:numChannelsY
         yPulsLim = y_pulseLimits{f_ind, cy};
-        durPulsesY = diff(yPulsLim, 2)/y_SampleRate;        
+        durPulsesY = diff(yPulsLim, 2)/ySampleRate;        
         corrInd{f_ind, cy} = associateValues(durPulsesX, durPulsesY, marg);        
     end
 end
