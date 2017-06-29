@@ -199,16 +199,22 @@ classdef WFSToolSimple < handle
                 
         function compareRecordedAndSimul(obj)
             
+            % Get variables
             sTheo = obj.getTheoreticalScenarioVariables();
-            frequencies = sTheo.frequencies;
-            sourcesCoef = sTheo.sourcesCoeff;
             sExp = obj.getExperimentalResultVariables();
             sSimul = obj.getSimulationResultVariables();
             
+            frequencies = sTheo.frequencies;
+            sourcesCoef = sTheo.sourcesCoeff;
+            simulCoef = sSimul.simulatedField;
+            
+            % Visual examination of reproduced and recorded signals
             analyzer = WFSanalyzer();
             analyzer.representRecordedSignal(sExp.recordedSignal, sExp.recordedSignal_SampleRate,...
                 sExp.reproducedSignal, sExp.reproducedSignal_SampleRate);
-            
+
+            % Get the experimental acoustic paths
+            % A) Create the pulse coefficient matrix
             numChan = size(sourcesCoef, 1);
             numFreq = numel(frequencies);
             
@@ -221,13 +227,22 @@ classdef WFSToolSimple < handle
             for p = 1:numPulses - 1
                 pulseCoefMat(p, chanInd(p), freqInd(p)) = sourcesCoef(chanInd(p), freqInd(p));
             end
+                       
+            pulseCoefMat(end, :, :) = permute(sourcesCoef, [3 1 2]);
             
-            [~, rat] = compareSimulationAndExperiment( frequencies, pulseCoefMat, sExp.pulseLimits, sExp.reproducedSignal_SampleRate, pulseInd, chanInd, freqInd, sExp.recordedSignal, sExp.recordedSignal_SampleRate, sSimul.simulatedField );
+            % B) Calculate the acoustic paths
+            expAcPath = compareSimulationAndExperiment( frequencies, pulseCoefMat, sExp.pulseLimits, sExp.reproducedSignal_SampleRate, pulseInd, chanInd, freqInd, sExp.recordedSignal, sExp.recordedSignal_SampleRate);
             
-            ax = axes(figure);
-            for f = 1:numel(frequencies)
-                scatter(ax, permute(rat(:, 1, :), [1, 3, 2]));
-            end
+            % Get the simulated acoustic paths
+            numRec = size(sTheo.receiverPos, 1);
+            simulAcPath = simulCoef./repmat(permute(sourcesCoef, [1, 3, 2]), [1 numRec 1]);
+                        
+            % Get the ratio between them
+            rat = expAcPath./simulAcPath;
+            
+            % Set source coefficient corrections
+            
+            
         end 
         
         function processResults(obj)

@@ -1,5 +1,72 @@
-function [ values, pulseLimits ] = pulseSignalParameters( x )
+function [ values, pulseLimits ] = pulseSignalParameters( x, filterWidth, minDur, minSep )
 % x is a signal with complex values in form of pulses
+
+% Parse inputs
+if nargin < 4
+    minSep = 1000;
+end
+if nargin < 3
+    minDur = 1000;
+end
+if nargin < 2
+    filterWidth = 600;
+end
+
+% Filter the signal
+xFilt = filter(ones(filterWidth, 1), filterWidth, x); 
+
+% Sort the values
+xSort = sort(abs(xFilt));
+% Gradient
+grad = diff(xSort);
+% Normalize the gradient
+gradNorm = grad*numel(xSort)/max(xSort);
+% Filter
+gradFiltWidth = round(0.01*numel(gradNorm));
+gradNormFilt = filter(ones(gradFiltWidth, 1), gradFiltWidth, gradNorm);
+
+% Find local maxima. Each of them are divisions between levels of peaks
+[maxtab, ~] = peakdet(gradNormFilt, 10);
+
+% Find the mean value of first level
+firstPeak = maxtab(1,1);
+if size(maxtab, 1) < 2
+    secondPeak = numel(xSort);
+else
+    secondPeak = maxtab(2, 1);
+end
+firstStepLevel = mean(xSort(firstPeak:secondPeak));
+threshold = firstStepLevel/2;
+
+% Apply
+active = abs(xFilt) > threshold;
+indActive = find(active);
+diffActive = diff(indActive);
+sep = find(diffActive > 1);
+
+% Join the pulses that are closer than the minimum separation
+underSep = sep < minSep;
+sep(underSep) = [];
+
+startPulse = [indActive(1); indActive(sep + 1)];
+endPulse = [indActive(sep); indActive(end)];
+
+% Delete the pulses that are shorter than the minimum duration
+dur = endPulse - startPulse;
+underDur = dur < minDur;
+startPulse(underDur) = [];
+endPulse(underDur) = [];
+
+numPulses = numel(startPulse);
+values = zeros(numPulses, 1);
+for k = 1:numPulses
+    values(k) = mean(x(startPulse(k):endPulse(k)));
+end
+
+pulseLimits = [startPulse, endPulse];
+
+end
+
 
 % % Calculate the median (mediana)
 % % N = size(x, 1);
@@ -24,25 +91,3 @@ function [ values, pulseLimits ] = pulseSignalParameters( x )
 % end
 % 
 % pulseLimits = [startPulse, endPulse];
-
-% Other way
-grad = diff(abs(x));
-threshold_grad;
-limits = find(grad > threshold_grad);
-
-% Mean of the space between the limits
-startPulse = [1; limits(1:end)];
-endPulse = [limits(1:end); numel(x)];
-numPulses = numel(startPulse);
-
-values = zeros(numPulses, 1);
-for k = 1:numPulses
-    values(k) = mean(x(startPulse(k):endPulse(k)));
-end
-
-% Decide which of them are pulses and which of them are silence
-
-
-
-end
-

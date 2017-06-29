@@ -30,12 +30,12 @@ end
 corrInd = cell(numFrequencies, numChannelsY);
 for f_ind = 1:numFrequencies
     xPulsLim = xPulseLimits{f_ind};
-    durPulsesX = diff(xPulsLim, 2)/xSampleRate;
+    durPulsesX = diff(xPulsLim, 1, 2)/xSampleRate;
     marg = durPulsesX * durationTolerance;
         
     for cy = 1:numChannelsY
         yPulsLim = y_pulseLimits{f_ind, cy};
-        durPulsesY = diff(yPulsLim, 2)/ySampleRate;        
+        durPulsesY = diff(yPulsLim, 1, 2)/ySampleRate;        
         corrInd{f_ind, cy} = associateValues(durPulsesX, durPulsesY, marg);        
     end
 end

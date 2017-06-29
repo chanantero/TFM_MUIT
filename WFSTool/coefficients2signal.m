@@ -8,13 +8,13 @@ numFreq = size(coefficients, 2);
 % First, reproduce in each channel and silence the rest
 amplitude = abs(coefficients);
 phase = angle(coefficients);
-soundSamples = ceil(1*SampleRate);
-silenceSamples = ceil(1*SampleRate);
+soundSamples = ceil(2*SampleRate);
+silenceSamples = ceil(2*SampleRate);
 [x_pre, startInd_pre, endInd_pre] = successiveChannelSinusoids( amplitude, phase, frequency, SampleRate, soundSamples, silenceSamples );
 numPre = size(x_pre, 1);
 
 % Then, reproduce everything at the same time
-numSamples_main = ceil(SampleRate * 1); % 1 seconds
+numSamples_main = ceil(SampleRate * 1); % 2 seconds
 t0 = numPre/SampleRate;
 t = t0 + (0:numSamples_main-1)'/SampleRate;
 x_main = zeros(numSamples_main, numChann, numFreq);

@@ -16,7 +16,7 @@ for f_ind = 1:numFrequencies
     xCoefMat1freq = xPulseCoefMat(:, :, f_ind);
     activePulses1freq = any(xCoefMat1freq ~= 0, 2);
     activePulses(:, f_ind) = activePulses1freq;
-    xGroupPulseLimits{f_ind} = xPulseLimits(activePulses1freq);
+    xGroupPulseLimits{f_ind} = xPulseLimits(activePulses1freq, :);
 end
 
 tol = 0.1; % Tolerance

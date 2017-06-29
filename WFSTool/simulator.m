@@ -84,7 +84,7 @@ classdef simulator < handle
             
             % Simulate
             U = obj.calculate(obj.measurePoints);
-            obj.field = permute(sum(U, 2), [1 3 2]); % (numMeasPoints x numFrequencies)
+            obj.field = permute(sum(U, 1), [2 3 1]); % (numMeasPoints x numFrequencies)
                      
             obj.draw();
         end
@@ -140,7 +140,7 @@ classdef simulator < handle
             numFreq = obj.numFrequencies;
             numMeasPoints = size(measurePointPositions, 1);
 
-            U = zeros(numMeasPoints, numSour, obj.numFrequencies);
+            U = zeros(numSour, numMeasPoints, obj.numFrequencies);
             for s = 1:numSour
                 sourceCoef = obj.sourceCoefficients(s, :);
                 sourcePos = obj.sourcePositions(s, :);
@@ -156,11 +156,11 @@ classdef simulator < handle
                 relDir = diffVec; % quatrotate no va incluído en el matlab del laboratorio. relDir = quatrotate(quat, diffVec);
                 radPatCoef = radPatFun(relDir);
                 
-                aux = zeros(numMeasPoints, 1, numFreq);
+                aux = zeros(1, numMeasPoints, numFreq);
                 for f = 1:obj.numFrequencies
-                    aux(:, 1, f) = sourceCoef(:, f)*radPatCoef.*exp(-1i*obj.k(f)*dist)./dist;
+                    aux(1, :, f) = (sourceCoef(f)*radPatCoef.*exp(-1i*obj.k(f)*dist)./dist).';
                 end
-                U(:, s, :) = aux;
+                U(s, :, :) = aux;
             end
             
 %             U = permute(sum(U, 2), [1 3 2]); % (numMeasPoints x numFrequencies)
