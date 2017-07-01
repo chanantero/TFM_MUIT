@@ -1,5 +1,5 @@
-function [expAcPath] = compareSimulationAndExperiment( freq, xPulseCoefMat, xPulseLimits, xSampleRate, pulseInd, xChanInd, freqInd, y, ySampleRate)
-% Compare the simulation results with the experimental results.
+function expAcPath = getAcousticPath( freq, xPulseCoefMat, xPulseLimits, xSampleRate, pulseInd, xChanInd, freqInd, y, ySampleRate)
+% Get the experimental acoustic path.
 % freq. numFrequencies-element vector. The i-th element is the i-th
 % frequency in Hz.
 % xPulseCoefMat. (numPulses x numChannelsX x numFrequencies) array. The

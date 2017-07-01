@@ -24,9 +24,10 @@ classdef WFSToolSimple < handle
         simulField
         
         % Experimental results
+        pulseCoeffMat
+        singularPulseInd
         pulseLimits
-        reprodSignal
-                                
+                                        
         % Infrastructure variables
         fig
         player
@@ -38,6 +39,7 @@ classdef WFSToolSimple < handle
                 
         % Other
         ax
+        timeDisp
     end
     
     properties(Dependent)
@@ -67,10 +69,10 @@ classdef WFSToolSimple < handle
             obj.fig = fig;
             
             obj.player = reproductorRecorder();
-            obj.reprodPanel = reproductionPanel_noiseChannel(fig, [0.05, 0.7, 0.4, 0.3], @(action) obj.orderCallback(action));
+            obj.reprodPanel = reproductionPanel_noiseChannel(fig, [0.05, 0.6, 0.4, 0.4], @(action) obj.orderCallback(action));
             obj.scenarioObj = scenario(fig);
             obj.propPanel = propertiesPanel(fig, [0.05 0.1 0.4 0.2]);
-            obj.recordPanel = recorderPanel(fig, [0.05 0.35 0.4 0.3]);
+            obj.recordPanel = recorderPanel(fig, [0.05 0.35 0.4 0.2]);
             obj.simulObj = simulator;
             obj.ax = obj.scenarioObj.ax;
             obj.simulObj.ax = obj.ax;
@@ -79,10 +81,12 @@ classdef WFSToolSimple < handle
                         
             obj.changed = struct('virtual', false, 'real', false, 'signalsSpec', false);
             
-            addlistener(obj.player, 'numChannels', 'PostSet', @(~, eventData) obj.changeScenario(eventData.AffectedObject.numChannels(1)));
             addlistener(obj.reprodPanel, 'updatedValues', @(~, evntData) obj.reprodPanelListener(evntData.type));
             addlistener(obj.recordPanel, 'updatedValues', @(~, evntData) obj.recordPanelListener(evntData.type));
             addlistener(obj.player, 'playingState', 'PostSet', @(~, eventData) obj.GUIenabling(eventData.AffectedObject.playingState));
+            addlistener(obj.player, 'numChannels', 'PostSet', @(~, eventData) obj.changeScenario(eventData.AffectedObject.numChannels(1)));
+            addlistener(obj.player, 'count', 'PostSet', @(~, eventData) obj.timeDisplay(eventData.AffectedObject.count*eventData.AffectedObject.frameDuration));
+            
                                  
             obj.signalsSpec = obj.reprodPanel.signals;
             obj.virtual = obj.reprodPanel.virtual;
@@ -105,6 +109,8 @@ classdef WFSToolSimple < handle
                 'Units', 'normalized', 'Position', [0.6 0.95 0.1 0.05], 'String', 'Simulate', 'Callback', @(hObject, eventData) obj.simulateOnAxis());
             uicontrol(fig, 'Style', 'pushbutton',...
                 'Units', 'normalized', 'Position', [0.75 0.95 0.1 0.05], 'String', 'Save', 'Callback', @(~, ~) obj.saveInformation());
+            obj.timeDisp = uicontrol(fig, 'Style', 'text',...
+                'Units', 'normalized', 'Position', [0.85 0.95 0.1 0.05], 'String', '');
         end
         
         function updateEverything(obj)
@@ -210,28 +216,14 @@ classdef WFSToolSimple < handle
             
             % Visual examination of reproduced and recorded signals
             analyzer = WFSanalyzer();
-            analyzer.representRecordedSignal(sExp.recordedSignal, sExp.recordedSignal_SampleRate,...
-                sExp.reproducedSignal, sExp.reproducedSignal_SampleRate);
+            analyzer.representRecordedSignal(sExp.recordedSignal, sExp.recordedSignal_SampleRate);
 
             % Get the experimental acoustic paths
-            % A) Create the pulse coefficient matrix
-            numChan = size(sourcesCoef, 1);
-            numFreq = numel(frequencies);
+            pulseCoefMat = s.pulseCoefMat;
             
-            chanInd = repmat((1:numChan)', [numFreq, 1]);
-            freqInd = kron(1:frequencies, ones(numChan, 1));
-            pulseInd = 1:numChan*numFreq;
-            numPulses = numChan*numFreq + 1;
-            
-            pulseCoefMat = zeros(numPulses, numChan, numFreq);
-            for p = 1:numPulses - 1
-                pulseCoefMat(p, chanInd(p), freqInd(p)) = sourcesCoef(chanInd(p), freqInd(p));
-            end
-                       
-            pulseCoefMat(end, :, :) = permute(sourcesCoef, [3 1 2]);
             
             % B) Calculate the acoustic paths
-            expAcPath = compareSimulationAndExperiment( frequencies, pulseCoefMat, sExp.pulseLimits, sExp.reproducedSignal_SampleRate, pulseInd, chanInd, freqInd, sExp.recordedSignal, sExp.recordedSignal_SampleRate);
+            expAcPath = compareSimulationAndExperiment( frequencies, s.pulseCoefMat, sExp.pulseLimits, sExp.reproducedSignal_SampleRate, pulseInd, chanInd, freqInd, sExp.recordedSignal, sExp.recordedSignal_SampleRate);
             
             % Get the simulated acoustic paths
             numRec = size(sTheo.receiverPos, 1);
@@ -298,23 +290,23 @@ classdef WFSToolSimple < handle
             SampleRate = 44100;
             
             s = obj.getTheoreticalScenarioVariables();
-            [x, startInd, endInd] = coefficients2signal( s.sourcesCoeff, s.frequencies, SampleRate );
-            
-            obj.pulseLimits = [startInd, endInd];
-            
+           
             real_comMat = obj.player.comMatrix;
             writingDrivers = obj.player.driver;
             writingDevices = obj.player.device;
             prov_comMat = true;
             obj.player.setProps('comMatrix', prov_comMat);
             obj.player.setProps('mode', originType('custom'), 1);
-            obj.player.setProps('customSignal', x, 1);           
             obj.player.setProps('FsGenerator', SampleRate, 1);
             obj.player.setProps('enableProc', false);
             obj.player.setProps('driver', writingDrivers{1}, 1);
             obj.player.setProps('device', writingDevices{1}, 1);
+         
+            [x, startInd, endInd] = coefficients2signal( s.sourcesCoeff, s.frequencies, SampleRate );
+            obj.pulseLimits = [startInd, endInd];
+            obj.player.setProps('customSignal', x, 1);
             
-            obj.player.executeOrder('play'); 
+            obj.player.executeOrder('play');
             
             obj.player.setProps('enableProc', true);
             obj.player.setProps('comMatrix', real_comMat);
@@ -325,6 +317,60 @@ classdef WFSToolSimple < handle
             end
             
             obj.reprodSignal = x;
+        end
+        
+        function reproduceAndRecord_memoryEfficient(obj)
+            SampleRate = 44100;
+            
+            s = obj.getTheoreticalScenarioVariables();
+            sourcesCoef = s.sourcesCoeff;
+            frequencies = s.frequencies;
+                   
+            real_comMat = obj.player.comMatrix;
+            writingDrivers = obj.player.driver;
+            writingDevices = obj.player.device;
+            prov_comMat = true;
+            obj.player.setProps('comMatrix', prov_comMat);
+            obj.player.setProps('mode', originType('func'), 1);
+            obj.player.setProps('FsGenerator', SampleRate, 1);
+            obj.player.setProps('enableProc', false);
+            obj.player.setProps('driver', writingDrivers{1}, 1);
+            obj.player.setProps('device', writingDevices{1}, 1);
+            obj.player.setProps('driver_recorder', 'ASIO', 1);
+            obj.player.setProps('device_recorder', 'MOTU PCI ASIO', 1);
+            signalFunc = @(startSample, endSample) coefficients2signal_inds( sourcesCoef, frequencies, SampleRate, startSample, endSample);
+            obj.player.setProps('signalFunc', signalFunc, 1);
+
+            obj.player.executeOrder('play');
+                        
+            obj.player.setProps('enableProc', true);
+            obj.player.setProps('comMatrix', real_comMat);
+            obj.updateSignalProvidersVariables();
+            for k = 1:obj.player.numPlayers
+                obj.player.setProps('driver', writingDrivers{k}, k);
+                obj.player.setProps('device', writingDevices{k}, k);
+            end
+            
+            % Create the pulse coefficient matrix
+            numChan = size(sourcesCoef, 1);
+            numFreq = numel(frequencies);
+            
+            chanInd = repmat((1:numChan)', [numFreq, 1]);
+            freqInd = kron(1:frequencies, ones(numChan, 1));
+            numPulses = numChan*numFreq + 1;
+            
+            pulseCoefMat = zeros(numPulses, numChan, numFreq);
+            for p = 1:numPulses - 1
+                pulseCoefMat(p, chanInd(p), freqInd(p)) = sourcesCoef(chanInd(p), freqInd(p));
+            end           
+            pulseCoefMat(end, :, :) = permute(sourcesCoef, [3 1 2]);
+            obj.pulseCoeffMat = pulseCoefMat;
+            
+            obj.singularPulseInd = 1:numChan*numFreq;
+            
+            [~, startPulseInd, endPulseInd] = coefficients2signal_inds( sourcesCoef, frequencies, SampleRate );
+            obj.pulseLimits = [startPulseInd, endPulseInd];
+            
         end
         
         function simulate(obj)
@@ -411,12 +457,12 @@ classdef WFSToolSimple < handle
         
         function s = getExperimentalResultVariables(obj)
             recorded = obj.player.recorded{1}; % Only one recorder device
-            
-            s.reproducedSignal = obj.reprodSignal;
-            s.reproducedSignal_SampleRate = obj.player.Fs_player(1);
+       
             s.recordedSignal = recorded(:, obj.activeReceiverChannels);
             s.recordedSignal_SampleRate = obj.player.Fs_recorder(1);
             s.pulseLimits = obj.pulseLimits;
+            s.pulseCoefMat = obj.pulseCoeffMat;
+            s.singularPulseInd = obj.singularPulseInd;
         end
         
         function s = getSimulationResultVariables(obj)
@@ -424,9 +470,7 @@ classdef WFSToolSimple < handle
         end
         
         function changeScenario(obj, numLoudspeakers)
-            
-            disp('hola')
-            
+                        
             if ~ismember(numLoudspeakers, [0 2 96])
                 numLoudspeakers = 0;
             end
@@ -434,20 +478,22 @@ classdef WFSToolSimple < handle
             switch numLoudspeakers
                 case 0
                     sourcePosition = [0 0 0];
+                    receiverPosition = zeros(obj.numReceivers, 3);
                     loudspeakersPosition = double.empty(0,3);
                     loudspeakersOrientation = double.empty(0,3);
                     roomPosition = [0 0 1 1];
-                    obj.scenarioObj.setScenario(sourcePosition, [], loudspeakersPosition, loudspeakersOrientation, roomPosition);
+                    obj.scenarioObj.setScenario(sourcePosition, receiverPosition, loudspeakersPosition, loudspeakersOrientation, roomPosition);
                     
                     obj.simulObj.XLim = [roomPosition(1), roomPosition(1) + roomPosition(3)];
                     obj.simulObj.YLim = [roomPosition(2), roomPosition(2) + roomPosition(4)];
                     delete(obj.simulObj.imag);
                 case 2
                     sourcePosition = obj.scenarioObj.sourcesPosition;
+                    receiverPosition = zeros(obj.numReceivers, 3);
                     loudspeakersPosition = [-0.1 0 0; 0.1 0 0];
                     loudspeakersOrientation = [1 0 0; -1 0 0];
                     roomPosition = [-2, -2, 4, 4];
-                    obj.scenarioObj.setScenario(sourcePosition, [], loudspeakersPosition, loudspeakersOrientation, roomPosition);
+                    obj.scenarioObj.setScenario(sourcePosition, receiverPosition, loudspeakersPosition, loudspeakersOrientation, roomPosition);
                     
                     obj.simulObj.XLim = [roomPosition(1), roomPosition(1) + roomPosition(3)];
                     obj.simulObj.YLim = [roomPosition(2), roomPosition(2) + roomPosition(4)];
@@ -465,13 +511,14 @@ classdef WFSToolSimple < handle
                     loudspeakersOrientation = [cosd(alfa), sind(alfa), zeros(numel(alfa), 1)];
                     
                     sourcePosition = [0, 0, 0];
+                    receiverPosition = zeros(obj.numReceivers, 3);
                     
                     xmin = min(x); xmax = max(x); ymin = min(y); ymax = max(y);
                     xDim = xmax - xmin; yDim = ymax - ymin;
                     xmargin = 0.2 * xDim; ymargin = 0.2 * yDim;
                     roomPosition = [xmin - xmargin, ymin - ymargin, xDim + 2*xmargin, yDim + 2*ymargin];
                     
-                    obj.scenarioObj.setScenario(sourcePosition, [], loudspeakersPosition, loudspeakersOrientation, roomPosition);
+                    obj.scenarioObj.setScenario(sourcePosition, receiverPosition, loudspeakersPosition, loudspeakersOrientation, roomPosition);
                     
                     obj.simulObj.XLim = [roomPosition(1), roomPosition(1) + roomPosition(3)];
                     obj.simulObj.YLim = [roomPosition(2), roomPosition(2) + roomPosition(4)];
@@ -487,6 +534,10 @@ classdef WFSToolSimple < handle
     
     methods(Access = private)
                
+        function timeDisplay(obj, time)
+            obj.timeDisp.String = num2str(time);
+        end
+        
         function GUIenabling(obj, newPlayingState)
             if newPlayingState == playingStateClass('stopped')
 %                 obj.reprodPanel.enableGUI();
@@ -796,7 +847,8 @@ classdef WFSToolSimple < handle
                     obj.player.executeOrder('stop');
                     if obj.simplePerformance
                         obj.fromBase2TheoreticalScenario();
-                        obj.reproduceAndRecord();
+%                         obj.reproduceAndRecord();
+                        obj.reproduceAndRecord_memoryEfficient();
                         obj.simulate();
                     else
                         obj.player.executeOrder('play');

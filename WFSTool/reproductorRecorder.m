@@ -7,8 +7,8 @@ classdef reproductorRecorder < matlab.System
         comMatrix % Commutation matrix. numReaders x numPlayers.
         
         % Signal provider settings
-        mode % file, sinusoidal or customSignal
-        FsGenerator % Sampling frequency for the sinusoidal signal (For mode == sinusoidal or mode == customSignal)
+        mode % file, sinusoidalm customSignal, func
+        FsGenerator % Sampling frequency (For mode == sinusoidal or mode == customSignal or mode == func)
         % mode == file
         audioFileName % Cell string array with as many elements as signalReaders
         % mode == sinusoidal
@@ -17,6 +17,8 @@ classdef reproductorRecorder < matlab.System
         frequency
         % mode == customSignal
         customSignal
+        % mode == func
+        signalFunc
         
         % Process settings
         enableProc % Enable processing
@@ -58,7 +60,7 @@ classdef reproductorRecorder < matlab.System
         frameSizeRecorder % Array with as many elements as recorders
     end
     
-    properties(DiscreteState)
+    properties(DiscreteState, SetObservable)
         count
     end
     
@@ -270,6 +272,7 @@ classdef reproductorRecorder < matlab.System
                 obj.signalReader{k}.frequency = obj.frequency(k);
                 obj.signalReader{k}.SampleRate = obj.FsGenerator(k);
                 obj.signalReader{k}.customSignal = obj.customSignal{k};
+                obj.signalReader{k}.signalFunc = obj.signalFunc{k};
             end
             
             obj.frameSizeReading = floor(obj.frameDuration*obj.Fs_reader);
@@ -402,6 +405,7 @@ classdef reproductorRecorder < matlab.System
                 obj.setProps('phase', 0, k);
                 obj.setProps('frequency', 1, k);
                 obj.setProps('FsGenerator', 44100, k);
+                obj.setProps('customSignal', [], k);
             end
             
             for k = 1:obj.numPlayers
@@ -529,10 +533,12 @@ classdef reproductorRecorder < matlab.System
                     % Get processor parameters: delays and attenuations
                     delays = cell(obj.numLinks, 1);
                     attenuations = cell(obj.numLinks, 1);
-                    for k = 1:obj.numLinks
-                        [delay, attenuations{k}] = step(obj.procParamProvider{k});
-                        delay = delay + offset(playerIndex(k));
-                        delays{k} = delay;
+                    if obj.enableProc
+                        for k = 1:obj.numLinks
+                            [delay, attenuations{k}] = step(obj.procParamProvider{k});
+                            delay = delay + offset(playerIndex(k));
+                            delays{k} = delay;
+                        end
                     end
                     
                     
@@ -799,8 +805,7 @@ classdef reproductorRecorder < matlab.System
                         case 'driver'
                             obj.(parameter){index} = value;
                             
-                            % Set the value on the correspondent player and do
-                            % the setup and release
+                            % Set the value on the correspondent player
                             player_this = obj.player{index};
                             player_this.driver = value;
                                                         
@@ -862,11 +867,22 @@ classdef reproductorRecorder < matlab.System
                             obj.setNumRecorders(value);
                         case 'driver_recorder'
                             obj.(parameter){index} = value;
+                            
+                            % Set the value on the correspondent recorder
+                            recorder_this = obj.recorder{index};
+                            recorder_this.Driver = value;
+                                                        
+                            % Get devices for the new driver and set it
+                            audioDevices = recorder_this.getAudioDevices();
+                            obj.setProps('device_recorder', audioDevices{1}, index);
+                            
                         case 'device_recorder'
                             obj.(parameter){index} = value;
                         case 'Fs_recorder'
                             obj.(parameter)(index) = value;
                         case 'customSignal'
+                            obj.(parameter){index} = value;
+                        case 'signalFunc'
                             obj.(parameter){index} = value;
                         case 'enableProc'
                             obj.(parameter) = value;

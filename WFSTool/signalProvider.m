@@ -9,13 +9,16 @@ classdef signalProvider < matlab.System
         % Variables that are exclusive for the mode == file
         FileName
         
-        % Variables that are exclussive for the mode == sinusoidal
+        % Variables that are exclusive for the mode == sinusoidal
         amplitude
         phase
         frequency
         
-        % Variables that are exclussive for the mode == custom
+        % Variables that are exclusive for the mode == custom
         customSignal
+        
+        % Variables that are exclusive for the mode == func
+        signalFunc
     end
 
     properties(SetAccess = private)
@@ -29,6 +32,7 @@ classdef signalProvider < matlab.System
     
     properties(DiscreteState)
         count
+        lastSample
     end
 
     % Pre-computed constants
@@ -49,6 +53,8 @@ classdef signalProvider < matlab.System
                     obj.providerFunction = @() obj.toneGenerator();
                 case originType('custom')
                     obj.providerFunction = @() obj.provideCustomSignal();
+                case originType('func')
+                    obj.providerFunction = @() obj.getSignalFromFunction();
                 otherwise
                     error('signalProvider:setup', 'The variable mode is not recognized')
             end
@@ -61,6 +67,7 @@ classdef signalProvider < matlab.System
 
         function resetImpl(obj)
             obj.count = 0;
+            obj.lastSample = 0;
             reset(obj.fileReader);
         end
         
@@ -72,7 +79,7 @@ classdef signalProvider < matlab.System
     % Getters and setters
     methods
         function SampleRate = get.SampleRate(obj)
-            if obj.mode == originType('file') || obj.mode == originType('custom') % Sinusoidal or custom
+            if obj.mode == originType('file') || obj.mode == originType('custom') || obj.mode == originType('func') % Sinusoidal or custom or func
                 SampleRate = obj.SampleRate;
             else %File
 %                 SampleRate = obj.fileReader.SampleRate;
@@ -91,13 +98,20 @@ classdef signalProvider < matlab.System
                     flag = true;
                 end
             elseif obj.mode == originType('custom')
-                if obj.count * obj.SamplesPerFrame >= size(obj.customSignal, 1)
+                if obj.lastSample >= size(obj.customSignal, 1)
                     flag = true;
                 else
                     flag = false;
                 end
             elseif obj.mode == originType('file')
                 flag = isDone(obj.fileReader);
+            elseif obj.mode == originType('func')
+                aux = obj.signalFunc(obj.lastSample+1, obj.lastSample+1);
+                if isempty(aux)
+                    flag = true;
+                else
+                    flag = false;
+                end
             end
         end
         
@@ -119,7 +133,7 @@ classdef signalProvider < matlab.System
             elseif obj.mode == originType('custom')
                 numSamples = size(obj.customSignal, 1);
             else
-                numSamples = Inf;
+                numSamples = obj.stopSample;
             end
         end
         
@@ -137,6 +151,15 @@ classdef signalProvider < matlab.System
         function obj = signalProvider()
             obj.fileReader = dsp.AudioFileReader();
             obj.setDefaultProperties();
+        end
+        
+        function addSignal(obj, x)
+            obj.customSignal = [obj.customSignal; x];
+        end
+           
+        function substractSignal(obj, numSamples)
+            obj.customSignal(1:numSamples, :) = [];
+            obj.lastSample = obj.lastSample - numSamples;
         end
     end
     
@@ -161,15 +184,16 @@ classdef signalProvider < matlab.System
             if obj.isDone()
                 y = zeros(obj.SamplesPerFrame, obj.numChannels);
             else
-                over = (obj.count+1) * obj.SamplesPerFrame - obj.numSamples;
+                over = obj.lastSample + obj.SamplesPerFrame - obj.numSamples;
                 if over > 0
-                    ind = obj.count*obj.SamplesPerFrame + (1:obj.SamplesPerFrame - over)';
+                    ind = obj.lastSample + (1:obj.SamplesPerFrame - over)';
                     y = zeros(obj.SamplesPerFrame, obj.numChannels);
-                    y(1:obj.SamplesPerFrame - over, :) = obj.customSignal(ind, :);                    
+                    y(1:obj.SamplesPerFrame - over, :) = obj.customSignal(ind, :);
                 else
-                    ind = obj.count*obj.SamplesPerFrame + (1:obj.SamplesPerFrame)';
+                    ind = obj.lastSample + (1:obj.SamplesPerFrame)';
                     y = obj.customSignal(ind, :);
                 end
+                obj.lastSample = ind(end);
             end
         end
         
@@ -183,6 +207,15 @@ classdef signalProvider < matlab.System
                 t = (obj.count*obj.SamplesPerFrame + (0:obj.SamplesPerFrame-1)')/obj.SampleRate;
                 
                 y = A*cos(2*pi*f*t + Ph);
+            end
+        end
+        
+        function y = getSignalFromFunction(obj)
+            if obj.isDone()
+                y = zeros(obj.SamplesPerFrame, obj.numChannels);
+            else
+                y = obj.signalFunc(obj.lastSample + 1, obj.lastSample + obj.SamplesPerFrame);
+                obj.lastSample = obj.lastSample + obj.SamplesPerFrame;
             end
         end
         

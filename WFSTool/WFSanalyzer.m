@@ -48,20 +48,21 @@ classdef WFSanalyzer
             plot(axDiff, t, abs(difference))
         end
         
-        function representRecordedSignal(obj, x, xSampleRate, y, ySampleRate)            
-            axReprod = axes(obj.fig, 'Units', 'normalized', 'Position', [0.1 0.6 0.8 0.3]);
+        function representRecordedSignal(obj, y, ySampleRate)            
+%             axReprod = axes(obj.fig, 'Units', 'normalized', 'Position', [0.1 0.6 0.8 0.3]);
             axRecord = axes(obj.fig, 'Units', 'normalized', 'Position', [0.1 0.1 0.8 0.3]);
             
-            numReprodSamples = size(x, 1);
-            tReprod = (0:numReprodSamples - 1)'/xSampleRate;
+%             numReprodSamples = size(x, 1);
+%             tReprod = (0:numReprodSamples - 1)'/xSampleRate;
             
             numRecordSamples = size(y, 1);
             tRecord = (0:numRecordSamples - 1)'/ySampleRate;
             
-            plot(axReprod, tReprod, x)
+%             plot(axReprod, tReprod, x)
             plot(axRecord, tRecord, y)
             
-            obj.ax = [axReprod; axRecord];
+%             obj.ax = [axReprod; axRecord];
+            obj.ax = axRecord;
         end
     end
     

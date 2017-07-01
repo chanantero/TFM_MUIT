@@ -32,7 +32,7 @@ classdef scenario < handle
     properties (Constant)
         c = 343;
         sourceColor = [0 0 1];
-        receiverColor = [1 1 0];
+        receiverColor = [1 0 1];
     end
     
     % Getters and setters
@@ -382,8 +382,8 @@ classdef scenario < handle
             cosAlfa = obj.calcCosAlfa();
             
             % Calculate active loudspeakers
-            obj.loudspeakersState = cosAlfa > 0; % Buscamos los altavoces que deberían estar activos
-%             obj.loudspeakersState(:) = true;
+%             obj.loudspeakersState = cosAlfa > 0; % Buscamos los altavoces que deberían estar activos
+            obj.loudspeakersState(:) = true;
 
             atten = obj.calcPhysicalAttenuation(distances, cosAlfa);
                       
