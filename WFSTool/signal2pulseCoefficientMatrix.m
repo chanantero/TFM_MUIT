@@ -1,4 +1,4 @@
-function yPulseCoefMat = signal2pulseCoefficientMatrix(freq, xPulseCoefMat, xPulseLimits, xSampleRate, y, ySampleRate)
+function yPulseCoefMat = signal2pulseCoefficientMatrix(freq, xPulseCoefMat, xPulseLimits, y, ySampleRate)
 % freq. Frequencies
 % xPulseCoefMat. Original pulse coefficient matrix. (numPulsesX x
 % numChannelsX x numFrequencies
@@ -20,7 +20,7 @@ for f_ind = 1:numFrequencies
 end
 
 tol = 0.1; % Tolerance
-[corrInd, y_coef, ~] = associateSinPulses(freq, xGroupPulseLimits, xSampleRate, y, ySampleRate, tol);
+[corrInd, y_coef, ~] = associateSinPulses(freq, xGroupPulseLimits, y, ySampleRate, tol);
 
 % Map the corresponding indices into the original x signal pulse structure.
 % Remember that the pulse limits in y can be very different from the ones

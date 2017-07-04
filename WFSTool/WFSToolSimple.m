@@ -25,7 +25,7 @@ classdef WFSToolSimple < handle
         
         % Experimental results
         pulseCoeffMat
-        singularPulseInd
+        singularPulseInfo
         pulseLimits
                                         
         % Infrastructure variables
@@ -217,13 +217,14 @@ classdef WFSToolSimple < handle
             % Visual examination of reproduced and recorded signals
             analyzer = WFSanalyzer();
             analyzer.representRecordedSignal(sExp.recordedSignal, sExp.recordedSignal_SampleRate);
-
-            % Get the experimental acoustic paths
-            pulseCoefMat = s.pulseCoefMat;
             
+            sPInfo = sExp.singularPulseInfo;
+            pulseInd = sPInfo(:, 1);
+            chanInd = sPInfo(:, 2);
+            freqInd = sPInfo(:, 3);
             
-            % B) Calculate the acoustic paths
-            expAcPath = compareSimulationAndExperiment( frequencies, s.pulseCoefMat, sExp.pulseLimits, sExp.reproducedSignal_SampleRate, pulseInd, chanInd, freqInd, sExp.recordedSignal, sExp.recordedSignal_SampleRate);
+            % Calculate the acoustic paths
+            expAcPath = getAcousticPath( frequencies, sExp.pulseCoefMat, sExp.pulseLimits, pulseInd, chanInd, freqInd, sExp.recordedSignal, sExp.recordedSignal_SampleRate);
             
             % Get the simulated acoustic paths
             numRec = size(sTheo.receiverPos, 1);
@@ -285,41 +286,8 @@ classdef WFSToolSimple < handle
             obj.simulObj.freq = obj.frequency;
 
         end
-                
+                 
         function reproduceAndRecord(obj)
-            SampleRate = 44100;
-            
-            s = obj.getTheoreticalScenarioVariables();
-           
-            real_comMat = obj.player.comMatrix;
-            writingDrivers = obj.player.driver;
-            writingDevices = obj.player.device;
-            prov_comMat = true;
-            obj.player.setProps('comMatrix', prov_comMat);
-            obj.player.setProps('mode', originType('custom'), 1);
-            obj.player.setProps('FsGenerator', SampleRate, 1);
-            obj.player.setProps('enableProc', false);
-            obj.player.setProps('driver', writingDrivers{1}, 1);
-            obj.player.setProps('device', writingDevices{1}, 1);
-         
-            [x, startInd, endInd] = coefficients2signal( s.sourcesCoeff, s.frequencies, SampleRate );
-            obj.pulseLimits = [startInd, endInd];
-            obj.player.setProps('customSignal', x, 1);
-            
-            obj.player.executeOrder('play');
-            
-            obj.player.setProps('enableProc', true);
-            obj.player.setProps('comMatrix', real_comMat);
-            obj.updateSignalProvidersVariables();
-            for k = 1:obj.player.numPlayers
-                obj.player.setProps('driver', writingDrivers{k}, k);
-                obj.player.setProps('device', writingDevices{k}, k);
-            end
-            
-            obj.reprodSignal = x;
-        end
-        
-        function reproduceAndRecord_memoryEfficient(obj)
             SampleRate = 44100;
             
             s = obj.getTheoreticalScenarioVariables();
@@ -336,8 +304,8 @@ classdef WFSToolSimple < handle
             obj.player.setProps('enableProc', false);
             obj.player.setProps('driver', writingDrivers{1}, 1);
             obj.player.setProps('device', writingDevices{1}, 1);
-            obj.player.setProps('driver_recorder', 'ASIO', 1);
-            obj.player.setProps('device_recorder', 'MOTU PCI ASIO', 1);
+%             obj.player.setProps('driver_recorder', 'ASIO', 1);
+%             obj.player.setProps('device_recorder', 'MOTU PCI ASIO', 1);
             signalFunc = @(startSample, endSample) coefficients2signal_inds( sourcesCoef, frequencies, SampleRate, startSample, endSample);
             obj.player.setProps('signalFunc', signalFunc, 1);
 
@@ -351,26 +319,8 @@ classdef WFSToolSimple < handle
                 obj.player.setProps('device', writingDevices{k}, k);
             end
             
-            % Create the pulse coefficient matrix
-            numChan = size(sourcesCoef, 1);
-            numFreq = numel(frequencies);
-            
-            chanInd = repmat((1:numChan)', [numFreq, 1]);
-            freqInd = kron(1:frequencies, ones(numChan, 1));
-            numPulses = numChan*numFreq + 1;
-            
-            pulseCoefMat = zeros(numPulses, numChan, numFreq);
-            for p = 1:numPulses - 1
-                pulseCoefMat(p, chanInd(p), freqInd(p)) = sourcesCoef(chanInd(p), freqInd(p));
-            end           
-            pulseCoefMat(end, :, :) = permute(sourcesCoef, [3 1 2]);
-            obj.pulseCoeffMat = pulseCoefMat;
-            
-            obj.singularPulseInd = 1:numChan*numFreq;
-            
-            [~, startPulseInd, endPulseInd] = coefficients2signal_inds( sourcesCoef, frequencies, SampleRate );
-            obj.pulseLimits = [startPulseInd, endPulseInd];
-            
+            [~, obj.pulseCoeffMat, pulseLim, obj.singularPulseInfo] = coefficients2signal_inds( sourcesCoef, frequencies, SampleRate );
+            obj.pulseLimits = pulseLim/SampleRate;
         end
         
         function simulate(obj)
@@ -462,7 +412,7 @@ classdef WFSToolSimple < handle
             s.recordedSignal_SampleRate = obj.player.Fs_recorder(1);
             s.pulseLimits = obj.pulseLimits;
             s.pulseCoefMat = obj.pulseCoeffMat;
-            s.singularPulseInd = obj.singularPulseInd;
+            s.singularPulseInfo = obj.singularPulseInfo;
         end
         
         function s = getSimulationResultVariables(obj)
@@ -847,8 +797,7 @@ classdef WFSToolSimple < handle
                     obj.player.executeOrder('stop');
                     if obj.simplePerformance
                         obj.fromBase2TheoreticalScenario();
-%                         obj.reproduceAndRecord();
-                        obj.reproduceAndRecord_memoryEfficient();
+                        obj.reproduceAndRecord();
                         obj.simulate();
                     else
                         obj.player.executeOrder('play');

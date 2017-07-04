@@ -1,4 +1,4 @@
-function [x, startInd, endInd] = coefficients2signal_inds( coefficients, frequency, SampleRate, startSample, endSample, onlyPulseInfoFlag )
+function [x, pulseCoefMat, pulseLimits, sPMat ] = coefficients2signal_inds( coefficients, frequency, SampleRate, startSample, endSample, onlyPulseInfoFlag )
 % coefficients. (numChannels x numFreq)
 % frequency. numFreq-element vector
 if nargin < 6
@@ -16,14 +16,14 @@ amplitude = abs(coefficients);
 phase = angle(coefficients);
 
 % Prelude parameters
-soundSamples = ceil(0.5*SampleRate);
+soundSamples = ceil(2*SampleRate);
 silenceSamples = ceil(0.5*SampleRate);
 samplesPerChannel = soundSamples + silenceSamples;
 numCicles = numChann * numFreq;
 totalPre = numCicles * samplesPerChannel;
 
 % Main signal parameters
-totalMain = ceil(1*SampleRate);
+totalMain = ceil(2*SampleRate);
 
 % Indices
 startSamplePre = startSample;
@@ -52,6 +52,7 @@ else
     x = [];
 end
 
+%% Pulse information
 if numSamplesMain > 0
     startPulseIndMain = startSampleMain;
     endPulseIndMain = endSampleMain;
@@ -62,5 +63,19 @@ end
 
 startInd = [startPulseIndPre; startPulseIndMain];
 endInd = [endPulseIndPre; endPulseIndMain];
+pulseLimits = [startInd, endInd];
+
+% Create the pulse coefficient matrix
+sPind = (1:numChann*numFreq)'; % Singular pulse indices
+sPChInd = repmat((1:numChann)', [numFreq, 1]); % Singular pulse channel indices
+sPFreqInd = kron(1:numFreq, ones(numChann, 1)); % Singular pulse frequency indices
+sPMat = [sPind, sPChInd, sPFreqInd]; % Singular pulse information matrix
+numPulses = numChann*numFreq + 1;
+
+pulseCoefMat = zeros(numPulses, numChann, numFreq);
+for p = 1:numPulses - 1
+    pulseCoefMat(p, sPChInd(p), sPFreqInd(p)) = coefficients(sPChInd(p), sPFreqInd(p));
+end
+pulseCoefMat(end, :, :) = permute(coefficients, [3 1 2]);
 
 end

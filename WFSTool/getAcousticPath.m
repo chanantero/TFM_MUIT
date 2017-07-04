@@ -1,4 +1,4 @@
-function expAcPath = getAcousticPath( freq, xPulseCoefMat, xPulseLimits, xSampleRate, pulseInd, xChanInd, freqInd, y, ySampleRate)
+function expAcPath = getAcousticPath( freq, xPulseCoefMat, xPulseLimits, pulseInd, xChanInd, freqInd, y, ySampleRate)
 % Get the experimental acoustic path.
 % freq. numFrequencies-element vector. The i-th element is the i-th
 % frequency in Hz.
@@ -32,7 +32,7 @@ numFrequencies = numel(freq);
 
 % Get a pulse coefficient matrix of y that corresponds to the coefficient
 % matrix of x
-yPulseCoefMat = signal2pulseCoefficientMatrix(freq, xPulseCoefMat, xPulseLimits, xSampleRate, y, ySampleRate);
+yPulseCoefMat = signal2pulseCoefficientMatrix(freq, xPulseCoefMat, xPulseLimits, y, ySampleRate);
 
 %  Identify the coefficients detected for each y channel, each x channel
 %  (loudspeaker) and each frequency.
@@ -50,8 +50,8 @@ for cy = 1:numChannelsY
 end
 
 % % Chech if the total signal corresponds to the sum of the rest
-% totalSignalCoef = yPulseCoefMat(end, :, :); % Last pulse
-% totalTheoricSignalCoef = sum(repmat(permute(xPulseCoefMat(end, :, :), [2, 1, 3]), [1, numChannelsY, 1]).*expAcPath, 1); % Sum of all channels and frequencies
-% totalSignalCoef./totalTheoricSignalCoef
+totalSignalCoef = yPulseCoefMat(end, :, :); % Last pulse
+totalTheoricSignalCoef = sum(repmat(permute(xPulseCoefMat(end, :, :), [2, 1, 3]), [1, numChannelsY, 1]).*expAcPath, 1); % Sum of all channels and frequencies
+totalSignalCoef./totalTheoricSignalCoef
 
 end
