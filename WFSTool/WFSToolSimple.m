@@ -234,7 +234,11 @@ classdef WFSToolSimple < handle
             rat = expAcPath./simulAcPath;
             
             % Set source coefficient corrections
-            
+            [U, S, V] = svd(rat); % Best rank 1 approximation
+            new_sourceCorr = U(:, 1);
+            new_recCorr = V(:, 1)*S(1);
+            obj.sourceCorr = obj.sourceCorr.*new_sourceCorr;
+            obj.receiverCorr = obj.receiverCorr.*new_recCorr;
             
         end 
         
@@ -406,9 +410,10 @@ classdef WFSToolSimple < handle
         end
         
         function s = getExperimentalResultVariables(obj)
-            recorded = obj.player.recorded{1}; % Only one recorder device
-       
-            s.recordedSignal = recorded(:, obj.activeReceiverChannels);
+            recorded = obj.player.recorded{1}(:, obj.activeReceiverChannels); % Only one recorder device
+            numSamples = size(recorded, 1);
+            
+            s.recordedSignal = recorded.*repmat(obj.receiverCorr.', [numSamples 1]);
             s.recordedSignal_SampleRate = obj.player.Fs_recorder(1);
             s.pulseLimits = obj.pulseLimits;
             s.pulseCoefMat = obj.pulseCoeffMat;

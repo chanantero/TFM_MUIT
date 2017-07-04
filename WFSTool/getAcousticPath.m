@@ -36,22 +36,28 @@ yPulseCoefMat = signal2pulseCoefficientMatrix(freq, xPulseCoefMat, xPulseLimits,
 
 %  Identify the coefficients detected for each y channel, each x channel
 %  (loudspeaker) and each frequency.
-yCoef = zeros(numChannelsX, numChannelsY, numFrequencies);
-xCoef = zeros(numChannelsX, numFrequencies);
+yCoef = cell(numChannelsX, numChannelsY, numFrequencies);
+xCoef = cell(numChannelsX, numFrequencies);
 for p = 1:numel(pulseInd)
-    yCoef(xChanInd(p), :, freqInd(p)) = yPulseCoefMat(pulseInd(p), :, freqInd(p));
-    xCoef(xChanInd(p), freqInd(p)) = xPulseCoefMat(pulseInd(p), xChanInd(p), freqInd(p));
+    for cy = 1:numChannelsY
+        yCoef{xChanInd(p), cy, freqInd(p)} = [yCoef{xChanInd(p), cy, freqInd(p)}; yPulseCoefMat(pulseInd(p), cy, freqInd(p))];
+    end
+    xCoef{xChanInd(p), freqInd(p)} = [xCoef{xChanInd(p), freqInd(p)}; xPulseCoefMat(pulseInd(p), xChanInd(p), freqInd(p))];
 end
 
 % Acoustic paths
 expAcPath = zeros(numChannelsX, numChannelsY, numFrequencies);
-for cy = 1:numChannelsY
-    expAcPath(:, cy, :) = yCoef(:, cy, :)./permute(xCoef, [1, 3, 2]);
+for cx = 1:numChannelsX
+    for cy = 1:numChannelsY
+        for f = 1:numFrequencies
+            expAcPath(cx, cy, f) = mean(yCoef{cx, cy, f}./xCoef{cx, f});
+        end
+    end
 end
 
 % % Chech if the total signal corresponds to the sum of the rest
-totalSignalCoef = yPulseCoefMat(end, :, :); % Last pulse
-totalTheoricSignalCoef = sum(repmat(permute(xPulseCoefMat(end, :, :), [2, 1, 3]), [1, numChannelsY, 1]).*expAcPath, 1); % Sum of all channels and frequencies
-totalSignalCoef./totalTheoricSignalCoef
+% totalSignalCoef = yPulseCoefMat(end, :, :); % Last pulse
+% totalTheoricSignalCoef = sum(repmat(permute(xPulseCoefMat(end, :, :), [2, 1, 3]), [1, numChannelsY, 1]).*expAcPath, 1); % Sum of all channels and frequencies
+% totalSignalCoef./totalTheoricSignalCoef
 
 end
