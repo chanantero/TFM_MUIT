@@ -121,6 +121,9 @@ classdef signalProvider < matlab.System
                 numChannels = inf.NumChannels;
             elseif obj.mode == originType('custom')
                 numChannels = size(obj.customSignal, 2);
+            elseif obj.mode == originType('func')
+                y = obj.signalFunc(1, 1);
+                numChannels = size(y, 2);               
             else
                 numChannels = 1;
             end

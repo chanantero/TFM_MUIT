@@ -1,33 +1,51 @@
-function [x, startInd, endInd] = coefficients2signal( coefficients, frequency, SampleRate )
+function [x, pulseCoefMat, pulseLimits, sPMat ] = coefficients2signal( coefficients, frequency, SampleRate, startSample, endSample, onlyPulseInfoFlag )
 % coefficients. (numChannels x numFreq)
 % frequency. numFreq-element vector
+if nargin < 6
+    onlyPulseInfoFlag = false;
+end
+if nargin < 4
+    startSample = 1;
+    endSample = Inf;
+end
 
 numChann = size(coefficients, 1);
 numFreq = size(coefficients, 2);
 
+% Prelude parameters
+soundTime = 1;
+silenceTime = 1;
+numRep = 2;
+
+% Main signal parameters
+mainTime = 2;
+
+soundSamples = ceil(soundTime * SampleRate);
+silenceSamples = ceil(silenceTime * SampleRate);
+mainSamples = ceil(mainTime*SampleRate);
+
 % First, reproduce in each channel and silence the rest
-amplitude = abs(coefficients);
-phase = angle(coefficients);
-soundSamples = ceil(2*SampleRate);
-silenceSamples = ceil(2*SampleRate);
-[x_pre, startInd_pre, endInd_pre] = successiveChannelSinusoids( amplitude, phase, frequency, SampleRate, soundSamples, silenceSamples );
-numPre = size(x_pre, 1);
+[pulseCoefMat_pre, pulseLimitsPre] = successiveChannelSinusoids( coefficients, frequency, soundSamples, silenceSamples, numRep);
 
 % Then, reproduce everything at the same time
-numSamples_main = ceil(SampleRate * 1); % 2 seconds
-t0 = numPre/SampleRate;
-t = t0 + (0:numSamples_main-1)'/SampleRate;
-x_main = zeros(numSamples_main, numChann, numFreq);
-for c = 1:numChann
-    for f = 1:numFreq
-        x_main(:, c, f) = amplitude(c, f) * cos(2*pi*frequency(f)*t + phase(c, f));
-    end
+pulseCoefMat_main = permute(coefficients, [3, 1, 2]);
+pulseLimits = [pulseLimitsPre; pulseLimitsPre(end) + mainSamples];
+pulseCoefMat = [pulseCoefMat_pre; pulseCoefMat_main];
+
+if ~onlyPulseInfoFlag
+    x = pulseCoefMat2signal(frequency, pulseCoefMat, pulseLimits, SampleRate, startSample, endSample+1, 'sample'); % endSample+1 because of the way pulseCoefMat2signal works
+else
+    x = [];
 end
-x_main = sum(x_main, 3);
 
-x = [x_pre; x_main];
+%% Pulse information
 
-% Set the time vector
-startInd = [startInd_pre; numPre + 1];
-endInd = [endInd_pre; numPre + numSamples_main];
+% Create the pulse coefficient matrix
+[Ch, Fr, ~] = ndgrid(1:numChann, 1:numFreq, 1:numRep);
+numPrePulses = numel(Ch);
+sPind = (1:numPrePulses)'; % Singular pulse indices
+sPChInd = Ch(:); % Singular pulse channel indices
+sPFreqInd = Fr(:); % Singular pulse frequency indices
+sPMat = [sPind, sPChInd, sPFreqInd]; % Singular pulse information matrix
+
 end

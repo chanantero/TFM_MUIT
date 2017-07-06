@@ -310,7 +310,7 @@ classdef WFSToolSimple < handle
             obj.player.setProps('device', writingDevices{1}, 1);
 %             obj.player.setProps('driver_recorder', 'ASIO', 1);
 %             obj.player.setProps('device_recorder', 'MOTU PCI ASIO', 1);
-            signalFunc = @(startSample, endSample) coefficients2signal_inds( sourcesCoef, frequencies, SampleRate, startSample, endSample);
+            signalFunc = @(startSample, endSample) coefficients2signal( sourcesCoef, frequencies, SampleRate, startSample, endSample);
             obj.player.setProps('signalFunc', signalFunc, 1);
 
             obj.player.executeOrder('play');
@@ -323,7 +323,7 @@ classdef WFSToolSimple < handle
                 obj.player.setProps('device', writingDevices{k}, k);
             end
             
-            [~, obj.pulseCoeffMat, pulseLim, obj.singularPulseInfo] = coefficients2signal_inds( sourcesCoef, frequencies, SampleRate );
+            [~, obj.pulseCoeffMat, pulseLim, obj.singularPulseInfo] = coefficients2signal( sourcesCoef, frequencies, SampleRate );
             obj.pulseLimits = pulseLim/SampleRate;
         end
         

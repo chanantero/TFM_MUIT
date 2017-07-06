@@ -29,7 +29,9 @@ function signal = genSignal(coefMat, freq, pulseLimits, offsetSample, sampleRate
 % contains the complex coefficient of the i-th pulse for the j-th channel
 % and the f-th frequency
 % freq. numFreqs-element vector.
-% pulseLimits. (numPulses+1)-element vector.
+% pulseLimits. (numPulses x 2). The (i, 1)-th element is the sample where
+% the i-th pulse starts. The (i, 2)-th element is the sample where the i-th
+% pulse ends. The first sample of the signal is the sample 0, not 1.
 % offsetSample. Scalar. The offset used to calculate the time vector.
 % sampleRate. Scalar. Sample rate of the signal.
 
@@ -45,8 +47,8 @@ end
 
 signal = zeros(numSamples, numChannels);
 for p = 1:numPulses
-    startPulse = pulseLimits(p);
-    endPulse = pulseLimits(p+1);
+    startPulse = pulseLimits(p, 1);
+    endPulse = pulseLimits(p, 2);
     numPulseSamples = endPulse - startPulse;
     
     ind = startPulse:endPulse-1;

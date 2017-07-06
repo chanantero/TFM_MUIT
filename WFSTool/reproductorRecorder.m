@@ -564,7 +564,8 @@ classdef reproductorRecorder < matlab.System
                             offset = obj.delayBetweenDevices(t_eps, numUnderruns);
                             offset = max(offset) - offset;
                         end
-                    catch
+                    catch e
+                        disp(e)
                         warning('There was some error with the step function of reproductor')
                         release(obj);
                         return;
