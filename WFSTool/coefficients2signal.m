@@ -27,6 +27,10 @@ mainSamples = ceil(mainTime*SampleRate);
 % First, reproduce in each channel and silence the rest
 [pulseCoefMat_pre, pulseLimitsPre] = successiveChannelSinusoids( coefficients, frequency, soundSamples, silenceSamples, numRep);
 
+% Change amplitude of second repetition
+pulseCoefMat_pre(numChann*numFreq+1:end) = pulseCoefMat_pre(numChann*numFreq+1:end)*1.3;
+
+
 % Then, reproduce everything at the same time
 pulseCoefMat_main = permute(coefficients, [3, 1, 2]);
 pulseLimits = [pulseLimitsPre; pulseLimitsPre(end) + mainSamples];

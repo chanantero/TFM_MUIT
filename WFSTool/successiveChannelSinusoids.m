@@ -10,6 +10,7 @@ numPulses = numChann * numFreq * numRep;
 
 pulseCoefMat_noSilences = zeros(numPulses, numChann, numFreq);
 pulseLimits = zeros(numPulses, 1);
+% pulseDurations = zeros(numPulses, 1);
 
 [Ch, Fr, ~] = ndgrid(1:numChann, 1:numFreq, 1:numRep);
 c = Ch(:);
@@ -21,8 +22,12 @@ for p = 1:numPulses
     pulseLimits(p, 1) = startPulseSample;
     pulseLimits(p, 2) = endPulseSample;
     
+%     pulseDurations(p) = soundSamples;
+    
     pulseCoefMat_noSilences(p, c(p), f(p)) = coefMat(c(p), f(p));
 end
+
+% pulseDurations = reshape([soundSamples*ones(1, numPulses); silenceSamples*ones(1, numPulses)], [numPulses*2, 1]);
 
 pulseLimits = [reshape(pulseLimits', [2*numPulses, 1]); pulseLimits(end) + silenceSamples];
 pulseCoefMat = zeros(numPulses*2, numChann, numFreq);
