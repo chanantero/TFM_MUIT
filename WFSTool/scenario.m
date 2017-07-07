@@ -382,8 +382,8 @@ classdef scenario < handle
             cosAlfa = obj.calcCosAlfa();
             
             % Calculate active loudspeakers
-%             obj.loudspeakersState = cosAlfa > 0; % Buscamos los altavoces que deberían estar activos
-            obj.loudspeakersState(:) = true;
+            obj.loudspeakersState = cosAlfa > 0; % Buscamos los altavoces que deberían estar activos
+%             obj.loudspeakersState(:) = true;
 
             atten = obj.calcPhysicalAttenuation(distances, cosAlfa);
                       

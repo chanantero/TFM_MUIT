@@ -242,26 +242,6 @@ classdef WFSToolSimple < handle
             
         end 
         
-        function processResults(obj)
-            f = figure;
-            axReprod = axes(f, 'Units', 'normalized', 'OuterPosition', [0.1 0.6 0.8 0.3]);
-            axRecord = axes(f, 'Units', 'normalized', 'OuterPosition', [0.1 0.1 0.8 0.3]);
-            
-            s = obj.getExperimentalResultVariables();
-                        
-            numReprodSamples = size(s.reproducedSignal, 1);
-            reprodSampleRate = s.reproducedSignal_SampleRate;
-            
-            numRecordSamples = size(s.recordedSignal, 1);
-            recordSampleRate = s.recordedSignal_SampleRate;
-            
-            tReprod = (0:numReprodSamples - 1)/reprodSampleRate;
-            tRecord = (0:numRecordSamples - 1)/recordSampleRate;
-            
-            plot(axReprod, tReprod, s.reproducedSignal);
-            plot(axRecord, tRecord, s.recordedSignal);
-        end
-        
         function fromBase2TheoreticalScenario(obj)
             
             indActiveSour = find(obj.real | obj.virtual);
@@ -325,6 +305,23 @@ classdef WFSToolSimple < handle
             
             [~, obj.pulseCoeffMat, pulseLim, obj.singularPulseInfo] = coefficients2signal( sourcesCoef, frequencies, SampleRate );
             obj.pulseLimits = pulseLim/SampleRate;
+        end
+        
+        function WFS2realRatio(obj)
+            
+            realInd = obj.channelNumber(1);
+            WFSInd = 1:obj.simulObj.numSources;
+            WFSInd(realInd) = [];
+            
+            U = mean(obj.simulObj.calculate(obj.simulObj.measurePoints(20000,:)), 2);
+            UWFS = sum(U(WFSInd));
+            Ureal = U(realInd);
+            
+            correction = -Ureal/UWFS;
+            
+            obj.simulObj.sourceCoefficients(WFSInd) = obj.simulObj.sourceCoefficients(WFSInd)*correction;
+            obj.simulObj.simulate();
+            
         end
         
         function simulate(obj)
