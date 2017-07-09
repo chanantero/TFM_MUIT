@@ -8,19 +8,31 @@ end
 startMarker = max(0, startMarker);
 endMarker = min(pulseLimits(end), endMarker);
 
-[newPulseLimits, indPulses] = cutPulseLimits(pulseLimits, startMarker, endMarker);
-
 switch type
-    case 'time' % Time version
+    case 'time'
         startSample = floor(startMarker*sampleRate);
-        newPulseSampleLimits = floor(newPulseLimits*sampleRate);
-    case 'sample' % Matlab sample version (indexing start at 1 in matlab)
+        endSample = floor(endMarker*sampleRate);
+        pulseSampleLimits = floor(pulseLimits*sampleRate);
+    case 'sample'
         startSample = startMarker - 1;
-        newPulseSampleLimits = newPulseLimits - 1;
+        endSample = endMarker - 1 + 1; % -1 because we work with 0 as the first index, not 1 as matlab does. +1 because we want the input of type "sample" to be the last sample to return
+        pulseSampleLimits = pulseLimits - 1;
 end
 
+[cuttedPulseLimits, indPulses] = intervalSelection(pulseSampleLimits, startSample, endSample);
+startFirstPulse = pulseSampleLimits(indPulses(1),1);
+wholePulseLimits = pulseSampleLimits(indPulses, :) - startFirstPulse;
+
 coefMat = coefMat(indPulses, :, :);
-signal = genSignal(coefMat, freq, newPulseSampleLimits-startSample, startSample, sampleRate);
+
+wholePulseSignal = genSignal(coefMat, freq, wholePulseLimits, startFirstPulse, sampleRate);
+
+% Map signal
+signal = zeros(endSample - startSample, size(wholePulseSignal, 2));
+selAbsInd = cuttedPulseLimits(1, 1):cuttedPulseLimits(end, 2) - 1; 
+ind1 = selAbsInd - startSample + 1;
+ind2 = selAbsInd - startFirstPulseSample + 1;
+signal(ind1) = wholePulseSignal(ind2);
 
 end
 

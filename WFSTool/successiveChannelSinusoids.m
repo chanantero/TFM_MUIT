@@ -1,41 +1,4 @@
-function [pulseCoefMat, pulseLimits] = successiveChannelSinusoids( coefMat, frequency, soundSamples, silenceSamples, numRep )
-% amplitude. (numChannels x numFreqs)
-
-numChann = size(coefMat, 1);
-numFreq = numel(frequency);
-
-% First, reproduce in each channel and silence the rest
-samplesPerChannel = soundSamples + silenceSamples;
-numPulses = numChann * numFreq * numRep;
-
-pulseCoefMat_noSilences = zeros(numPulses, numChann, numFreq);
-pulseLimits = zeros(numPulses, 1);
-% pulseDurations = zeros(numPulses, 1);
-
-[Ch, Fr, ~] = ndgrid(1:numChann, 1:numFreq, 1:numRep);
-c = Ch(:);
-f = Fr(:);
-for p = 1:numPulses     
-    startPulseSample = (p - 1)*samplesPerChannel + 1;
-    endPulseSample = (p - 1)*samplesPerChannel + soundSamples + 1;
-    
-    pulseLimits(p, 1) = startPulseSample;
-    pulseLimits(p, 2) = endPulseSample;
-    
-%     pulseDurations(p) = soundSamples;
-    
-    pulseCoefMat_noSilences(p, c(p), f(p)) = coefMat(c(p), f(p));
-end
-
-% pulseDurations = reshape([soundSamples*ones(1, numPulses); silenceSamples*ones(1, numPulses)], [numPulses*2, 1]);
-
-pulseLimits = [reshape(pulseLimits', [2*numPulses, 1]); pulseLimits(end) + silenceSamples];
-pulseCoefMat = zeros(numPulses*2, numChann, numFreq);
-pulseCoefMat(1:2:end, :, :) = pulseCoefMat_noSilences;
-
-end
-
-% % Old version
+% % Vectorized version
 % function [pulseCoefMat, pulseLimits] = successiveChannelSinusoids( coefMat, frequency, soundSamples, silenceSamples, numRep )
 % % amplitude. (numChannels x numFreqs)
 % 
@@ -46,30 +9,68 @@ end
 % samplesPerChannel = soundSamples + silenceSamples;
 % numPulses = numChann * numFreq * numRep;
 % 
-% pulseCoefMat = zeros(numPulses, numChann, numFreq);
-% pulseLimits = zeros(numPulses, 2);
+% pulseCoefMat_noSilences = zeros(numPulses, numChann, numFreq);
+% pulseLimits = zeros(numPulses, 1);
+% % pulseDurations = zeros(numPulses, 1);
 % 
 % [Ch, Fr, ~] = ndgrid(1:numChann, 1:numFreq, 1:numRep);
 % c = Ch(:);
 % f = Fr(:);
 % for p = 1:numPulses     
 %     startPulseSample = (p - 1)*samplesPerChannel + 1;
-%     endPulseSample = (p - 1)*samplesPerChannel + soundSamples;
+%     endPulseSample = (p - 1)*samplesPerChannel + soundSamples + 1;
 %     
 %     pulseLimits(p, 1) = startPulseSample;
 %     pulseLimits(p, 2) = endPulseSample;
 %     
-%     pulseCoefMat(p, c(p), f(p)) = coefMat(c(p), f(p));
+% %     pulseDurations(p) = soundSamples;
+%     
+%     pulseCoefMat_noSilences(p, c(p), f(p)) = coefMat(c(p), f(p));
 % end
 % 
-% % signal = pulseCoefMat2signal(frequency, coefMat, pulseLimits, SampleRate, startSample, endSample, false);
+% % pulseDurations = reshape([soundSamples*ones(1, numPulses); silenceSamples*ones(1, numPulses)], [numPulses*2, 1]);
 % 
-% % % Set the markers vector. Starting indices of pulses
-% startPulseInd = (0:numPulses-1)'*samplesPerChannel + 1;
-% endPulseInd = (0:numPulses-1)'*samplesPerChannel + soundSamples;
+% pulseLimits = [reshape(pulseLimits', [2*numPulses, 1]); pulseLimits(end) + silenceSamples];
+% pulseCoefMat = zeros(numPulses*2, numChann, numFreq);
+% pulseCoefMat(1:2:end, :, :) = pulseCoefMat_noSilences;
 % 
-% pulseLimits = [startPulseInd, endPulseInd];
 % end
+
+% Other version
+function [pulseCoefMat, pulseLimits] = successiveChannelSinusoids( coefMat, frequency, soundSamples, silenceSamples, numRep )
+% amplitude. (numChannels x numFreqs)
+
+numChann = size(coefMat, 1);
+numFreq = numel(frequency);
+
+% First, reproduce in each channel and silence the rest
+samplesPerChannel = soundSamples + silenceSamples;
+numPulses = numChann * numFreq * numRep;
+
+pulseCoefMat = zeros(numPulses, numChann, numFreq);
+pulseLimits = zeros(numPulses, 2);
+
+[Ch, Fr, ~] = ndgrid(1:numChann, 1:numFreq, 1:numRep);
+c = Ch(:);
+f = Fr(:);
+for p = 1:numPulses     
+    startPulseSample = (p - 1)*samplesPerChannel + 1;
+    endPulseSample = (p - 1)*samplesPerChannel + soundSamples;
+    
+    pulseLimits(p, 1) = startPulseSample;
+    pulseLimits(p, 2) = endPulseSample;
+    
+    pulseCoefMat(p, c(p), f(p)) = coefMat(c(p), f(p));
+end
+
+% signal = pulseCoefMat2signal(frequency, coefMat, pulseLimits, SampleRate, startSample, endSample, false);
+
+% % Set the markers vector. Starting indices of pulses
+startPulseInd = (0:numPulses-1)'*samplesPerChannel + 1;
+endPulseInd = (0:numPulses-1)'*samplesPerChannel + soundSamples + 1;
+
+pulseLimits = [startPulseInd, endPulseInd];
+end
 
 
 % % Old version

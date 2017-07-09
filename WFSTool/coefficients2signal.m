@@ -30,14 +30,13 @@ mainSamples = ceil(mainTime*SampleRate);
 % Change amplitude of second repetition
 pulseCoefMat_pre(numChann*numFreq+1:end) = pulseCoefMat_pre(numChann*numFreq+1:end)*1.3;
 
-
 % Then, reproduce everything at the same time
 pulseCoefMat_main = permute(coefficients, [3, 1, 2]);
-pulseLimits = [pulseLimitsPre; pulseLimitsPre(end) + mainSamples];
+pulseLimits = [pulseLimitsPre; [pulseLimitsPre(end) + silenceSamples, pulseLimitsPre(end) + silenceSamples + mainSamples]];
 pulseCoefMat = [pulseCoefMat_pre; pulseCoefMat_main];
 
 if ~onlyPulseInfoFlag
-    x = pulseCoefMat2signal(frequency, pulseCoefMat, pulseLimits, SampleRate, startSample, endSample+1, 'sample'); % endSample+1 because of the way pulseCoefMat2signal works
+    x = pulseCoefMat2signal(frequency, pulseCoefMat, pulseLimits, SampleRate, startSample, endSample, 'sample'); % endSample+1 because of the way pulseCoefMat2signal works
 else
     x = [];
 end
