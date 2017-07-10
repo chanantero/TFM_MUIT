@@ -10,6 +10,7 @@ classdef audioRecorder < matlab.System
         Device
         SamplesPerFrame
         SampleRate
+        channelMapping
     end
 
     properties(DiscreteState)
@@ -38,6 +39,9 @@ classdef audioRecorder < matlab.System
            obj.audioDeviceReaderObj.Device = obj.Device;
            obj.audioDeviceReaderObj.SamplesPerFrame = obj.SamplesPerFrame;
            obj.audioDeviceReaderObj.SampleRate = obj.SampleRate;
+           obj.audioDeviceReaderObj.ChannelMappingSource = 'Property';
+           obj.audioDeviceReaderObj.ChannelMapping = obj.channelMapping;
+           
            
            setup(obj.audioDeviceReaderObj);
         end
