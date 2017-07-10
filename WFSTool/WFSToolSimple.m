@@ -77,7 +77,7 @@ classdef WFSToolSimple < handle
             obj.ax = obj.scenarioObj.ax;
             obj.simulObj.ax = obj.ax;
             colormap(obj.ax, 'gray')
-            obj.ax.CLim = [-1 1];
+            obj.ax.CLim = [-1 1];            
                         
             obj.changed = struct('virtual', false, 'real', false, 'signalsSpec', false);
             
@@ -270,31 +270,26 @@ classdef WFSToolSimple < handle
             obj.simulObj.freq = obj.frequency;
 
         end
-                 
-        function reproduceAndRecord(obj)
-            SampleRate = 44100;
-            
-            s = obj.getTheoreticalScenarioVariables();
-            sourcesCoef = s.sourcesCoeff;
-            frequencies = s.frequencies;
-                   
+              
+        function reproduceSignalFunction(obj, signalFunction, signalSampleRate)
+               
+            % Save ReproductorRecorder parameters
             real_comMat = obj.player.comMatrix;
             writingDrivers = obj.player.driver;
             writingDevices = obj.player.device;
-            prov_comMat = true;
-            obj.player.setProps('comMatrix', prov_comMat);
+            
+            % Change state
+            obj.player.setProps('comMatrix', true);
             obj.player.setProps('mode', originType('func'), 1);
-            obj.player.setProps('FsGenerator', SampleRate, 1);
+            obj.player.setProps('FsGenerator', signalSampleRate, 1);
             obj.player.setProps('enableProc', false);
             obj.player.setProps('driver', writingDrivers{1}, 1);
             obj.player.setProps('device', writingDevices{1}, 1);
-%             obj.player.setProps('driver_recorder', 'ASIO', 1);
-%             obj.player.setProps('device_recorder', 'MOTU PCI ASIO', 1);
-            signalFunc = @(startSample, endSample) coefficients2signal( sourcesCoef, frequencies, SampleRate, startSample, endSample);
-            obj.player.setProps('signalFunc', signalFunc, 1);
+            obj.player.setProps('signalFunc', signalFunction, 1);
 
             obj.player.executeOrder('play');
                         
+            % Turn everything to the previous state
             obj.player.setProps('enableProc', true);
             obj.player.setProps('comMatrix', real_comMat);
             obj.updateSignalProvidersVariables();
@@ -303,6 +298,18 @@ classdef WFSToolSimple < handle
                 obj.player.setProps('device', writingDevices{k}, k);
             end
             
+        end
+        
+        function reproduceAndRecord(obj)
+            SampleRate = 44100;
+            
+            s = obj.getTheoreticalScenarioVariables();
+            sourcesCoef = s.sourcesCoeff;
+            frequencies = s.frequencies;
+            signalFunc = @(startSample, endSample) coefficients2signal( sourcesCoef, frequencies, SampleRate, startSample, endSample);
+
+            obj.reproduceSignalFunction(signalFunc, SampleRate);
+                           
             [~, obj.pulseCoeffMat, pulseLim, obj.singularPulseInfo] = coefficients2signal( sourcesCoef, frequencies, SampleRate );
             obj.pulseLimits = pulseLim/SampleRate;
         end
@@ -480,8 +487,26 @@ classdef WFSToolSimple < handle
             end
             
             obj.updateForcedDisabledLoudspeakers();
+            
+            obj.sourceCorr = ones(numLoudspeakers, 1);
         end
          
+        function calibrate(obj)
+            
+            SampleRate = 44100;
+            sTheo = obj.getTheoreticalScenarioVariables();
+            numChannels = numel(sTheo.sourcesCoeff);
+            numFreq = numel(sTheo.frequencies);
+            frequencies = sTheo.frequencies;
+            
+            calCoeff = 0.05*ones(numChannels, numFreq);
+            
+            signalFunc = @(startSample, endSample) coefficients2signal( calCoeff, frequencies, SampleRate, startSample, endSample);
+            obj.reproduceSignalFunction(signalFunc, SampleRate);
+            
+            [~, obj.pulseCoeffMat, pulseLim, obj.singularPulseInfo] = coefficients2signal( calCoeff, frequencies, SampleRate );
+            obj.pulseLimits = pulseLim/SampleRate;
+        end
     end
     
     methods(Access = private)
@@ -573,7 +598,9 @@ classdef WFSToolSimple < handle
         end
                 
         function updateRecorderVariables(obj)
-            obj.scenarioObj.setNumReceivers(numel(obj.activeReceiverChannels));      
+            obj.scenarioObj.setNumReceivers(numel(obj.activeReceiverChannels));
+            obj.player.setProps('channelMapping_recorder', obj.activeReceiverChannels, 1);
+            obj.receiverCorr = ones(obj.numReceivers, 1);
         end
         
         function updateSignalParameteres(obj)
