@@ -310,7 +310,7 @@ classdef WFSToolSimple < handle
 
             obj.reproduceSignalFunction(signalFunc, SampleRate);
                            
-            [~, obj.pulseCoeffMat, pulseLim, obj.singularPulseInfo] = coefficients2signal( sourcesCoef, frequencies, SampleRate );
+            [~, ~, obj.pulseCoeffMat, pulseLim, obj.singularPulseInfo] = coefficients2signal( sourcesCoef, frequencies, SampleRate );
             obj.pulseLimits = pulseLim/SampleRate;
         end
         
@@ -504,7 +504,7 @@ classdef WFSToolSimple < handle
             signalFunc = @(startSample, endSample) coefficients2signal( calCoeff, frequencies, SampleRate, startSample, endSample);
             obj.reproduceSignalFunction(signalFunc, SampleRate);
             
-            [~, obj.pulseCoeffMat, pulseLim, obj.singularPulseInfo] = coefficients2signal( calCoeff, frequencies, SampleRate );
+            [~, ~, obj.pulseCoeffMat, pulseLim, obj.singularPulseInfo] = coefficients2signal( calCoeff, frequencies, SampleRate );
             obj.pulseLimits = pulseLim/SampleRate;
         end
     end

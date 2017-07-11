@@ -106,8 +106,8 @@ classdef signalProvider < matlab.System
             elseif obj.mode == originType('file')
                 flag = isDone(obj.fileReader);
             elseif obj.mode == originType('func')
-                aux = obj.signalFunc(obj.lastSample+1, obj.lastSample+1);
-                if isempty(aux)
+                [~, outOfRange] = obj.signalFunc(obj.lastSample+1, obj.lastSample+1);
+                if outOfRange
                     flag = true;
                 else
                     flag = false;

@@ -1,4 +1,4 @@
-function [newIntervalLimits, indIntervals] = intervalSelection(intervalLimits, startMarker, endMarker)
+function [newIntervalLimits, indIntervals, outOfRange] = intervalSelection(intervalLimits, startMarker, endMarker)
 % intervalLimits. (numIntervals x 2) matrix. The (i, 1)-th element is the
 % starting point of the i-th interval. The (i, 2)-th element is the ending
 % point of the i-th interval. The i-th interval exist in the interval
@@ -17,11 +17,12 @@ numIntervals = size(intervalLimits, 1);
 % Transform the pulseLimits matrix to a column vector. So, the silence
 % between pulses is now considered as pulses of zero amplitude
 intervLim_vec = reshape(intervalLimits', [numIntervals*2, 1]);
+numVecIntervals = numIntervals*2 - 1;
 
 % firstInterval in [1, numIntervals + 1]
 firstInterval = find(intervLim_vec - startMarker > 0, 1, 'first') - 1;
 if isempty(firstInterval)
-    firstInterval = numIntervals + 1;
+    firstInterval = numVecIntervals + 1;
 end
 if firstInterval == 0
     firstInterval = 1;
@@ -32,8 +33,8 @@ lastInterval = find(endMarker - intervLim_vec > 0, 1, 'last');
 if isempty(lastInterval)
     lastInterval = 0;
 end
-if lastInterval > numIntervals
-    lastInterval = numIntervals;
+if lastInterval > numVecIntervals
+    lastInterval = numVecIntervals;
 end
 
 indIntervals = firstInterval:lastInterval;
@@ -47,8 +48,19 @@ indIntervals = (indIntervals + 1)/2;
 % except the first and the last one are the original ones. However, the
 % first and last intervals can be cutted by the start and end markers.
 newIntervalLimits = intervalLimits(indIntervals, :);
-newIntervalLimits(1, 1) = max(startMarker, newIntervalLimits(1, 1));
-newIntervalLimits(end, 2) = min(endMarker, newIntervalLimits(end, 2));
-
+if ~isempty(newIntervalLimits)
+    lowLimit = newIntervalLimits(1, 1);
+    upperLimit = newIntervalLimits(end, 2);
+    newIntervalLimits(1, 1) = max(startMarker, lowLimit);
+    newIntervalLimits(end, 2) = min(endMarker, upperLimit);
+    
+    outOfRange = false;
+else
+    if lastInterval == 0 || firstInterval == numVecIntervals + 1
+        outOfRange = true;
+    else
+        outOfRange = false;
+    end
+end
 
 end

@@ -1,12 +1,12 @@
-function [signal] = pulseCoefMat2signal(freq, coefMat, pulseLimits, sampleRate, startMarker, endMarker, type)
+function [signal, outOfRange] = pulseCoefMat2signal(freq, coefMat, pulseLimits, sampleRate, startMarker, endMarker, type)
 % coefMat. (numPulses x numChannels x numFreqs)
-    
+
 if nargin < 7
     type = 'sample';
 end
 
-startMarker = max(0, startMarker);
-endMarker = min(pulseLimits(end), endMarker);
+% startMarker = max(0, startMarker);
+% endMarker = min(pulseLimits(end), endMarker);
 
 switch type
     case 'time'
@@ -19,20 +19,31 @@ switch type
         pulseSampleLimits = pulseLimits - 1;
 end
 
-[cuttedPulseLimits, indPulses] = intervalSelection(pulseSampleLimits, startSample, endSample);
-startFirstPulse = pulseSampleLimits(indPulses(1),1);
-wholePulseLimits = pulseSampleLimits(indPulses, :) - startFirstPulse;
+endSample = min(endSample, startMarker + 1e6); % Limit size of output
 
-coefMat = coefMat(indPulses, :, :);
+[cuttedPulseLimits, indPulses, outOfRange] = intervalSelection(pulseSampleLimits, startSample, endSample);
 
-wholePulseSignal = genSignal(coefMat, freq, wholePulseLimits, startFirstPulse, sampleRate);
+if isempty(indPulses)
+    numChannels = size(coefMat, 2);
+    signal = zeros(endSample - startSample, numChannels);
+else
+    startFirstPulse = pulseSampleLimits(indPulses(1),1);
+    
+    wholePulseLimits = pulseSampleLimits(indPulses, :) - startFirstPulse;
+    
+    coefMat = coefMat(indPulses, :, :);
+    
+    wholePulseSignal = genSignal(coefMat, freq, wholePulseLimits, startFirstPulse, sampleRate);
+    
+    % Map signal
+    signal = zeros(endSample - startSample, size(wholePulseSignal, 2));
+    selAbsInd = cuttedPulseLimits(1, 1):cuttedPulseLimits(end, 2) - 1;
+    ind1 = selAbsInd - startSample + 1;
+    ind2 = selAbsInd - startFirstPulse + 1;
+    signal(ind1, :) = wholePulseSignal(ind2, :);
+end
 
-% Map signal
-signal = zeros(endSample - startSample, size(wholePulseSignal, 2));
-selAbsInd = cuttedPulseLimits(1, 1):cuttedPulseLimits(end, 2) - 1; 
-ind1 = selAbsInd - startSample + 1;
-ind2 = selAbsInd - startFirstPulseSample + 1;
-signal(ind1) = wholePulseSignal(ind2);
+
 
 end
 
@@ -57,9 +68,11 @@ end
 
 signal = zeros(numSamples, numChannels);
 for p = 1:numPulses
-    startPulse = pulseLimits(p);
-    endPulse = pulseLimits(p+1);
+    startPulse = pulseLimits(p, 1);
+    endPulse = pulseLimits(p, 2);
     numPulseSamples = endPulse - startPulse;
+    
+    windMask = windowing(numPulseSamples, 0.5);
     
     ind = startPulse:endPulse-1;
     t = (ind + offsetSample)/sampleRate;
@@ -71,9 +84,26 @@ for p = 1:numPulses
             phase = angle(coefMat(p, c, f));
             aux(:, f) = amp*cos(2*pi*freq(f)*t + phase);
         end
-        signal(ind + 1, c) = sum(aux, 2);
+        signal(ind + 1, c) = sum(aux, 2).*windMask;
     end
 end
 
 end
 
+function mask = windowing(numSamples, constantRatio)
+hanningRatio = 1 - constantRatio;
+numHann = floor(hanningRatio*numSamples);
+numPre = ceil(numHann/2);
+numPost = numHann - numPre;
+hannWind = hann(numHann);
+
+preInd = 1:numPre;
+postInd = (numSamples-numPost+1):numSamples;
+constantInd = numPre+1:numSamples-numPost;
+
+mask = zeros(numSamples, 1);
+mask(preInd) = hannWind(1:numPre);
+mask(postInd) = hannWind(numPre+1:end);
+mask(constantInd) = 1;
+
+end
