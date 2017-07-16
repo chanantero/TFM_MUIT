@@ -27,7 +27,7 @@ end
 yPulseCoefMat = zeros(numPulsesX, numChannelsY, numFrequencies);
 for f_ind = 1:numFrequencies
     for cy = 1:numChannelsY
-        yPulseCoefMat(activePulses(:, f_ind), cy, f_ind) = y_coef{f_ind, cy}(corrInd{f_ind, cy});
+        yPulseCoefMat(activePulses(corrInd{f_ind, cy}, f_ind), cy, f_ind) = y_coef{f_ind, cy}(corrInd{f_ind, cy});
     end
 end
 

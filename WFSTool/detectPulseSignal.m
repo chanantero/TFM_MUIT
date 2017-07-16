@@ -1,4 +1,4 @@
-function [coeff, correspondingIndexes] = detectPulseSignal(xPulseLimits, y, ySampleRate, marginRatio)
+function [coeff, correspondingIndexes, yPulseLimits] = detectPulseSignal(xPulseLimits, y, ySampleRate, marginRatio)
 % xPulseLimits. (numPulses x 2) matrix
 % y. (numSamples x numChannels) matrix
 % ySampleRate. Scalar. Natural number
@@ -14,7 +14,7 @@ numChannels = size(y, 2);
 xPulseLimitsSamp = floor(xPulseLimits * ySampleRate);
 beggining = xPulseLimitsSamp(1, 1);
 ending = xPulseLimitsSamp(end, 2);
-numSampMask = beggining - ending + 1;
+numSampMask = ending - beggining;
 mask = zeros(numSampMask, 1);
 for p = 1:numPulses
     mask(xPulseLimitsSamp(p, 1)+1:xPulseLimitsSamp(p, 2)) = 1;
@@ -30,6 +30,8 @@ for k = 1:N
     
     % Apply mask
     corr(k, :) = sum(y.*repmat(shiftedMask, 1, numChannels), 1);
+    
+    fprintf('%d/%d\n', k, N)
 end
 
 % Find the indexes of maximum correlation
@@ -38,12 +40,14 @@ end
 % Find the pulse signal coefficients
 coeff = cell(numChannels, 1);
 correspondingIndexes = cell(numChannels, 1);
+yPulseLimits = cell(numChannels, 1);
 for cy = 1:numChannels
     % The new pulse limits are the original ones shifted
     yPulseLimitsSamp = xPulseLimitsSamp + shiftPos(maxInd(cy));
     valid = find(all(yPulseLimitsSamp >= 0, 2));        
     numDetPulses = numel(valid);
     
+    yPulseLimits{cy} = yPulseLimitsSamp(valid, :);
     correspondingIndexes{cy} = valid;
     coeff{cy} = zeros(numDetPulses, 1);
     for k = 1:numDetPulses
