@@ -24,6 +24,8 @@ for f_ind = 1:numFrequencies
     for cy = 1:numChannelsY
         [ y_coef{f_ind, cy}, y_pulseSampleLimits{f_ind, cy} ] = pulseSignalParameters( iq(:, cy) );
     end
+    
+    [coeff, corrInd] = detectPulseSignal(xPulseLimits, iq, ySampleRate, 0.1);
 end
 
 % Association of pulses
