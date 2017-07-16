@@ -11,7 +11,7 @@ numFreq = size(coefficients, 2);
 % Prelude parameters
 soundTime = 1;
 silenceTime = 1;
-numRep = 2;
+numRep = 5;
 
 % Main signal parameters
 mainTime = 5;
@@ -23,8 +23,8 @@ mainSamples = ceil(mainTime*SampleRate);
 % First, reproduce in each channel and silence the rest
 [pulseCoefMat_pre, pulseLimitsPre] = successiveChannelSinusoids( coefficients, frequency, soundSamples, silenceSamples, numRep);
 
-% Change amplitude of second repetition
-pulseCoefMat_pre(numChann*numFreq+1:end, :) = pulseCoefMat_pre(numChann*numFreq+1:end, :)*1.3;
+% % Change amplitude of second repetition
+% pulseCoefMat_pre(numChann*numFreq+1:end, :) = pulseCoefMat_pre(numChann*numFreq+1:end, :)*1.3;
 
 % Then, reproduce everything at the same time
 pulseCoefMat_main = permute(coefficients, [3, 1, 2]);

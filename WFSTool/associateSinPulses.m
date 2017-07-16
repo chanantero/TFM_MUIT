@@ -1,4 +1,4 @@
-function [corrInd, y_coef, y_pulseSampleLimits] = associateSinPulses(freqs, xPulseLimits, y, ySampleRate, durationTolerance)
+function [corrInd, y_coef, y_pulseSampleLimits] = associateSinPulses(freqs, xPulseLimits, y, ySampleRate)
 
 % y. Received signal. (numRecSamples x numChannels) matrix
 % xPulseLimits. Time limits of the pulses in the original signal x. 
@@ -31,35 +31,57 @@ corrInd = cell(numFrequencies, numChannelsY);
 for f_ind = 1:numFrequencies
     xPulsLim = xPulseLimits{f_ind};
     durPulsesX = diff(xPulsLim, 1, 2);
-    marg = durPulsesX * durationTolerance;
         
     for cy = 1:numChannelsY
         yPulsSampleLim = y_pulseSampleLimits{f_ind, cy};
         durPulsesY = diff(yPulsSampleLim, 1, 2)/ySampleRate;        
-        corrInd{f_ind, cy} = associateValues(durPulsesX, durPulsesY, marg);        
+        corrInd{f_ind, cy} = associateValues(durPulsesX, durPulsesY);        
     end
 end
 
 end
 
 
-function corrInd = associateValues(x, y, margins)
+function corrInd = associateValues(x, y)
 % x. Column vector with original values
 % y. Column vector with distorded values.
+
 numValuesX = numel(x);
-numValuesY = numel(y);
+
+[ insertionCost, deletionCost, substitutionCost ] = genCostMatrices( x, y );
+alignment = NeedlemanWunsch(insertionCost, deletionCost, substitutionCost);
 
 corrInd = zeros(numValuesX, 1);
-
-yi = 1; % y index
-for xi = 1:numValuesX
-    if abs(y(yi) - x(xi)) <= margins(xi)
-        corrInd(xi) = yi;
-        yi = yi + 1;
-        if yi > numValuesY
-            break;
-        end
-    end
+x_ind = 1;
+y_ind = 1;
+for k = 1:numel(alignment)
+    if alignment(k) == 'substitute'
+        corrInd(x_ind) = y_ind;
+        x_ind = x_ind + 1;
+        y_ind = y_ind + 1;
+    elseif alignment(k) == 'delete'
+        x_ind = x_ind + 1;
+    elseif alignment(k) == 'insert'
+        y_ind = y_ind + 1;
+    end   
 end
+
+% % Old way
+% % margin is an input
+% numValuesX = numel(x);
+% numValuesY = numel(y);
+% 
+% corrInd = zeros(numValuesX, 1);
+% 
+% yi = 1; % y index
+% for xi = 1:numValuesX
+%     if abs(y(yi) - x(xi)) <= margins(xi)
+%         corrInd(xi) = yi;
+%         yi = yi + 1;
+%         if yi > numValuesY
+%             break;
+%         end
+%     end
+% end
 
 end

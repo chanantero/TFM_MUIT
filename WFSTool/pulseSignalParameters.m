@@ -1,7 +1,10 @@
-function [ values, pulseLimits ] = pulseSignalParameters( x, filterWidth, minDur, minSep )
+function [ values, pulseLimits ] = pulseSignalParameters( x, filterWidth, minDur, minSep, marginRatio )
 % x is a signal with complex values in form of pulses
 
 % Parse inputs
+if nargin < 5
+    marginRatio = 0.1;
+end
 if nargin < 4
     minSep = 1000;
 end
@@ -12,7 +15,7 @@ if nargin < 2
     filterWidth = 600;
 end
 
-% Filter the signal
+% Filter the signal. Low pass filter.
 xFilt = filter(ones(filterWidth, 1), filterWidth, x); 
 
 % Sort the values
@@ -38,7 +41,7 @@ end
 firstStepLevel = mean(xSort(firstPeak:secondPeak));
 threshold = firstStepLevel/2;
 
-% Apply
+% Apply threshold
 active = abs(xFilt) > threshold;
 indActive = find(active);
 diffActive = diff(indActive);
@@ -57,10 +60,15 @@ underDur = dur < minDur;
 startPulse(underDur) = [];
 endPulse(underDur) = [];
 
+% Get the complex coefficient of the pulse
 numPulses = numel(startPulse);
 values = zeros(numPulses, 1);
 for k = 1:numPulses
-    values(k) = mean(x(startPulse(k):endPulse(k)));
+    % Discard the extremes of the pulse
+    durPulse = endPulse(k) - startPulse(k) + 1;
+    margin = floor(durPulse * marginRatio);
+    ind = (startPulse(k) + margin):(endPulse(k) - margin);
+    values(k) = mean(x(ind));
 end
 
 pulseLimits = [startPulse, endPulse];

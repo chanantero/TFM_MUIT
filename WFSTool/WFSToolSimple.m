@@ -203,12 +203,16 @@ classdef WFSToolSimple < handle
             obj.activeReceivers = value;
         end
                 
-        function compareRecordedAndSimul(obj)
+        function compareRecordedAndSimul(obj, s)
             
-            % Get variables
-            sTheo = obj.getTheoreticalScenarioVariables();
-            sExp = obj.getExperimentalResultVariables();
-            sSimul = obj.getSimulationResultVariables();
+            if nargin < 2
+                s = obj.exportInformation();
+            end
+            
+            % Get variables           
+            sTheo = s.TheoreticalScenario;
+            sExp = s.Experiment;
+            sSimul = s.Simulation;
             
             frequencies = sTheo.frequencies;
             sourcesCoef = sTheo.sourcesCoeff;
@@ -354,7 +358,7 @@ classdef WFSToolSimple < handle
                 save([PathName, FileName], 's');            
             end
         end
-                   
+        
         function s = exportInformation(obj)
             
             % Base variables  
@@ -499,13 +503,24 @@ classdef WFSToolSimple < handle
             numFreq = numel(sTheo.frequencies);
             frequencies = sTheo.frequencies;
             
-            calCoeff = 0.05*ones(numChannels, numFreq);
+            calCoeff = 0.1*ones(numChannels, numFreq);
             
             signalFunc = @(startSample, endSample) coefficients2signal( calCoeff, frequencies, SampleRate, startSample, endSample);
             obj.reproduceSignalFunction(signalFunc, SampleRate);
             
             [~, ~, obj.pulseCoeffMat, pulseLim, obj.singularPulseInfo] = coefficients2signal( calCoeff, frequencies, SampleRate );
             obj.pulseLimits = pulseLim/SampleRate;
+            
+            obj.fromBase2TheoreticalScenario();
+            % The theoretical scenario is almost complete. The only thing
+            % left is change the coefficients, which shouldn't be
+            % calculated from the scenario but from the coefficient matrix
+            % used for the calibration
+            obj.simulObj.sourceCoefficients = calCoeff;
+            
+            % Simulate
+            obj.simulate();
+            
         end
     end
     

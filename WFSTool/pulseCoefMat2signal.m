@@ -52,7 +52,7 @@ function signal = genSignal(coefMat, freq, pulseLimits, offsetSample, sampleRate
 % contains the complex coefficient of the i-th pulse for the j-th channel
 % and the f-th frequency
 % freq. numFreqs-element vector.
-% pulseLimits. (numPulses+1)-element vector.
+% pulseLimits. (numPulses x 2) matrix.
 % offsetSample. Scalar. The offset used to calculate the time vector.
 % sampleRate. Scalar. Sample rate of the signal.
 
@@ -72,7 +72,7 @@ for p = 1:numPulses
     endPulse = pulseLimits(p, 2);
     numPulseSamples = endPulse - startPulse;
     
-    windMask = windowing(numPulseSamples, 0.5);
+    windMask = windowing2(numPulseSamples, sampleRate, 0.1);
     
     ind = startPulse:endPulse-1;
     t = (ind + offsetSample)/sampleRate;
@@ -90,7 +90,7 @@ end
 
 end
 
-function mask = windowing(numSamples, constantRatio)
+function mask = windowing1(numSamples, constantRatio)
 hanningRatio = 1 - constantRatio;
 numHann = floor(hanningRatio*numSamples);
 numPre = ceil(numHann/2);
@@ -107,3 +107,22 @@ mask(postInd) = hannWind(numPre+1:end);
 mask(constantInd) = 1;
 
 end
+
+function mask = windowing2(numSamples, sampleRate, risingDuration)
+risingSamples = floor(sampleRate*risingDuration);
+
+numPre = min(risingSamples, floor(numSamples/2));
+numPost = numPre;
+hannWind = hann(numPre*2);
+
+preInd = 1:numPre;
+postInd = (numSamples-numPost+1):numSamples;
+constantInd = numPre+1:numSamples-numPost;
+
+mask = zeros(numSamples, 1);
+mask(preInd) = hannWind(1:numPre);
+mask(postInd) = hannWind(numPre+1:end);
+mask(constantInd) = 1;
+
+end
+

@@ -19,8 +19,7 @@ for f_ind = 1:numFrequencies
     xGroupPulseLimits{f_ind} = xPulseLimits(activePulses1freq, :);
 end
 
-tol = 0.1; % Tolerance
-[corrInd, y_coef, ~] = associateSinPulses(freq, xGroupPulseLimits, y, ySampleRate, tol);
+[corrInd, y_coef, ~] = associateSinPulses(freq, xGroupPulseLimits, y, ySampleRate);
 
 % Map the corresponding indices into the original x signal pulse structure.
 % Remember that the pulse limits in y can be very different from the ones
