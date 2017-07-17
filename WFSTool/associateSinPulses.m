@@ -16,10 +16,13 @@ for f_ind = 1:numFrequencies
     f = freqs(f_ind);
     iq = real2IQ(y, ySampleRate, f, 500);
     
-    [coeff, correspInd, y_pulseSampLimits] = detectPulseSignal(xPulseLimits{f_ind}, iq, ySampleRate, 0.1);
-    y_coef(f_ind, :) = coeff;
-    corrInd(f_ind, :) = correspInd;
-    y_pulseSampleLimits(f_ind, :) = y_pulseSampLimits;
+    for cy = 1:numChannelsY
+        [y_coef{f_ind, cy}, corrInd{f_ind, cy}, y_pulseSampleLimits{f_ind, cy}] = detectPulseSignal(xPulseLimits{f_ind}, iq(:, cy), ySampleRate, 0.1);
+    end
+     
+%     for cy = 1:numChannelsY
+%         [ y_coef{f_ind, cy}, y_pulseSampleLimits{f_ind, cy} ] = pulseSignalParameters( iq(:, cy) );
+%     end
 end
 
 end

@@ -218,9 +218,9 @@ classdef WFSToolSimple < handle
             sourcesCoef = sTheo.sourcesCoeff;
             simulCoef = sSimul.simulatedField;
             
-            % Visual examination of reproduced and recorded signals
-            analyzer = WFSanalyzer();
-            analyzer.representRecordedSignal(sExp.recordedSignal, sExp.recordedSignal_SampleRate);
+%             % Visual examination of reproduced and recorded signals
+%             analyzer = WFSanalyzer();
+%             analyzer.representRecordedSignal(sExp.recordedSignal, sExp.recordedSignal_SampleRate);
             
             sPInfo = sExp.singularPulseInfo;
             pulseInd = sPInfo(:, 1);

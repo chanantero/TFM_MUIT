@@ -1,65 +1,102 @@
 function [coeff, correspondingIndexes, yPulseLimits] = detectPulseSignal(xPulseLimits, y, ySampleRate, marginRatio)
-% xPulseLimits. (numPulses x 2) matrix
+% xPulseLimits. (numPulses x 2) matrix. The first sample has the index 0.
 % y. (numSamples x numChannels) matrix
 % ySampleRate. Scalar. Natural number
 % marginRatio. Scalar between 0 and 1
 
 numPulses = size(xPulseLimits, 1);
-numSamples = size(y, 1);
-numChannels = size(y, 2);
 
 % Correlate a mask created with xPulseLimits with the received signal y
 
 % Generate the basic mask
 xPulseLimitsSamp = floor(xPulseLimits * ySampleRate);
-beggining = xPulseLimitsSamp(1, 1);
+% beggining = xPulseLimitsSamp(1, 1);
 ending = xPulseLimitsSamp(end, 2);
-numSampMask = ending - beggining;
+numSampMask = ending;
 mask = zeros(numSampMask, 1);
 for p = 1:numPulses
     mask(xPulseLimitsSamp(p, 1)+1:xPulseLimitsSamp(p, 2)) = 1;
 end
 
 % Correlate it
-N = numSamples + numSampMask - 1;
-shiftPos = numSamples - 1:-1:-(numSampMask - 1);
-corr = zeros(N, numChannels); % Correlation
-for k = 1:N
-    % Shift mask
-    shiftedMask = shiftAndCrop(mask, shiftPos(k), numSamples);
-    
-    % Apply mask
-    corr(k, :) = sum(y.*repmat(shiftedMask, 1, numChannels), 1);
-    
-    fprintf('%d/%d\n', k, N)
-end
+meanDur = mean(diff(xPulseLimits, 1, 2));
+step = floor(meanDur * 0.1 * ySampleRate);
+% lowLimit = -(numSampMask - 1);
+% highLimit = numSamples-1;
+% Estimate a range of shift positions of the mask. The range will be guided
+% by a concrete number of pulses. We assume that the shift of the received
+% signal y is less than a concrete number of pulses.
+NP = 10;
+lowLimit = -xPulseLimitsSamp(NP, 2);
+highLimit = xPulseLimitsSamp(NP, 2);
 
-% Find the indexes of maximum correlation
-[~, maxInd] = max(corr, [], 1);
+% Apply mask only to a fragment of the signal
+y_ = y(1:highLimit*2, :);
+numSamples_ = size(y_, 1);
 
-% Find the pulse signal coefficients
-coeff = cell(numChannels, 1);
-correspondingIndexes = cell(numChannels, 1);
-yPulseLimits = cell(numChannels, 1);
-for cy = 1:numChannels
-    % The new pulse limits are the original ones shifted
-    yPulseLimitsSamp = xPulseLimitsSamp + shiftPos(maxInd(cy));
-    valid = find(all(yPulseLimitsSamp >= 0, 2));        
-    numDetPulses = numel(valid);
-    
-    yPulseLimits{cy} = yPulseLimitsSamp(valid, :);
-    correspondingIndexes{cy} = valid;
-    coeff{cy} = zeros(numDetPulses, 1);
-    for k = 1:numDetPulses
-        % Discard the extremes of the pulse
-        startPulse = yPulseLimitsSamp(valid(k), 1);
-        endPulse = yPulseLimitsSamp(valid(k), 2);
-        durPulse = endPulse - startPulse;
-        margin = floor(durPulse * marginRatio);
-        ind = (startPulse + margin):(endPulse - 1 - margin);
-        coeff{cy}(k) = mean(x(ind));
+firstIteration = true;
+while step > 1
+    shiftPos = highLimit:-step:lowLimit;
+    N = numel(shiftPos);
+    corr = zeros(N, 1); % Correlation
+    for k = 1:N
+        % Shift mask
+        shiftedMask = shiftAndCrop(mask, shiftPos(k), numSamples_);
+        
+        % Apply mask
+        corr(k, :) = sum(abs(y_).*shiftedMask);
+        
+        fprintf('%d/%d\n', k, N)
     end
     
+    % Normalize the correlation values
+    corr = corr/max(corr);
+      
+    if firstIteration
+    % Find the peaks in the correlation
+    delta = (max(corr) - min(corr)) * 0.1;
+    [maxtab, ~] = peakdet(corr, delta);
+        
+    % Find the first peak whose value is not much different with respect
+    % the next peak.
+    ind = find(abs(diff(maxtab(:, 2))) < 0.015, 1, 'first');
+    ind = maxtab(ind, 1);
+    
+    firstIteration = false;
+    else
+        % Just find the maximum value
+        [~, ind] = max(corr);        
+    end
+    
+    % Set the new step
+    if ind == lowLimit || ind == highLimit
+        break;
+    end
+    
+    lowLimit = shiftPos(ind + 1);
+    highLimit = shiftPos(ind - 1);
+    step = floor((highLimit - lowLimit)*0.1);
+end
+
+shiftSamp = shiftPos(ind);
+
+% Find the pulse signal coefficients
+% The new pulse limits are the original ones shifted
+yPulseLimitsSamp = xPulseLimitsSamp + shiftSamp;
+valid = find(all(yPulseLimitsSamp >= 0, 2));
+numDetPulses = numel(valid);
+
+yPulseLimits = yPulseLimitsSamp(valid, :);
+correspondingIndexes = valid;
+coeff = zeros(numDetPulses, 1);
+for k = 1:numDetPulses
+    % Discard the extremes of the pulse
+    startPulse = yPulseLimitsSamp(valid(k), 1);
+    endPulse = yPulseLimitsSamp(valid(k), 2);
+    durPulse = endPulse - startPulse;
+    margin = floor(durPulse * marginRatio);
+    ind = (startPulse + margin):(endPulse - 1 - margin);
+    coeff(k) = mean(y(ind));
 end
 
 end
