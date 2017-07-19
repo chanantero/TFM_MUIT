@@ -20,14 +20,19 @@ classdef WFSToolSimple < handle
         phase
         frequency
         
+        % Theoretical Scenario Variables
+        
         % Simulation results
         simulField
         
         % Experimental results
         pulseCoeffMat
-        singularPulseInfo
         pulseLimits
-                                        
+        
+        % Analysis varaibles
+        expAcPath
+        simulAcPath
+        
         % Infrastructure variables
         fig
         player
@@ -203,6 +208,36 @@ classdef WFSToolSimple < handle
             obj.activeReceivers = value;
         end
                 
+        function calculateExperimentalAcousticPaths(obj)
+            % Get variables           
+            sTheo = s.TheoreticalScenario;
+            sExp = s.Experiment;
+            
+            frequencies = sTheo.frequencies;
+            
+%             % Visual examination of reproduced and recorded signals
+%             analyzer = WFSanalyzer();
+%             analyzer.representRecordedSignal(sExp.recordedSignal, sExp.recordedSignal_SampleRate);
+            
+            % Calculate the acoustic paths
+            obj.expAcPath = getAcousticPath( frequencies, sExp.pulseCoefMat, sExp.pulseLimits, sExp.recordedSignal, sExp.recordedSignal_SampleRate);
+            
+        end
+        
+        function calculateSimulatedAcousticPaths(obj)
+            
+            % Get variables           
+            sTheo = s.TheoreticalScenario;
+            sSimul = s.Simulation;
+            
+            sourcesCoef = sTheo.sourcesCoeff;
+            simulCoef = sSimul.simulatedField;
+        
+            % Get the simulated acoustic paths
+            numRec = size(sTheo.receiverPos, 1);
+            simulAcPath = simulCoef./repmat(permute(sourcesCoef, [1, 3, 2]), [1 numRec 1]);
+        end
+        
         function compareRecordedAndSimul(obj, s)
             
             if nargin < 2
@@ -314,26 +349,9 @@ classdef WFSToolSimple < handle
 
             obj.reproduceSignalFunction(signalFunc, SampleRate);
                            
-            [~, ~, obj.pulseCoeffMat, pulseLim, obj.singularPulseInfo] = coefficients2signal( sourcesCoef, frequencies, SampleRate );
+            [~, ~, obj.pulseCoeffMat, pulseLim] = coefficients2signal( sourcesCoef, frequencies, SampleRate );
             obj.pulseLimits = pulseLim/SampleRate;
-        end
-        
-        function WFS2realRatio(obj)
-            
-            realInd = obj.channelNumber(1);
-            WFSInd = 1:obj.simulObj.numSources;
-            WFSInd(realInd) = [];
-            
-            U = mean(obj.simulObj.calculate(obj.simulObj.measurePoints(20000,:)), 2);
-            UWFS = sum(U(WFSInd));
-            Ureal = U(realInd);
-            
-            correction = -Ureal/UWFS;
-            
-            obj.simulObj.sourceCoefficients(WFSInd) = obj.simulObj.sourceCoefficients(WFSInd)*correction;
-            obj.simulObj.simulate();
-            
-        end
+        end        
         
         function simulate(obj)
             obj.simulObj.measurePoints = obj.scenarioObj.receiversPosition;
@@ -341,95 +359,6 @@ classdef WFSToolSimple < handle
             
             obj.simulField = obj.simulObj.calculate(obj.simulObj.measurePoints);
             
-        end
-        
-        function saveInformation(obj)
-            defaultName = datestr(now, 'yyyy-mm-dd_HH-MM-SS');
-            [FileName,PathName, ~] = uiputfile('*.mat', 'Save Information', ['../Data/', defaultName]);
-            
-            if FileName ~= 0
-                
-                [~, ~, ext] = fileparts(FileName);
-                if isempty(ext)
-                    FileName = [FileName, '.mat'];
-                end
-                
-                s = obj.exportInformation();
-                save([PathName, FileName], 's');            
-            end
-        end
-        
-        function s = exportInformation(obj)
-            
-            % Base variables  
-            sBase = obj.getBaseVariables();
-            
-            % Theoretical Scenario Variables
-            sScen = obj.getTheoreticalScenarioVariables();
-
-            % Simulation Results Variables
-            sSimul = obj.getSimulationResultVariables();
-            
-            % Experimental Results Variables
-            sExp = obj.getExperimentalResultVariables();
-            
-            s.Base = sBase;
-            s.TheoreticalScenario = sScen;
-            s.Simulation = sSimul;
-            s.Experiment = sExp;
-        end
-               
-        function s = getBaseVariables(obj)
-            numLoudspeakers = obj.scenarioObj.numLoudspeakers;
-            numNoiseSources = obj.scenarioObj.numSources;
-            
-            % Base variables  
-            s.loudspeakersPos = obj.scenarioObj.loudspeakersPosition;
-            s.loudspeakersOrient = obj.scenarioObj.loudspeakersOrientation;
-            s.loudspeakersRadPat = repmat({@(x) simulator.monopoleRadPat(x)}, [numLoudspeakers, 1]); % Assumption
-            s.noiseSourcesPos = obj.scenarioObj.sourcesPosition;
-            s.noiseSourcesOrient = simulator.vec2rotVec(repmat([0 0 1], [numNoiseSources, 1]));
-            s.noiseSourcesRadPat = repmat({@(x) simulator.monopoleRadPat(x)}, [numLoudspeakers, 1]); % Assumption
-            s.noiseSourcesCoeff = obj.amplitude.*exp(1i*obj.phase);
-            s.virtual = obj.virtual; % Virtual source indices
-            s.real = obj.real; % Real source indices
-            s.channelReal = obj.channelNumber; % Channel for real sources
-            s.freq = obj.frequency;
-            s.receiverPos = obj.scenarioObj.receiversPosition;
-            s.receiversOrient = simulator.vec2rotVec(repmat([0 0 1], [obj.numReceivers, 1]));
-            s.receiversRadpat = repmat({@(x) simulator.monopoleRadPat(x)}, [obj.numReceivers, 1]); % Assumption
-            s.sourcesCorrectionCoeff = obj.sourceCorr;
-            s.receiversCorrectionCoeff = obj.receiverCorr;   
-            s.realVolume = obj.realVolume; 
-            s.virutalVolume = obj.virtualVolume;
-        end
-        
-        function s = getTheoreticalScenarioVariables(obj)
-            s.sourcesPos = obj.simulObj.sourcePositions;
-            s.sourceOrient = obj.simulObj.sourceOrientations;
-            s.sourceRadPat = obj.simulObj.radPatFuns;
-            s.sourcesCoeff = obj.simulObj.sourceCoefficients;
-            s.frequencies = obj.frequency;
-            s.receiverPos = obj.scenarioObj.receiversPosition;
-            s.receiversOrient = simulator.vec2rotVec(repmat([0 0 1], [obj.numReceivers, 1]));
-            s.receiversRadpat = repmat({@(x) simulator.monopoleRadPat(x)}, [obj.numReceivers, 1]); % Assumption
-            s.sourcesCorrectionCoeff = obj.sourceCorr;
-            s.receiversCorrectionCoeff = obj.receiverCorr;   
-        end
-        
-        function s = getExperimentalResultVariables(obj)
-            recorded = obj.player.recorded{1}(:, obj.activeReceiverChannels); % Only one recorder device
-            numSamples = size(recorded, 1);
-            
-            s.recordedSignal = recorded.*repmat(obj.receiverCorr.', [numSamples 1]);
-            s.recordedSignal_SampleRate = obj.player.Fs_recorder(1);
-            s.pulseLimits = obj.pulseLimits;
-            s.pulseCoefMat = obj.pulseCoeffMat;
-            s.singularPulseInfo = obj.singularPulseInfo;
-        end
-        
-        function s = getSimulationResultVariables(obj)
-            s.simulatedField = obj.simulField;
         end
         
         function changeScenario(obj, numLoudspeakers)
@@ -521,6 +450,141 @@ classdef WFSToolSimple < handle
             % Simulate
             obj.simulate();
             
+        end
+    end
+    
+    % Export and import methods
+    methods
+        function importInformation(obj, s)
+        end
+        
+        function saveInformation(obj)
+            defaultName = datestr(now, 'yyyy-mm-dd_HH-MM-SS');
+            [FileName,PathName, ~] = uiputfile('*.mat', 'Save Information', ['../Data/', defaultName]);
+            
+            if FileName ~= 0
+                
+                [~, ~, ext] = fileparts(FileName);
+                if isempty(ext)
+                    FileName = [FileName, '.mat'];
+                end
+                
+                s = obj.exportInformation();
+                save([PathName, FileName], 's');            
+            end
+        end
+               
+        function s = exportInformation(obj)
+            
+            % Base variables  
+            sBase = obj.getBaseVariables();
+            
+            % Theoretical Scenario Variables
+            sScen = obj.getTheoreticalScenarioVariables();
+
+            % Simulation Results Variables
+            sSimul = obj.getSimulationResultVariables();
+            
+            % Experimental Results Variables
+            sExp = obj.getExperimentalResultVariables();
+            
+            s.Base = sBase;
+            s.TheoreticalScenario = sScen;
+            s.Simulation = sSimul;
+            s.Experiment = sExp;
+        end
+               
+        function s = getBaseVariables(obj)
+            numLoudspeakers = obj.scenarioObj.numLoudspeakers;
+            numNoiseSources = obj.scenarioObj.numSources;
+            
+            % Base variables  
+            s.loudspeakersPos = obj.scenarioObj.loudspeakersPosition;
+            s.loudspeakersOrient = obj.scenarioObj.loudspeakersOrientation;
+            s.loudspeakersRadPat = repmat({@(x) simulator.monopoleRadPat(x)}, [numLoudspeakers, 1]); % Assumption
+            s.noiseSourcesPos = obj.scenarioObj.sourcesPosition;
+            s.noiseSourcesOrient = simulator.vec2rotVec(repmat([0 0 1], [numNoiseSources, 1]));
+            s.noiseSourcesRadPat = repmat({@(x) simulator.monopoleRadPat(x)}, [numLoudspeakers, 1]); % Assumption
+            s.noiseSourcesCoeff = obj.amplitude.*exp(1i*obj.phase);
+            s.virtual = obj.virtual; % Virtual source indices
+            s.real = obj.real; % Real source indices
+            s.channelReal = obj.channelNumber; % Channel for real sources
+            s.freq = obj.frequency;
+            s.receiverPos = obj.scenarioObj.receiversPosition;
+            s.receiversOrient = simulator.vec2rotVec(repmat([0 0 1], [obj.numReceivers, 1]));
+            s.receiversRadpat = repmat({@(x) simulator.monopoleRadPat(x)}, [obj.numReceivers, 1]); % Assumption
+            s.sourcesCorrectionCoeff = obj.sourceCorr;
+            s.receiversCorrectionCoeff = obj.receiverCorr;   
+            s.realVolume = obj.realVolume; 
+            s.virutalVolume = obj.virtualVolume;
+        end
+        
+        function s = getTheoreticalScenarioVariables(obj)
+            s.sourcesPos = obj.simulObj.sourcePositions;
+            s.sourceOrient = obj.simulObj.sourceOrientations;
+            s.sourceRadPat = obj.simulObj.radPatFuns;
+            s.sourcesCoeff = obj.simulObj.sourceCoefficients;
+            s.frequencies = obj.frequency;
+            s.receiverPos = obj.scenarioObj.receiversPosition;
+            s.receiversOrient = simulator.vec2rotVec(repmat([0 0 1], [obj.numReceivers, 1]));
+            s.receiversRadpat = repmat({@(x) simulator.monopoleRadPat(x)}, [obj.numReceivers, 1]); % Assumption
+            s.sourcesCorrectionCoeff = obj.sourceCorr;
+            s.receiversCorrectionCoeff = obj.receiverCorr;   
+        end
+        
+        function s = getExperimentalResultVariables(obj)
+            recorded = obj.player.recorded{1}; % Only one recorder device
+            numSamples = size(recorded, 1);
+            
+            s.recordedSignal = recorded.*repmat(obj.receiverCorr.', [numSamples 1]);
+            s.recordedSignal_SampleRate = obj.player.Fs_recorder(1);
+            s.pulseLimits = obj.pulseLimits;
+            s.pulseCoefMat = obj.pulseCoeffMat;
+            s.singularPulseInfo = obj.singularPulseInfo;
+        end
+        
+        function s = getSimulationResultVariables(obj)
+            s.simulatedField = obj.simulField;
+        end
+        
+    end
+    
+    % WFS actions
+    methods
+        function WFS2realRatio(obj)
+            
+            realInd = obj.channelNumber(1);
+            WFSInd = 1:obj.simulObj.numSources;
+            WFSInd(realInd) = [];
+            
+            U = mean(obj.simulObj.calculate(obj.simulObj.measurePoints(20000,:)), 2);
+            UWFS = sum(U(WFSInd));
+            Ureal = U(realInd);
+            
+            correction = -Ureal/UWFS;
+            
+            obj.simulObj.sourceCoefficients(WFSInd) = obj.simulObj.sourceCoefficients(WFSInd)*correction;
+            obj.simulObj.simulate();
+            
+        end
+             
+        function nullField(obj)
+            s = obj.exportInformation();
+            sTheo = s.TheoreticalScenario;
+            
+            sourceCoeff = sTheo.sourcesCoeff;
+            
+            indepIndices;
+            depIndices;
+            
+            sourceCoeffDep = zeros(numel(depIndices), numFreq);
+            for f = 1:numFreq
+                B = acPath(indepIndices, :, f).'*sourceCoeff(indepIndices, f);
+                A = acPath(depIndices, :, f).';
+                
+                sourceCoeffDep(:, f) = A\B;
+            end
+                      
         end
     end
     

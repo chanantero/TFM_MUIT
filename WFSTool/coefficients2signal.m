@@ -1,4 +1,4 @@
-function [x, outOfRange, pulseCoefMat, pulseLimits, sPMat ] = coefficients2signal( coefficients, frequency, SampleRate, startSample, endSample, onlyPulseInfoFlag )
+function [x, outOfRange, pulseCoefMat, pulseLimits ] = coefficients2signal( coefficients, frequency, SampleRate, startSample, endSample, onlyPulseInfoFlag )
 % coefficients. (numChannels x numFreq)
 % frequency. numFreq-element vector
 if nargin < 6
@@ -44,14 +44,13 @@ else
     x = [];
 end
 
-%% Pulse information
-
-% Create the pulse coefficient matrix
-[Ch, Fr, ~] = ndgrid(1:numChann, 1:numFreq, 1:numRep);
-numPrePulses = numel(Ch);
-sPind = (1:numPrePulses)'; % Singular pulse indices
-sPChInd = Ch(:); % Singular pulse channel indices
-sPFreqInd = Fr(:); % Singular pulse frequency indices
-sPMat = [sPind, sPChInd, sPFreqInd]; % Singular pulse information matrix
+%% Singular Pulse information
+% % sPMat should be the output in case we wanted to use that information.
+% [Ch, Fr, ~] = ndgrid(1:numChann, 1:numFreq, 1:numRep);
+% numPrePulses = numel(Ch);
+% sPind = (1:numPrePulses)'; % Singular pulse indices
+% sPChInd = Ch(:); % Singular pulse channel indices
+% sPFreqInd = Fr(:); % Singular pulse frequency indices
+% sPMat = [sPind, sPChInd, sPFreqInd]; % Singular pulse information matrix
 
 end
