@@ -132,6 +132,16 @@ classdef simulator < handle
         end
         
         function U = calculate(obj, measurePointPositions)
+
+            acPath = obj.calculateAcousticPaths(measurePointPositions);
+            
+            numMeasPoints = size(measurePointPositions, 1);
+            U = acPath .* repmat(permute(obj.sourceCoefficients, [1, 3, 2]), [1, numMeasPoints, 1]);
+%             U = permute(sum(U, 2), [1 3 2]); % (numMeasPoints x numFrequencies)
+                       
+        end
+        
+        function acPath = calculateAcousticPaths(obj, measurePointPositions)
             % Calculate the difference vectors between sources and measure
             % points
             % First dimension along measurePoints, second dimension along
@@ -140,30 +150,30 @@ classdef simulator < handle
             numFreq = obj.numFrequencies;
             numMeasPoints = size(measurePointPositions, 1);
 
-            U = zeros(numSour, numMeasPoints, obj.numFrequencies);
+            acPath = zeros(numSour, numMeasPoints, numFreq);
             for s = 1:numSour
-                sourceCoef = obj.sourceCoefficients(s, :);
                 sourcePos = obj.sourcePositions(s, :);
-                sourceOrient = obj.sourceOrientations(s, :);
                 radPatFun = obj.radPatFuns{s};
                 
                 diffVec = measurePointPositions - repmat(sourcePos, numMeasPoints, 1);
                 dist = sqrt(sum(diffVec.^2, 2));
                 
-                rotVec = sourceOrient;
-                rotVec(1) = -rotVec(1);
-                quat = simulator.rotVec2quat(rotVec);
+                % % quatrotate no va incluído en el matlab del laboratorio. relDir = quatrotate(quat, diffVec);
+                % sourceOrient = obj.sourceOrientations(s, :);
+                % rotVec = sourceOrient;
+                % rotVec(1) = -rotVec(1);      
+                % quat = simulator.rotVec2quat(rotVec);
+                % relDir = quatrotate(quat, diffVec);
+                % Si quatrotate no está disponible, usar lo siguiente
                 relDir = diffVec; % quatrotate no va incluído en el matlab del laboratorio. relDir = quatrotate(quat, diffVec);
                 radPatCoef = radPatFun(relDir);
                 
                 aux = zeros(1, numMeasPoints, numFreq);
                 for f = 1:obj.numFrequencies
-                    aux(1, :, f) = (sourceCoef(f)*radPatCoef.*exp(-1i*obj.k(f)*dist)./dist).';
+                    aux(1, :, f) = (radPatCoef.*exp(-1i*obj.k(f)*dist)./dist).';
                 end
-                U(s, :, :) = aux;
+                acPath(s, :, :) = aux;
             end
-            
-%             U = permute(sum(U, 2), [1 3 2]); % (numMeasPoints x numFrequencies)
                        
         end
         

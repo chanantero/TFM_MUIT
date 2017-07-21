@@ -31,7 +31,7 @@ lowLimit = -xPulseLimitsSamp(NP, 2);
 highLimit = xPulseLimitsSamp(NP, 2);
 
 % Apply mask only to a fragment of the signal
-y_ = y(1:highLimit*2, :);
+y_ = y(1:min(highLimit*2, end), :);
 numSamples_ = size(y_, 1);
 
 firstIteration = true;
@@ -51,21 +51,21 @@ while step > 1
     
     % Normalize the correlation values
     corr = corr/max(corr);
-      
-    if firstIteration
-    % Find the peaks in the correlation
-    delta = (max(corr) - min(corr)) * 0.1;
-    [maxtab, ~] = peakdet(corr, delta);
-        
-    % Find the first peak whose value is not much different with respect
-    % the next peak.
-    ind = find(abs(diff(maxtab(:, 2))) < 0.015, 1, 'first');
-    ind = maxtab(ind, 1);
     
-    firstIteration = false;
+    if firstIteration
+        % Find the peaks in the correlation
+        delta = (max(corr) - min(corr)) * 0.1;
+        [maxtab, ~] = peakdet(corr, delta);
+        
+        % The maximum peak has the value 1. Find all the peaks that are above
+        % 0.985 and select the first one
+        cand = find(maxtab(:, 2) >= 0.985, 1, 'first');
+        ind = maxtab(cand, 1);
+        
+        firstIteration = false;
     else
         % Just find the maximum value
-        [~, ind] = max(corr);        
+        [~, ind] = max(corr);
     end
     
     % Set the new step
