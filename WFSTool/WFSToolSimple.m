@@ -28,6 +28,7 @@ classdef WFSToolSimple < handle
         % Experimental results
         pulseCoeffMat
         pulseLimits
+        reprodFrequencies
         
         % Analysis varaibles
         expAcPath
@@ -61,6 +62,7 @@ classdef WFSToolSimple < handle
     % Getters and setters
     methods
         function numSources = get.numSources(obj)
+            % Number of noise sources
             numSources = numel(obj.signalsSpec);
         end   
         
@@ -217,7 +219,7 @@ classdef WFSToolSimple < handle
         function setActiveReceivers(obj, value)
             obj.activeReceivers = value;
         end
-                
+        
         function calculateExperimentalAcousticPaths(obj)
             
             % Get variables           
@@ -386,15 +388,15 @@ classdef WFSToolSimple < handle
         function reproduceAndRecordForAcousticPaths(obj)
             SampleRate = 44100;
             sTheo = obj.getTheoreticalScenarioVariables();
-            numChannels = numel(sTheo.sourcesCoeff);
-            numFreq = numel(sTheo.frequencies);
+            numChannels = size(sTheo.sourcesCoeff, 1);
             frequencies = sTheo.frequencies;
+            numFreq = numel(frequencies);
             
             % Set coefficients for calibration
             calCoeff = 0.1*ones(numChannels, numFreq);
             
             % Reproduce
-            [ pulseCoefMat, pulseLim ] = coefficients2pulseSignalParameters( calCoeff, frequencies, SampleRate, 'prelude' );
+            [ pulseCoefMat, pulseLim ] = coefficients2pulseSignalParameters( calCoeff, frequencies, SampleRate, 'preludeAndMain' );
             signalFunc = @(startSample, endSample) pulseCoefMat2signal(frequencies, pulseCoefMat, pulseLim, SampleRate, startSample, endSample, 'sample');          
             obj.reproduceSignalFunction(signalFunc, SampleRate);
             
@@ -419,6 +421,49 @@ classdef WFSToolSimple < handle
             [U, S, V] = svd(rat);
             obj.sourceCorr = U(:, 1);
             obj.receiverCorr = V(:, 1)*S(1);
+            
+        end
+        
+        function position = calculatePosition(obj)
+            
+            % Create pulse coefficient matrix that uses different
+            % frequencies for each loudspeaker in order to calculate the
+            % distance
+            SampleRate = 44100;
+            freqVec = [600, 610]';
+            numFreq = numel(freqVec);
+            numChannels = obj.numLoudspeakers;
+            coefMat = 0.1*ones(numChannels, numFreq);         
+            [ pulseCoefMat, pulseLim ] = coefficients2pulseSignalParameters( coefMat, freqVec, SampleRate, 'prelude' );
+            
+            % Reproduce and Record
+            signalFunc = @(startSample, endSample) pulseCoefMat2signal(frequencies, pulseCoefMat, pulseLim, SampleRate, startSample, endSample, 'sample');          
+            obj.reproduceSignalFunction(signalFunc, SampleRate);
+            
+            % Save information about the reproduced signal
+            obj.pulseCoeffMat = pulseCoefMat;
+            obj.pulseLimits = pulseLim/SampleRate;
+            obj.reprodFrequencies = freqVec;
+            
+            % Calculate the coefficients of the received signal
+            s = obj.exportInformation();
+            sExp = s.Experiment;
+            acPath = getAcousticPath( freqVec, sExp.pulseCoefMat, sExp.pulseLim, sExp.recordedSignal, sExp.recordedSignal_SampleRate);
+            
+            % Calculate distances
+            phases = angle(acPath);
+            deltaPhase = diff(phases, 1, 3);
+            deltaFreq = diff(freqVec);
+            deltaFreqMat = repmat(permute(deltaFreq, [2, 3, 1]), [numChannels, obj.numReceivers, 1]);
+            dist = deltaPhase./deltaFreqMat*obj.c/(2*pi);
+            dist = mean(dist, 3);
+            
+            % Calculate position
+            refPoints = s.getTheoreticalScenarioVariables.sourcesPos;
+            position = zeros(obj.numReceivers, 3);
+            for rec = 1:obj.numReceivers
+                position(rec, :) = multilateration(refPoints, dist);
+            end
             
         end
     end
@@ -509,6 +554,7 @@ classdef WFSToolSimple < handle
             s.recordedSignal_SampleRate = obj.player.Fs_recorder(1);
             s.pulseLimits = obj.pulseLimits;
             s.pulseCoefMat = obj.pulseCoeffMat;
+            s.frequencies = obj.reprodFrequencies;
         end
         
         function s = getSimulationResultVariables(obj)
@@ -880,9 +926,9 @@ classdef WFSToolSimple < handle
                     % Start track again.
                     obj.player.executeOrder('stop');
                     if obj.simplePerformance
-                        obj.fromBase2TheoreticalScenario();
+%                         obj.fromBase2TheoreticalScenario();
                         obj.reproduceAndRecord();
-                        obj.simulate();
+%                         obj.simulate();
                     else
                         obj.player.executeOrder('play');
                     end

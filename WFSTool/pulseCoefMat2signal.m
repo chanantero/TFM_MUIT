@@ -16,7 +16,6 @@ switch type
     case 'sample'
         startSample = startMarker - 1;
         endSample = endMarker - 1 + 1; % -1 because we work with 0 as the first index, not 1 as matlab does. +1 because we want the input of type "sample" to be the last sample to return
-        pulseSampleLimits = pulseLimits - 1;
 end
 
 endSample = min(endSample, startMarker + 1e6); % Limit size of output

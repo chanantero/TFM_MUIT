@@ -58,9 +58,9 @@ end
 
 % signal = pulseCoefMat2signal(frequency, coefMat, pulseLimits, SampleRate, startSample, endSample, false);
 
-% % Set the markers vector. Starting indices of pulses
-startPulseInd = (0:numPulses-1)'*samplesPerChannel + 1;
-endPulseInd = (0:numPulses-1)'*samplesPerChannel + soundSamples + 1;
+% % Set the markers vector
+startPulseInd = (0:numPulses-1)'*samplesPerChannel;
+endPulseInd = (0:numPulses-1)'*samplesPerChannel + soundSamples;
 
 pulseLimits = [startPulseInd, endPulseInd];
 end
