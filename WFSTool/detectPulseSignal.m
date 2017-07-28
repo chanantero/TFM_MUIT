@@ -46,7 +46,7 @@ while step > 1
         % Apply mask
         corr(k, :) = sum(abs(y_).*shiftedMask);
         
-        fprintf('%d/%d\n', k, N)
+%         fprintf('%d/%d\n', k, N)
     end
     
     % Normalize the correlation values

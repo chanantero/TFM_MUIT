@@ -577,9 +577,9 @@ classdef reproductorRecorder < matlab.System
                     % Timing control
                     if any(numUnderrun > 0)
                         % Interruption in the reproduction. Reset timer
+                        fprintf('Underrun. count = %d', obj.count);
                         t0 = t;
                         counter = 0;
-                        disp('Underrun')
                     end
                     
                     counter = counter + 1;

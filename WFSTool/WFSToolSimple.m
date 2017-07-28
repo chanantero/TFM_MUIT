@@ -396,13 +396,14 @@ classdef WFSToolSimple < handle
             calCoeff = 0.1*ones(numChannels, numFreq);
             
             % Reproduce
-            [ pulseCoefMat, pulseLim ] = coefficients2pulseSignalParameters( calCoeff, frequencies, SampleRate, 'preludeAndMain' );
+            [ pulseCoefMat, pulseLim ] = coefficients2pulseSignalParameters( calCoeff, frequencies, SampleRate, 'preludeAndMain', 0.25, 0.25, 2 );
             signalFunc = @(startSample, endSample) pulseCoefMat2signal(frequencies, pulseCoefMat, pulseLim, SampleRate, startSample, endSample, 'sample');          
             obj.reproduceSignalFunction(signalFunc, SampleRate);
             
             % Save information about the reproduced signal
             obj.pulseCoeffMat = pulseCoefMat;
             obj.pulseLimits = pulseLim/SampleRate;
+            obj.reprodFrequencies = frequencies;
         end
         
         function calibrate(obj)
@@ -434,10 +435,15 @@ classdef WFSToolSimple < handle
             numFreq = numel(freqVec);
             numChannels = obj.numLoudspeakers;
             coefMat = 0.1*ones(numChannels, numFreq);         
-            [ pulseCoefMat, pulseLim ] = coefficients2pulseSignalParameters( coefMat, freqVec, SampleRate, 'prelude' );
+            [ pulseCoefMat, pulseLim ] = coefficients2pulseSignalParameters( coefMat, freqVec, SampleRate, 'prelude', 0.25, 0.25, 1 );
+            M = zeros(numFreq, numChannels);
+            for f = 1:numFreq
+                M(f, :) = (1:numChannels) + (f-1)*numChannels;
+            end
+            pulseCoefMat = pulseCoefMat(M(:), :, :);
             
             % Reproduce and Record
-            signalFunc = @(startSample, endSample) pulseCoefMat2signal(frequencies, pulseCoefMat, pulseLim, SampleRate, startSample, endSample, 'sample');          
+            signalFunc = @(startSample, endSample) pulseCoefMat2signal(freqVec, pulseCoefMat, pulseLim, SampleRate, startSample, endSample, 'sample');          
             obj.reproduceSignalFunction(signalFunc, SampleRate);
             
             % Save information about the reproduced signal
@@ -448,7 +454,7 @@ classdef WFSToolSimple < handle
             % Calculate the coefficients of the received signal
             s = obj.exportInformation();
             sExp = s.Experiment;
-            acPath = getAcousticPath( freqVec, sExp.pulseCoefMat, sExp.pulseLim, sExp.recordedSignal, sExp.recordedSignal_SampleRate);
+            acPath = getAcousticPath( freqVec, sExp.pulseCoefMat, sExp.pulseLimits, sExp.recordedSignal, sExp.recordedSignal_SampleRate);
             
             % Calculate distances
             phases = angle(acPath);
@@ -459,7 +465,7 @@ classdef WFSToolSimple < handle
             dist = mean(dist, 3);
             
             % Calculate position
-            refPoints = s.getTheoreticalScenarioVariables.sourcesPos;
+            refPoints = s.sScen.sourcesPos;
             position = zeros(obj.numReceivers, 3);
             for rec = 1:obj.numReceivers
                 position(rec, :) = multilateration(refPoints, dist);
