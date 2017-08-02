@@ -35,6 +35,8 @@ classdef reproductorRecorder < matlab.System
         driver % Cell string array with as many elements as players
         device % Cell string array with as many elements as players
         Fs_player
+        defaultChannelMapping
+        channelMapping_player
         
         % Recorder settings
         driver_recorder % Cell string array with as many elements as recorders
@@ -322,6 +324,8 @@ classdef reproductorRecorder < matlab.System
                 obj.player{k}.device = obj.device{k};
                 obj.player{k}.frameSize = obj.frameSizeWriting(k);
                 obj.player{k}.Fs = obj.Fs_player(k);
+                obj.player{k}.DefaultChannels = obj.defaultChannelMapping(k);
+                obj.player{k}.channelMapping = obj.channelMapping_player{k};
             end
         end
       
@@ -414,6 +418,7 @@ classdef reproductorRecorder < matlab.System
                 obj.setProps('Fs_player', 44100, k);
                 obj.setProps('driver', 'DirectSound', k);
                 obj.setProps('device', 'Default', k);
+                obj.setProps('defaultChannelMapping', true);
             end
                         
             [readInd, playInd] = obj.getLinkSubInd();
@@ -891,6 +896,10 @@ classdef reproductorRecorder < matlab.System
                         case 'enableProc'
                             obj.(parameter) = value;
                         case 'channelMapping_recorder'
+                            obj.(parameter){index} = value;
+                        case 'defaultChannelMapping'
+                            obj.(parameter)(index) = value;
+                        case 'channelMapping_player'
                             obj.(parameter){index} = value;
                         otherwise
                             error('reproductor_plus:setProps', 'The first argument must be the name of an existing parameter')

@@ -362,6 +362,13 @@ classdef simulator < handle
             rotVec = [theta, rotAxis];
         end
         
+        function vec = rotVec2BroadsideVec(x)
+            % Axis Z is assumed to be the original broadside direction
+            z = [0 0 1];
+            
+            quat = simulator.rotVec2quat(x);
+            vec = quatrotate_custom(quat, z);
+        end
     end
     
 end

@@ -2,7 +2,7 @@ classdef audioPlayer < matlab.System
     % When the stored data is big enough, it sends it to be reproduced.
 
     properties(Nontunable, Logical)
-        DefaultNumChannels = true;
+        DefaultChannels = true;
     end
 
     % Public, tunable properties
@@ -13,15 +13,19 @@ classdef audioPlayer < matlab.System
     properties(Nontunable)
         Fs
         frameSize
-        numChannels
+        channelMapping
         device
-        driver
+        driver        
     end
     
     properties(DiscreteState)
         count
     end
 
+    properties(Dependent)
+        numChannels
+    end
+    
     % Pre-computed constants
     properties(SetAccess = private)
         storedSamples
@@ -68,11 +72,11 @@ classdef audioPlayer < matlab.System
         end
         
         function numChannels = get.numChannels(obj)
-            if obj.DefaultNumChannels
+            if obj.DefaultChannels
                 inf = info(obj.deviceWriter);
                 numChannels = inf.MaximumOutputChannels;
             else
-                numChannels = obj.numChannels;
+                numChannels = numel(obj.channelMapping);
             end
         end
         
@@ -121,7 +125,16 @@ classdef audioPlayer < matlab.System
             obj.deviceWriter.SampleRate = obj.Fs;
             obj.deviceWriter.Driver = obj.driver;
             obj.deviceWriter.Device = obj.device;
-%             obj.deviceWriter.SupportVariableSizeInput = true; % Por qué
+            
+            if obj.DefaultChannels
+                obj.deviceWriter.ChannelMappingSource = 'Auto';
+            else
+                obj.deviceWriter.ChannelMappingSource = 'Property';
+                obj.deviceWriter.ChannelMapping = obj.channelMapping;
+            end
+
+            
+            %             obj.deviceWriter.SupportVariableSizeInput = true; % Por qué
 %             no iba sin esto y ahora sí que va?
         end
     end
