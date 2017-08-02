@@ -1,13 +1,8 @@
-function [coeff, correspondingIndexes, yPulseLimits] = detectPulseSignal(xPulseLimits, y, ySampleRate, marginType, marginValue)
+function [coeff, correspondingIndexes, yPulseLimits] = detectPulseSignal_gui(ax, xPulseLimits, y, ySampleRate, marginRatio)
 % xPulseLimits. (numPulses x 2) matrix. The first sample has the index 0.
 % y. (numSamples x numChannels) matrix
 % ySampleRate. Scalar. Natural number
 % marginRatio. Scalar between 0 and 1
-
-if nargin == 3
-    marginType = 'marginRatio';
-    marginValue = 0.1;
-end    
 
 numPulses = size(xPulseLimits, 1);
 
@@ -89,24 +84,18 @@ shiftSamp = shiftPos(ind);
 % The new pulse limits are the original ones shifted
 yPulseLimitsSamp = xPulseLimitsSamp + shiftSamp;
 valid = find(all(yPulseLimitsSamp >= 0, 2));
-correspondingIndexes = valid;
 numDetPulses = numel(valid);
 
 yPulseLimits = yPulseLimitsSamp(valid, :);
-startPulses = yPulseLimits(:, 1);
-endPulses = yPulseLimits(:, 2);
-durPulses = endPulses - startPulses;
-
-switch marginType
-    case 'marginRatio'
-        margins = floor(durPulses * marginValue);
-    case 'marginTime'
-        margins = floor(marginValue * ySampleRate)*ones(numDetPulses, 1);
-end
-
+correspondingIndexes = valid;
 coeff = zeros(numDetPulses, 1);
 for k = 1:numDetPulses
-    ind = (startPulses(k) + margins(k)):(endPulses(k) - 1 - margins(k));
+    % Discard the extremes of the pulse
+    startPulse = yPulseLimitsSamp(valid(k), 1);
+    endPulse = yPulseLimitsSamp(valid(k), 2);
+    durPulse = endPulse - startPulse;
+    margin = floor(durPulse * marginRatio);
+    ind = (startPulse + margin):(endPulse - 1 - margin);
     coeff(k) = mean(y(ind));
 end
 

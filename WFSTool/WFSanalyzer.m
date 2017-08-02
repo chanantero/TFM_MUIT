@@ -1,4 +1,4 @@
-classdef WFSanalyzer
+classdef WFSanalyzer < handle
     
     properties
         ax
@@ -47,6 +47,37 @@ classdef WFSanalyzer
             difference = x - recovered;
             plot(axDiff, t, abs(difference))
         end
+        
+        function analyzePulseSignal(obj, freq, xPulseCoefMat, xPulseLimits, y, ySampleRate )
+            clf(obj.fig);
+            
+            posAxSignal = [0 0.5 0.5 0.5];
+            posAxSpectrum= [0.5 0.5 0.5 0.5];
+            posAxIQ= [0 0 0.5 0.5];
+            posAxDiff= [0.5 0 0.5 0.5];
+            axSignal = axes(obj.fig, 'Units', 'normalized', 'OuterPosition', posAxSignal);
+            axSpectrum = axes(obj.fig, 'Units', 'normalized', 'OuterPosition', posAxSpectrum);
+            axIQ = axes(obj.fig, 'Units', 'normalized', 'OuterPosition', posAxIQ);
+            axDiff = axes(obj.fig, 'Units', 'normalized', 'OuterPosition', posAxDiff);
+            
+            % Represent signal
+            numSamplesY = size(y, 1);
+            t = (0:numSamplesY-1)'/ySampleRate;            
+            plot(axSignal, t, y);
+           
+            % Represent spectrum
+            Y = fft(y);
+            df = (numSamplesY/ySampleRate)^(-1);
+            f = (0:numSamplesY-1)*df;
+            plot(axSpectrum, f, abs(Y), f, angle(Y), '-');
+            
+            % Represent IQ signal
+            yPulseCoefMat = signal2pulseCoefficientMatrix(freq, xPulseCoefMat, xPulseLimits, y, ySampleRate);
+
+            
+            % Represent difference with recovered signal from IQ signal
+
+        end            
         
         function representRecordedSignal(obj, y, ySampleRate)            
 %             axReprod = axes(obj.fig, 'Units', 'normalized', 'Position', [0.1 0.6 0.8 0.3]);

@@ -457,8 +457,9 @@ classdef WFSToolSimple < handle
             acPath = getAcousticPath( freqVec, sExp.pulseCoefMat, sExp.pulseLimits, sExp.recordedSignal, sExp.recordedSignal_SampleRate);
             
             % Calculate distances
-            phases = angle(acPath);
+            phases = -angle(acPath);
             deltaPhase = diff(phases, 1, 3);
+            deltaPhase = mod(deltaPhase, 2*pi);
             deltaFreq = diff(freqVec);
             deltaFreqMat = repmat(permute(deltaFreq, [2, 3, 1]), [numChannels, obj.numReceivers, 1]);
             dist = deltaPhase./deltaFreqMat*obj.c/(2*pi);
