@@ -38,19 +38,19 @@ classdef audioPlayer < matlab.System
             
             addParameter(p, 'Fs', 44100);
             addParameter(p, 'frameSize', 1024);
-            addParameter(p, 'numChannels', 2);
+            addParameter(p, 'channelMapping', 2);
             addParameter(p, 'device', 'Default');
             addParameter(p, 'driver', 'DirectSound');
-            addParameter(p, 'DefaultNumChannels', true);
+            addParameter(p, 'DefaultChannels', true);
 
             parse(p, varargin{:});
             
             obj.Fs = p.Results.Fs;
             obj.frameSize = p.Results.frameSize;
-            obj.numChannels = p.Results.numChannels;
+            obj.channelMapping = p.Results.channelMapping;
             obj.device = p.Results.device;
             obj.driver = p.Results.driver;
-            obj.DefaultNumChannels = p.Results.DefaultNumChannels;
+            obj.DefaultChannels = p.Results.DefaultChannels;
 
             obj.deviceWriter = audioDeviceWriter;
         end

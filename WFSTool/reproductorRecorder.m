@@ -418,7 +418,8 @@ classdef reproductorRecorder < matlab.System
                 obj.setProps('Fs_player', 44100, k);
                 obj.setProps('driver', 'DirectSound', k);
                 obj.setProps('device', 'Default', k);
-                obj.setProps('defaultChannelMapping', true);
+                obj.setProps('defaultChannelMapping', true, k);
+                obj.setProps('channelMapping_player', [], k);
             end
                         
             [readInd, playInd] = obj.getLinkSubInd();
@@ -582,7 +583,7 @@ classdef reproductorRecorder < matlab.System
                     % Timing control
                     if any(numUnderrun > 0)
                         % Interruption in the reproduction. Reset timer
-                        fprintf('Underrun. count = %d', obj.count);
+                        fprintf('Underrun. count = %d\n', obj.count);
                         t0 = t;
                         counter = 0;
                     end

@@ -31,7 +31,7 @@ step = floor(meanDur * 0.1 * ySampleRate);
 % Estimate a range of shift positions of the mask. The range will be guided
 % by a concrete number of pulses. We assume that the shift of the received
 % signal y is less than a concrete number of pulses.
-NP = 10;
+NP = min(10, numPulses);
 lowLimit = -xPulseLimitsSamp(NP, 2);
 highLimit = xPulseLimitsSamp(NP, 2);
 

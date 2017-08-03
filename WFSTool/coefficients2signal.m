@@ -1,4 +1,4 @@
-function [x, outOfRange, pulseCoefMat, pulseLimits ] = coefficients2signal( coefficients, frequency, SampleRate, startSample, endSample, onlyPulseInfoFlag )
+function [x, outOfRange, pulseCoefMat, pulseLimits ] = coefficients2signal( coefficients, frequency, SampleRate, startSample, endSample, onlyPulseInfoFlag, option, varargin )
 % coefficients. (numChannels x numFreq)
 % frequency. numFreq-element vector
 if nargin < 6
@@ -6,7 +6,7 @@ if nargin < 6
 end
 
 
-[ pulseCoefMat, pulseLimits ] = coefficients2pulseSignalParameters( coefficients, frequency, SampleRate, 'prelude' );
+[ pulseCoefMat, pulseLimits ] = coefficients2pulseSignalParameters( coefficients, frequency, SampleRate, option, varargin{:} );
 
 if nargin < 4
     startSample = pulseLimits(1, 1);

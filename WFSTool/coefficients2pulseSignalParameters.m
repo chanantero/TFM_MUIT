@@ -55,6 +55,27 @@ switch option
         
         % Reproduce in each channel and silence the rest
         [pulseCoefMat, pulseLimits] = successiveChannelSinusoids( coefficients, frequency, soundSamples, silenceSamples, numRep);
+    case 'main'
+        % Prelude and main signal parameters
+        p = inputParser();
+        
+        addOptional(p, 'soundTime', 1);
+        addOptional(p, 'silenceTime', 1);
+        addOptional(p, 'numRepetitions', 1);
+        
+        parse(p, varargin{:});
+        
+        soundTime = p.Results.soundTime;
+        silenceTime = p.Results.silenceTime;
+        numRep = p.Results.numRepetitions;  
+        
+        soundSamples = ceil(soundTime * SampleRate);
+        silenceSamples = ceil(silenceTime * SampleRate);
+        
+        % Then, reproduce everything at the same time
+        pulseCoefMat = repmat([permute(coefficients, [3, 1, 2]); zeros(1, numChann, numFreq)], numRep, 1);
+        pulseLimits = repmat([0 soundSamples; soundSamples+1 soundSamples + silenceSamples], numRep + 1);
+            
 end
 
 

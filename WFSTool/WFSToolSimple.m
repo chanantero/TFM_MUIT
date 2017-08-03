@@ -1,7 +1,7 @@
 classdef WFSToolSimple < handle
     % One device, sinusoidal signals
     
-    properties(SetAccess = private)
+    properties(SetAccess = public)
         changed % Variables changed since last update
         simplePerformance = true;
         
@@ -19,7 +19,6 @@ classdef WFSToolSimple < handle
         frequency
         
         % WFS Array
-        WFSarrayOrientation
         WFSarrayRadiationPattern
         WFSarrayChannelMapping
         
@@ -42,6 +41,7 @@ classdef WFSToolSimple < handle
         pulseCoeffMat
         pulseLimits
         reprodFrequencies
+        reprodChannelMapping
         
         % Analysis variables
         expAcPath
@@ -66,7 +66,8 @@ classdef WFSToolSimple < handle
         noiseSourcePosition
    
         % WFS Array
-        WFSarrayPosition
+        WFSarrayPosition % Dependent on scenarioObj
+        WFSarrayOrientation % Dependent on scenarioObj
         
         % Microphones
         receiverPosition
@@ -91,7 +92,7 @@ classdef WFSToolSimple < handle
         end   
         
         function numReceivers = get.numReceivers(obj)
-            numReceivers = numel(obj.receiverChannelMapping);
+            numReceivers = size(obj.receiverPosition, 1);
         end
         
         function numSourcesWFSarray = get.numSourcesWFSarray(obj)
@@ -104,17 +105,22 @@ classdef WFSToolSimple < handle
         
         % Noise source
         function noiseSourcePosition = get.noiseSourcePosition(obj)
-            indActiveSour = find(obj.real | obj.virtual);
-            indReal = find(obj.real);
-            indRealInActive = ismember(indActiveSour, indReal);
+%             indActiveSour = find(obj.real | obj.virtual);
+%             indReal = find(obj.real);
+%             indRealInActive = ismember(indActiveSour, indReal);
             
             noiseSourcePosition = zeros(obj.numNoiseSources, 3);
-            activeNoiseSourcePosition = obj.scenarioObj.sourcesPosition;
-            noiseSourcePosition(indRealInActive, :) = activeNoiseSourcePosition;
+            noiseSourcePosition(obj.real | obj.virtual, :) = obj.scenarioObj.sourcesPosition;
         end
         
         function set.noiseSourcePosition(obj, value)
-            obj.scenarioObj.sourcesPosition = value;
+            numPos = size(value, 1);
+            
+            if numPos == obj.numNoiseSources
+                obj.scenarioObj.setSourcePosition(value, (1:size(value, 1)));
+            else
+                warning('WFSToolSimple:WrongNumberNoiseSources', 'The number of positions must be equal to the number of sources');
+            end
         end
 
         % WFS array
@@ -127,7 +133,6 @@ classdef WFSToolSimple < handle
         end
 
         function set.WFSarrayOrientation(obj, value)
-            obj.WFSarrayOrientation = value;
             obj.scenarioObj.loudspeakersOrientation = simulator.rotVec2BroadsideVec(value);
         end
 
@@ -169,18 +174,13 @@ classdef WFSToolSimple < handle
             addlistener(obj.player, 'playingState', 'PostSet', @(~, eventData) obj.GUIenabling(eventData.AffectedObject.playingState));
             addlistener(obj.player, 'numChannels', 'PostSet', @(~, eventData) obj.changeScenario(eventData.AffectedObject.numChannels(1)));
             addlistener(obj.player, 'count', 'PostSet', @(~, eventData) obj.timeDisplay(eventData.AffectedObject.count*eventData.AffectedObject.frameDuration));
+                      
             
+            obj.setNumNoiseSources(1);
+            obj.setNumReceivers(1);
+            obj.changeScenario(2);
             
-            % Noise sources
-            obj.noiseSourceOrientation = [0, 0, 0, 1];
-            obj.noiseSourceRadiationPattern = @(x) simulator.monopoleRadPat(x);
-            
-            obj.signalsSpec = obj.reprodPanel.signals;
-            obj.virtual = obj.reprodPanel.virtual;
-            obj.real = obj.reprodPanel.real;
-            obj.noiseSourceChannelMapping = obj.reprodPanel.noiseSourceChannelMapping;
-            obj.virtualVolume = obj.reprodPanel.virtualVolume;
-            obj.realVolume = obj.reprodPanel.realVolume;
+            obj.readFromReprodPanel();
             obj.changed.virtual = true;
             obj.changed.real = true;
             obj.changed.signalsSpec = true;
@@ -262,6 +262,8 @@ classdef WFSToolSimple < handle
             obj.noiseSourceChannelMapping = zeros(numNoiseSources, 1);
             obj.virtualVolume = ones(numNoiseSources, 1);
             obj.realVolume = ones(numNoiseSources, 1);
+            obj.noiseSourceOrientation = repmat([1, 0, 0, 1], numNoiseSources, 1);
+            obj.noiseSourceRadiationPattern = repmat({@(x) simulator.monopoleRadPat(x)}, numNoiseSources, 1);
             
             for k = 1:numNoiseSources
                 obj.signalsSpec{k} = '';
@@ -269,6 +271,14 @@ classdef WFSToolSimple < handle
             
             obj.updateComMat();
             obj.updateSignalProvidersVariables();
+        end
+        
+        function setNumReceivers(obj, numReceivers)
+            obj.scenarioObj.setNumReceivers(numReceivers);
+            obj.receiverOrientation = repmat([1, 0, 0, 1], numReceivers, 1);
+            obj.receiverRadiationPattern = repmat({@(x) simulator.monopoleRadPat(x)}, numReceivers);
+            obj.receiverCorr = ones(numReceivers, 1);
+            obj.receiverChannelMapping = (1:numReceivers)';
         end
         
         function setVirtual(obj, value)
@@ -327,17 +337,17 @@ classdef WFSToolSimple < handle
             nSrcCoef_real = obj.amplitude(indReal) .* exp(1i*obj.phase(indReal));
             nSrcPos_real = obj.noiseSourcePosition(indReal, :);
             nSrcOrient_real = obj.noiseSourceOrientation(indReal, :); % simulator.vec2rotVec(repmat([0 0 1], [numReal, 1]));
-            nSrcRadPat_real = obj.noiseSourceRadiationPattern(indReal, :);
+            nSrcRadPat_real = obj.noiseSourceRadiationPattern(indReal);
                              
             [flagNS, indWFS] = ismember(nSrcChannelMapping_real, obj.WFSarrayChannelMapping);
-            ldspkrsCoef(indWFS, :) = nSrcCoef_real(flagNS);
-            ldspkrsPos(indWFS, :) = nSrcPos_real(flagNS);
-            ldspkrsOrient(indWFS, :) = nSrcOrient_real(flagNS);
+            ldspkrsCoef(indWFS, :) = nSrcCoef_real(flagNS, :);
+            ldspkrsPos(indWFS, :) = nSrcPos_real(flagNS, :);
+            ldspkrsOrient(indWFS, :) = nSrcOrient_real(flagNS, :);
             ldspkrsRadPat(indWFS) = nSrcRadPat_real(flagNS); 
             
-            ldspkrsCoef = [ldspkrsCoef; nSrcCoef_real(~flagNS)];
-            ldspkrsPos = [ldspkrsPos; nSrcPos_real(~flagNS)];
-            ldspkrsOrient = [ldspkrsOrient; nSrcOrient_real(~flagNS)];
+            ldspkrsCoef = [ldspkrsCoef; nSrcCoef_real(~flagNS, :)];
+            ldspkrsPos = [ldspkrsPos; nSrcPos_real(~flagNS, :)];
+            ldspkrsOrient = [ldspkrsOrient; nSrcOrient_real(~flagNS, :)];
             ldspkrsRadPat = [ldspkrsRadPat; nSrcRadPat_real(~flagNS)];
                         
             obj.loudspeakerChannelMapping = [obj.WFSarrayChannelMapping; nSrcChannelMapping_real(~flagNS)];
@@ -366,7 +376,7 @@ classdef WFSToolSimple < handle
             obj.player.setProps('driver', writingDrivers{1}, 1);
             obj.player.setProps('device', writingDevices{1}, 1);
             obj.player.setProps('signalFunc', signalFunction, 1);
-            if nargin == 3
+            if nargin == 4
                 obj.player.setProps('defaultChannelMapping', false, 1);
                 obj.player.setProps('channelMapping_player', channelMapping, 1);
             end
@@ -384,18 +394,21 @@ classdef WFSToolSimple < handle
             
         end
         
-        function reproduceAndRecord(obj)
+        function reproduceAndRecord(obj, option, varargin)
             SampleRate = 44100;
             
             s = obj.getTheoreticalScenarioVariables();
             sourcesCoef = s.sourcesCoeff;
             frequencies = s.frequencies;
-            signalFunc = @(startSample, endSample) coefficients2signal( sourcesCoef, frequencies, SampleRate, startSample, endSample);
+            signalFunc = @(startSample, endSample) coefficients2signal( sourcesCoef, frequencies, SampleRate, startSample, endSample, false, option, varargin{:});
 
             obj.reproduceSignalFunction(signalFunc, SampleRate, obj.loudspeakerChannelMapping);
                            
-            [~, ~, obj.pulseCoeffMat, pulseLim] = coefficients2signal( sourcesCoef, frequencies, SampleRate );
+            [~, ~, obj.pulseCoeffMat, pulseLim] = coefficients2signal( sourcesCoef, frequencies, SampleRate, [], [], true, option, varargin{:} );
             obj.pulseLimits = pulseLim/SampleRate;
+            obj.reprodChannelMapping = obj.loudspeakerChannelMapping;
+            obj.reprodFrequencies = frequencies;
+            
         end        
         
         function simulate(obj)
@@ -407,62 +420,20 @@ classdef WFSToolSimple < handle
         end
         
         function changeScenario(obj, numLoudspeakers)
-                        
-            if ~ismember(numLoudspeakers, [0 2 96])
-                numLoudspeakers = 0;
-            end
+                  
+            s = WFSToolSimple.generateScenario(numLoudspeakers);
+            obj.WFSarrayChannelMapping = (1:numLoudspeakers)';
+            obj.WFSarrayRadiationPattern = repmat({@(~) 1}, numLoudspeakers, 1);
             
-            switch numLoudspeakers
-                case 0
-                    sourcePosition = [0 0 0];
-                    receiverPosition = zeros(obj.numReceivers, 3);
-                    loudspeakersPosition = double.empty(0,3);
-                    loudspeakersOrientation = double.empty(0,3);
-                    roomPosition = [0 0 1 1];
-                    obj.scenarioObj.setScenario(sourcePosition, receiverPosition, loudspeakersPosition, loudspeakersOrientation, roomPosition);
+            % Reset noise sources and receivers
+            sourcePosition = repmat([0 0 0], obj.numNoiseSources, 1);
+            recPosition = repmat([0 0 0], obj.numReceivers, 1);
+                        
+            obj.scenarioObj.setScenario(sourcePosition, recPosition, s.loudspeakersPosition, s.loudspeakersOrientation, s.roomPosition);
                     
-                    obj.simulObj.XLim = [roomPosition(1), roomPosition(1) + roomPosition(3)];
-                    obj.simulObj.YLim = [roomPosition(2), roomPosition(2) + roomPosition(4)];
-                    delete(obj.simulObj.imag);
-                case 2
-                    sourcePosition = obj.scenarioObj.sourcesPosition;
-                    receiverPosition = zeros(obj.numReceivers, 3);
-                    loudspeakersPosition = [-0.1 0 0; 0.1 0 0];
-                    loudspeakersOrientation = [1 0 0; -1 0 0];
-                    roomPosition = [-2, -2, 4, 4];
-                    obj.scenarioObj.setScenario(sourcePosition, receiverPosition, loudspeakersPosition, loudspeakersOrientation, roomPosition);
-                    
-                    obj.simulObj.XLim = [roomPosition(1), roomPosition(1) + roomPosition(3)];
-                    obj.simulObj.YLim = [roomPosition(2), roomPosition(2) + roomPosition(4)];
-                    delete(obj.simulObj.imag);
-                case 96
-                    d = 0.18; % Separation between two contiguous loudspeakers. Size of one loudspeaker
-                    nb = 8; % Bottom and upper sides of the octogon (2 sides)
-                    nd = 8; % Diagonal sides of the octogon (4 sides)
-                    nl = 24; % Lateral side of the octogon (2 sides)
-                    betabd = 45; % Deviation angle between bottom/upper and diagonal sides
-                    
-                    [ x, y, alfa ] = octogon(d, nb, nd, nl, betabd);
-                    z = zeros(numel(x), 1);
-                    loudspeakersPosition = [x, y, z];
-                    loudspeakersOrientation = [cosd(alfa), sind(alfa), zeros(numel(alfa), 1)];
-                    
-                    sourcePosition = [0, 0, 0];
-                    receiverPosition = zeros(obj.numReceivers, 3);
-                    
-                    xmin = min(x); xmax = max(x); ymin = min(y); ymax = max(y);
-                    xDim = xmax - xmin; yDim = ymax - ymin;
-                    xmargin = 0.2 * xDim; ymargin = 0.2 * yDim;
-                    roomPosition = [xmin - xmargin, ymin - ymargin, xDim + 2*xmargin, yDim + 2*ymargin];
-                    
-                    obj.scenarioObj.setScenario(sourcePosition, receiverPosition, loudspeakersPosition, loudspeakersOrientation, roomPosition);
-                    
-                    obj.simulObj.XLim = [roomPosition(1), roomPosition(1) + roomPosition(3)];
-                    obj.simulObj.YLim = [roomPosition(2), roomPosition(2) + roomPosition(4)];
-                    delete(obj.simulObj.imag);
-                otherwise
-                    warning('Wrong number of output channels. There is not possible scenario for that case')
-            end
+            obj.simulObj.XLim = [s.roomPosition(1), s.roomPosition(1) + s.roomPosition(3)];
+            obj.simulObj.YLim = [s.roomPosition(2), s.roomPosition(2) + s.roomPosition(4)];
+            delete(obj.simulObj.imag);
             
             obj.updateForcedDisabledLoudspeakers();
             
@@ -477,10 +448,10 @@ classdef WFSToolSimple < handle
             numFreq = numel(frequencies);
             
             % Set coefficients for calibration
-            calCoeff = 0.1*ones(numChannels, numFreq);
+            calCoeff = 0.5*ones(numChannels, numFreq);
             
             % Reproduce
-            [ pulseCoefMat, pulseLim ] = coefficients2pulseSignalParameters( calCoeff, frequencies, SampleRate, 'preludeAndMain', 0.25, 0.25, 2 );
+            [ pulseCoefMat, pulseLim ] = coefficients2pulseSignalParameters( calCoeff, frequencies, SampleRate, 'preludeAndMain', 0.5, 0.5, 2 );
             signalFunc = @(startSample, endSample) pulseCoefMat2signal(frequencies, pulseCoefMat, pulseLim, SampleRate, startSample, endSample, 'sample');          
             obj.reproduceSignalFunction(signalFunc, SampleRate);
             
@@ -556,6 +527,15 @@ classdef WFSToolSimple < handle
                 position(rec, :) = multilateration(refPoints, dist);
             end
             
+        end
+        
+        function updateReprodPanelBasedOnVariables(obj)
+            obj.reprodPanel.setNumSignals(obj.numNoiseSources);
+            obj.reprodPanel.setRealFlags(obj.real);
+            obj.reprodPanel.setVirtualFlags(obj.virtual);
+            obj.reprodPanel.setChannelNumber(obj.noiseSourceChannelMapping);
+            obj.updateSignalSpecFromParameters();
+            obj.reprodPanel.setSignals(obj.signalsSpec);
         end
     end
     
@@ -645,7 +625,9 @@ classdef WFSToolSimple < handle
             s.recordedSignal_SampleRate = obj.player.Fs_recorder(1);
             s.pulseLimits = obj.pulseLimits;
             s.pulseCoefMat = obj.pulseCoeffMat;
+            s.channelMapping = obj.reprodChannelMapping;
             s.frequencies = obj.reprodFrequencies;
+            s.acPath = obj.expAcPath; % Sometimes it won't have been calculated
         end
         
         function s = getSimulationResultVariables(obj)
@@ -702,12 +684,24 @@ classdef WFSToolSimple < handle
     
     
     methods(Access = private)
-               
+        
         function timeDisplay(obj, time)
             obj.timeDisp.String = num2str(time);
         end
         
         function setDefaultValues(obj)
+            obj.setNumNoiseSources(1);
+            obj.setNumReceivers(1);
+            
+        end
+        
+        function readFromReprodPanel(obj)
+            obj.signalsSpec = obj.reprodPanel.signals;
+            obj.virtual = obj.reprodPanel.virtual;
+            obj.real = obj.reprodPanel.real;
+            obj.noiseSourceChannelMapping = obj.reprodPanel.channelNumber;
+            obj.virtualVolume = obj.reprodPanel.virtualVolume;
+            obj.realVolume = obj.reprodPanel.realVolume;
         end
         
         function GUIenabling(obj, newPlayingState)
@@ -749,8 +743,10 @@ classdef WFSToolSimple < handle
         end
         
         function recordPanelListener(obj, ~)
+            numRec = numel(obj.recordPanel.activeChannels);
+            obj.setNumReceivers(numRec);
             obj.receiverChannelMapping = obj.recordPanel.activeChannels;
-            obj.updateRecorderVariables();
+            obj.player.setProps('channelMapping_recorder', obj.receiverChannelMapping, 1);
         end
         
         function updateScenario(obj, oldReal, oldVirtual, newReal, newVirtual)
@@ -791,13 +787,7 @@ classdef WFSToolSimple < handle
             obj.changed.virtual = false;
             obj.changed.numNoiseSources = false;
         end
-                
-        function updateRecorderVariables(obj)
-            obj.scenarioObj.setNumReceivers(numel(obj.receiverChannelMapping));
-            obj.player.setProps('channelMapping_recorder', obj.receiverChannelMapping, 1);
-            obj.receiverCorr = ones(obj.numReceivers, 1);
-        end
-        
+
         function updateSignalParameteres(obj)
             
             obj.amplitude = zeros(obj.numNoiseSources, 1);
@@ -823,6 +813,14 @@ classdef WFSToolSimple < handle
                     obj.frequency(k) = str2double(param.Frequency);
                 end
             end
+        end
+        
+        function updateSignalSpecFromParameters(obj)
+            signSpec = cell(obj.numNoiseSources, 1);
+            for k = 1:obj.numNoiseSources
+                signSpec{k} = sprintf('A:%.2f Ph:%.2f f:%.1f', obj.amplitude(k), obj.phase(k), obj.frequency(k));
+            end
+            obj.signalsSpec = signSpec;
         end
         
         function updateSignalProvidersVariables(obj)
@@ -1082,6 +1080,50 @@ classdef WFSToolSimple < handle
         function comMat = createCommutationMatrix(virtual, ~)
 %             comMat = virtual | real;
             comMat = true(numel(virtual), 1);
+        end
+        
+        function s = generateScenario(numLoudspeakers)
+            if ~ismember(numLoudspeakers, [0 2 96])
+                numLoudspeakers = 0;
+            end
+            
+            switch numLoudspeakers
+                case 0
+
+                    loudspeakersPosition = double.empty(0,3);
+                    loudspeakersOrientation = double.empty(0,3);
+                    roomPosition = [0 0 1 1];   
+                    
+                case 2
+                    loudspeakersPosition = [-0.1 0 0; 0.1 0 0];
+                    loudspeakersOrientation = [1 0 0; -1 0 0];
+                    roomPosition = [-2, -2, 4, 4];
+                   
+                case 96
+                    d = 0.18; % Separation between two contiguous loudspeakers. Size of one loudspeaker
+                    nb = 8; % Bottom and upper sides of the octogon (2 sides)
+                    nd = 8; % Diagonal sides of the octogon (4 sides)
+                    nl = 24; % Lateral side of the octogon (2 sides)
+                    betabd = 45; % Deviation angle between bottom/upper and diagonal sides
+                    
+                    [ x, y, alfa ] = octogon(d, nb, nd, nl, betabd);
+                    z = zeros(numel(x), 1);
+                    loudspeakersPosition = [x, y, z];
+                    loudspeakersOrientation = [cosd(alfa), sind(alfa), zeros(numel(alfa), 1)];
+                    
+                    xmin = min(x); xmax = max(x); ymin = min(y); ymax = max(y);
+                    xDim = xmax - xmin; yDim = ymax - ymin;
+                    xmargin = 0.2 * xDim; ymargin = 0.2 * yDim;
+                    roomPosition = [xmin - xmargin, ymin - ymargin, xDim + 2*xmargin, yDim + 2*ymargin];
+                    
+                otherwise
+                    warning('Wrong number of output channels. There is not possible scenario for that case')
+            end
+            
+            s.loudspeakersPosition = loudspeakersPosition;
+            s.loudspeakersOrientation = loudspeakersOrientation;
+            s.roomPosition = roomPosition;
+            
         end
     end
 end

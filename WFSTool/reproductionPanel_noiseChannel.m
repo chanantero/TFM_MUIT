@@ -38,33 +38,33 @@ classdef reproductionPanel_noiseChannel < handle
         function setSignal(obj, signalSpec, index)
             obj.signals{index} = signalSpec;
             obj.list.Data(index, 1) = {signalSpec};
-            
-            evntData = updatedValuesEvntData('signals');
-            notify(obj, 'updatedValues', evntData);
+%             
+%             evntData = updatedValuesEvntData('signals');
+%             notify(obj, 'updatedValues', evntData);
         end
         
         function setSignals(obj, signalSpecs)
             obj.signals = signalSpecs;
             obj.list.Data(:, 1) = signalSpecs;
             
-            evntData = updatedValuesEvntData('signals');
-            notify(obj, 'updatedValues', evntData);
+%             evntData = updatedValuesEvntData('signals');
+%             notify(obj, 'updatedValues', evntData);
         end
         
         function setVirtualFlags(obj, flags)
             obj.virtual = flags;
             obj.list.Data(:, 2) = num2cell(flags);
             
-            evntData = updatedValuesEvntData('virtual');
-            notify(obj, 'updatedValues', evntData);
+%             evntData = updatedValuesEvntData('virtual');
+%             notify(obj, 'updatedValues', evntData);
         end
         
         function setRealFlags(obj, flags)
             obj.real = flags;
             obj.list.Data(:, 3) = num2cell(flags);
             
-            evntData = updatedValuesEvntData('real');
-            notify(obj, 'updatedValues', evntData);
+%             evntData = updatedValuesEvntData('real');
+%             notify(obj, 'updatedValues', evntData);
         end
         
         function setNumSignals(obj, num)
@@ -83,8 +83,13 @@ classdef reproductionPanel_noiseChannel < handle
             
             obj.numSources = num;
             
-            evntData = updatedValuesEvntData('numSources');
-            notify(obj, 'updatedValues', evntData);
+%             evntData = updatedValuesEvntData('numSources');
+%             notify(obj, 'updatedValues', evntData);
+        end
+        
+        function setChannelNumber(obj, channelNumbers)
+            obj.channelNumber = channelNumbers;
+            obj.list.Data(:, 4) = num2cell(channelNumbers);
         end
         
         function disableGUI(obj)
