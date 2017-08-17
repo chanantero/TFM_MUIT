@@ -35,24 +35,28 @@ NP = min(10, numPulses);
 lowLimit = -xPulseLimitsSamp(NP, 2);
 highLimit = max(xPulseLimitsSamp(NP, 2), floor(numel(y)/2));
 
-% Apply mask only to a fragment of the signal
-y_ = y(1:min(highLimit*2, end), :);
-numSamples_ = size(y_, 1);
+% % Apply mask only to a fragment of the signal
+% y_ = y(1:min(highLimit*2, end), :);
+% numSamples_ = size(y_, 1);
 
 firstIteration = true;
 while step > 1
-    shiftPos = highLimit:-step:lowLimit;
-    N = numel(shiftPos);
-    corr = zeros(N, 1); % Correlation
-    for k = 1:N
-        % Shift mask
-        shiftedMask = shiftAndCrop(mask, shiftPos(k), numSamples_);
+    lags = highLimit:-step:lowLimit;
+    
+%     % Old way
+%     N = numel(lags);
+%     corr = zeros(N, 1); % Correlation
+%     for k = 1:N
+%         % Shift mask
+%         shiftedMask = shiftAndCrop(mask, lags(k), numSamples_);
+%         
+%         % Apply mask
+%         corr(k, :) = sum(abs(y_).*shiftedMask);
+%         
+%     end
         
-        % Apply mask
-        corr(k, :) = sum(abs(y_).*shiftedMask);
-        
-%         fprintf('%d/%d\n', k, N)
-    end
+    % New way
+    corr = rectangularFilter(abs(y), xPulseLimitsSamp, lags);
     
     % Normalize the correlation values
     corr = corr/max(corr);
@@ -78,12 +82,12 @@ while step > 1
         break;
     end
     
-    lowLimit = shiftPos(ind + 1);
-    highLimit = shiftPos(ind - 1);
+    lowLimit = lags(ind + 1);
+    highLimit = lags(ind - 1);
     step = floor((highLimit - lowLimit)*0.1);
 end
 
-shiftSamp = shiftPos(ind);
+shiftSamp = lags(ind);
 
 % Find the pulse signal coefficients
 % The new pulse limits are the original ones shifted
@@ -125,5 +129,32 @@ firstXind = max(1, 1 - shiftPos);
 lastXind = min(N, newLength - shiftPos);
 
 y(firstYind:lastYind) = x(firstXind:lastXind);
+
+end
+
+function y = rectangularFilter(x, rectangleLimits, lags)
+
+lengthX = size(x, 1);
+lengthMask = max(rectangleLimits) - min(rectangleLimits) + 1;
+
+if nargin < 3
+minlag = -lengthMask - 1;
+maxlag = lengthX - 1;
+lags = minlag:maxlag;
+end
+
+acum = cumsum(x);
+clear('x')
+acum = [0; acum];
+
+y = zeros(numel(lags), 1);
+for lag_ind = 1:numel(lags)
+    newLimits = rectangleLimits + lags(lag_ind);
+    newLimits(newLimits < 1) = 0;
+    newLimits(newLimits > lengthX) = lengthX;
+    newLimits = newLimits + 1;
+    
+    y(lag_ind) = sum(acum(newLimits(:, 2))) - sum(acum(newLimits(:, 1)));
+end
 
 end

@@ -14,10 +14,10 @@ corrInd = cell(numFrequencies, numChannelsY);
 y_pulseSampleLimits = cell(numFrequencies, numChannelsY);
 for f_ind = 1:numFrequencies
     f = freqs(f_ind);
-    iq = real2IQ(y, ySampleRate, f, 15);
     
     for cy = 1:numChannelsY
-        [y_coef{f_ind, cy}, corrInd{f_ind, cy}, y_pulseSampleLimits{f_ind, cy}] = detectPulseSignal(xPulseLimits{f_ind}, iq(:, cy), ySampleRate, 'marginTime', 0.1);
+        iq = real2IQ(y(:, cy), ySampleRate, f, 15);
+        [y_coef{f_ind, cy}, corrInd{f_ind, cy}, y_pulseSampleLimits{f_ind, cy}] = detectPulseSignal(xPulseLimits{f_ind}, iq, ySampleRate, 'marginTime', 0.1);
     end
      
 %     for cy = 1:numChannelsY
