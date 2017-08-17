@@ -1,28 +1,40 @@
 addpath('C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Matlab\WFSTool');
 
 % Pulse signal example for the thesis report.
-pulseCoefMat(:, :, 1) = ...
-    [1 -1;
-    0 0;
-    0 0;
-    -1 1];
+% pulseCoefMat(:, :, 1) = ...
+%     [1 -1;
+%     0 0;
+%     0 0;
+%     -1 1];
+% 
+% pulseCoefMat(:, :, 2) = ...
+%     [0 0;
+%     1 0;
+%     0 1i;
+%     0 0];
+% 
+% pulseLimits = 20*...
+%     [1 2;
+%     3 4;
+%     5 7;
+%     9 10];
+% freqs = [2; 4];
+% channels = [2 1];
+% sampleRate = 10000;
 
-pulseCoefMat(:, :, 2) = ...
-    [0 0;
-    1 0;
-    0 1i;
-    0 0];
+pulseCoefMat = zeros(8, 1, 8);
+for k = 1:8
+    pulseCoefMat(k, 1, k) = 0.1;
+end
 
-pulseLimits = 20*...
-    [1 2;
-    3 4;
-    5 7;
-    9 10];
-freqs = [2; 4];
-channels = [2 1];
+pulseLimits = [0 1; 1 2; 2 3; 3 4; 4 5; 5 6; 6 7; 7 8 ];
+semitoneFactor = 2^(1/12);
+interval = [0 2 4 5 7 9 11 12];
+baseFreq = 300;
+freqs = baseFreq*semitoneFactor.^interval;
 sampleRate = 10000;
 
-[signal, outOfRange] = pulseCoefMat2signal(pulseCoefMat, pulseLimits, freqs, sampleRate, 0, 250, 'type_marker', 'time', 'type_pulseLimits', 'time');
+[signal, outOfRange] = pulseCoefMat2signal(pulseCoefMat, pulseLimits, freqs, sampleRate, 0, 12, 'type_marker', 'time', 'type_pulseLimits', 'time');
 numSamples = size(signal, 1);
 t = (0:numSamples-1)/sampleRate;
 
