@@ -5,7 +5,7 @@
 % in amplitude, phase and position.
 obj = WFSToolSimple;
 
-numLoudspeakers = 2;
+numLoudspeakers = 96;
 
 realPosition = [0.6 0 0]; % Assumed real position
 
@@ -39,8 +39,8 @@ sBase = obj.exportInformation();
 
 % Perform a more complex calibration (amplitude counts)
 
-PathName = 'C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Matlab\Data\';
-FileName = sprintf('Example.mat');
+PathName = 'Data\';
+FileName = sprintf('CalibrationLab_17-08-2017.mat');
 save([PathName, FileName], 'sBase');
 
 % Test only the real noise source.

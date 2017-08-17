@@ -515,7 +515,7 @@ classdef WFSToolSimple < handle
             
             % Reproduce
             [ pulseCoefMat, pulseLim ] = coefficients2pulseSignalParameters( calCoeff, frequencies, SampleRate, 'preludeAndMain', 1, 1, 2 );
-            signalFunc = @(startSample, endSample) pulseCoefMat2signal(frequencies, pulseCoefMat, pulseLim, SampleRate, startSample, endSample, 'sample');          
+            signalFunc = @(startSample, endSample) pulseCoefMat2signal(pulseCoefMat, pulseLim, frequencies, SampleRate, startSample, endSample, 'type_marker', 'sample');          
             obj.reproduceSignalFunction(signalFunc, SampleRate);
             
             % Save information about the reproduced signal
