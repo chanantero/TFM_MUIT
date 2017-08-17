@@ -14,7 +14,7 @@ switch option
         addOptional(p, 'soundTime', 1);
         addOptional(p, 'silenceTime', 1);
         addOptional(p, 'numRepetitions', 5);
-        addOptional(p, 'mainTime', 5);
+        addOptional(p, 'mainTime', 3);
         
         parse(p, varargin{:});
         
@@ -73,8 +73,14 @@ switch option
         silenceSamples = ceil(silenceTime * SampleRate);
         
         % Then, reproduce everything at the same time
-        pulseCoefMat = repmat([permute(coefficients, [3, 1, 2]); zeros(1, numChann, numFreq)], numRep, 1);
-        pulseLimits = repmat([0 soundSamples; soundSamples+1 soundSamples + silenceSamples], numRep + 1);
+        pulseCoefMat = repmat([permute(coefficients, [3, 1, 2]); zeros(1, numChann, numFreq)], [numRep, 1, 1]);
+        startPulse = (0:numRep-1)'*(soundSamples+silenceSamples);
+        endPulse = startPulse + soundSamples;
+        startSilence = endPulse;
+        endSilence = startSilence + silenceSamples;
+        start = reshape([startPulse, startSilence]', [2*numRep, 1]);
+        ending = reshape([endPulse, endSilence]', [2*numRep, 1]);
+        pulseLimits = [start, ending];
             
 end
 

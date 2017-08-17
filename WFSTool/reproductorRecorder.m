@@ -7,7 +7,7 @@ classdef reproductorRecorder < matlab.System
         comMatrix % Commutation matrix. numReaders x numPlayers.
         
         % Signal provider settings
-        mode % file, sinusoidalm customSignal, func
+        mode % file, sinusoidal, customSignal, func
         FsGenerator % Sampling frequency (For mode == sinusoidal or mode == customSignal or mode == func)
         % mode == file
         audioFileName % Cell string array with as many elements as signalReaders
@@ -93,7 +93,7 @@ classdef reproductorRecorder < matlab.System
         player % Cell Array
         recorder % Cell Array
     end
-    
+        
     % System object methods
     methods(Access = protected)
         
@@ -525,7 +525,7 @@ classdef reproductorRecorder < matlab.System
             t_eps = cell(numPlay, 1); % Times of the ending of loading to the buffer queue
             numUnderruns = cell(numPlay, 1);
             % Recorder timing
-            del = 2; % Delay of the reproduction with respect to the recording in seconds
+            del = 3; % Delay of the reproduction with respect to the recording in seconds
                         
             [~, playerIndex] = obj.getLinkSubInd();
             
@@ -607,7 +607,12 @@ classdef reproductorRecorder < matlab.System
                     if all(done)
                
                         % Record to overcompensate delays
-                        N = ceil(del/obj.frameDuration);
+                        numAcumUnd = zeros(obj.numPlayers, 1);
+                        for k = 1:obj.numPlayers
+                            numAcumUnd(k) = sum(numUnderruns{k})/obj.frameSizeWriting;
+                        end
+                                                
+                        N = ceil(del/obj.frameDuration) + max(numAcumUnd);
                         for k = 1:obj.numRecorders
                             for n = 1:N
                                 step(obj.recorder{k});

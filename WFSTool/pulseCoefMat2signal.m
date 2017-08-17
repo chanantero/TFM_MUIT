@@ -1,25 +1,44 @@
-function [signal, outOfRange] = pulseCoefMat2signal(freq, coefMat, pulseLimits, sampleRate, startMarker, endMarker, type)
+function [signal, outOfRange] = pulseCoefMat2signal(coefMat, pulseLimits, freq, sampleRate, varargin)
 % coefMat. (numPulses x numChannels x numFreqs)
 
-if nargin < 7
-    type = 'sample';
+p = inputParser;
+
+addOptional(p, 'startMarker', [])
+addOptional(p, 'endMarker', [])
+addParameter(p, 'type_pulseLimits', 'sample')
+addParameter(p, 'type_marker', 'sample')
+
+parse(p, varargin{:});
+
+startMarker = p.Results.startMarker;
+endMarker = p.Results.endMarker;
+type_pulseLimits = p.Results.type_pulseLimits;
+type_marker = p.Results.type_marker;
+
+switch type_pulseLimits
+    case 'time'
+        pulseSampleLimits = floor(pulseLimits*sampleRate);
+    case 'sample'
+        pulseSampleLimits = pulseLimits;
+end
+
+if ismember('startMarker', p.UsingDefaults) % Assume that endMarker wasn't introduced either
+    type_marker = 'sample';
+    startMarker = min(pulseSampleLimits(:)) + 1;
+    endMarker = max(pulseSampleLimits(:)) + 1 - 1; % +1 because endMarker must be a sample index starting at 1, not as 0 as with Matlab. -1 because we want endMarker to be the last sample to return
 end
 
 % startMarker = max(0, startMarker);
 % endMarker = min(pulseLimits(end), endMarker);
 
-switch type
+switch type_marker
     case 'time'
         startSample = floor(startMarker*sampleRate);
         endSample = floor(endMarker*sampleRate);
-        pulseSampleLimits = floor(pulseLimits*sampleRate);
     case 'sample'
         startSample = startMarker - 1;
         endSample = endMarker - 1 + 1; % -1 because we work with 0 as the first index, not 1 as matlab does. +1 because we want the input of type "sample" to be the last sample to return
-        pulseSampleLimits = pulseLimits;
 end
-
-endSample = min(endSample, startMarker + 1e6); % Limit size of output
 
 [cuttedPulseLimits, indPulses, outOfRange] = intervalSelection(pulseSampleLimits, startSample, endSample);
 
@@ -58,7 +77,6 @@ function signal = genSignal(coefMat, freq, pulseLimits, offsetSample, sampleRate
 
 numPulses = size(coefMat, 1);
 numChannels = size(coefMat, 2);
-numFrequencies = size(coefMat, 3);
 
 if isempty(pulseLimits)
     numSamples = 0;
@@ -72,21 +90,33 @@ for p = 1:numPulses
     endPulse = pulseLimits(p, 2);
     numPulseSamples = endPulse - startPulse;
     
+%     windMask = ones(numPulseSamples, 1); % Uniform window
     windMask = windowing2(numPulseSamples, sampleRate, 0.1);
     
     ind = startPulse:endPulse-1;
     t = (ind + offsetSample)/sampleRate;
     
     for c = 1:numChannels
-        aux = zeros(numPulseSamples, numFrequencies);
-        for f = 1:numFrequencies
-            amp = abs(coefMat(p, c, f));
-            phase = angle(coefMat(p, c, f));
-            aux(:, f) = amp*cos(2*pi*freq(f)*t + phase);
-        end
-        signal(ind + 1, c) = sum(aux, 2).*windMask;
+        pulse = genTones(coefMat(p, c, :), freq, t);
+        
+        signal(ind + 1, c) = pulse.*windMask;
     end
 end
+
+end
+
+function pulse = genTones(coefficients, frequencies, time)
+numFrequencies = numel(frequencies);
+numSamples = numel(time);
+
+aux = zeros(numSamples, numFrequencies);
+for f = 1:numFrequencies
+    amp = abs(coefficients(f));
+    phase = angle(coefficients(f));
+    aux(:, f) = amp*cos(2*pi*frequencies(f)*time + phase);
+end
+
+pulse = sum(aux, 2);
 
 end
 

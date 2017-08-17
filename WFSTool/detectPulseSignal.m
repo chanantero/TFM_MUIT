@@ -1,5 +1,5 @@
 function [coeff, correspondingIndexes, yPulseLimits] = detectPulseSignal(xPulseLimits, y, ySampleRate, marginType, marginValue)
-% xPulseLimits. (numPulses x 2) matrix. The first sample has the index 0.
+% xPulseLimits. numPulses colum vector. The first sample has the index 0.
 % y. (numSamples x numChannels) matrix
 % ySampleRate. Scalar. Natural number
 % marginRatio. Scalar between 0 and 1
@@ -33,7 +33,7 @@ step = floor(meanDur * 0.1 * ySampleRate);
 % signal y is less than a concrete number of pulses.
 NP = min(10, numPulses);
 lowLimit = -xPulseLimitsSamp(NP, 2);
-highLimit = xPulseLimitsSamp(NP, 2);
+highLimit = max(xPulseLimitsSamp(NP, 2), floor(numel(y)/2));
 
 % Apply mask only to a fragment of the signal
 y_ = y(1:min(highLimit*2, end), :);
