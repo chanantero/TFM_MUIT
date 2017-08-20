@@ -1,4 +1,4 @@
-function [coeff, correspondingIndexes, yPulseLimits] = detectPulseSignal(xPulseLimits, y, ySampleRate, marginType, marginValue)
+function [coeff, indicesFound, yPulseLimits] = detectPulseSignal(xPulseLimits, y, ySampleRate, marginType, marginValue)
 % xPulseLimits. The first sample has the index 0.
 % y. (numSamples x numChannels) matrix
 % ySampleRate. Scalar. Natural number
@@ -40,11 +40,10 @@ numSamples = size(y, 1);
 
 
 % Find the pulse signal coefficients
-
-    % The new pulse limits are the original ones shifted
-    yPulseLimitsSamp = xPulseLimitsSamp + shiftSamp;
-    % Don't consider the pulses that are not complete, i.e., they are out of the available signal
-    indicesFound = find(all(yPulseLimitsSamp >= 0 & yPulseLimitsSamp <= numSamples, 2));
+    
+    % Shift the pulse limits
+    yPulseLimitsSamp = xPulseLimitsSamp + shiftSamp; % The new pulse limits are the original ones shifted
+    indicesFound = find(all(yPulseLimitsSamp >= 0 & yPulseLimitsSamp <= numSamples, 2)); % Don't consider the pulses that are not complete, i.e., they are out of the available signal
     numDetPulses = numel(indicesFound);
     yPulseLimits = yPulseLimitsSamp(indicesFound, :);
     startPulses = yPulseLimits(:, 1);
@@ -68,22 +67,6 @@ numSamples = size(y, 1);
         ind = startPulsesInd(k):endPulsesInd(k);
         coeff(k) = mean(y(ind));
     end
-
-end
-
-function y = shiftAndCrop(x, shiftPos, newLength)
-
-N = size(x, 1);
-
-y = zeros(newLength, 1);
-
-firstYind = max(1, 1 + shiftPos);
-lastYind = min(newLength, N + shiftPos);
-
-firstXind = max(1, 1 - shiftPos);
-lastXind = min(N, newLength - shiftPos);
-
-y(firstYind:lastYind) = x(firstXind:lastXind);
 
 end
 
