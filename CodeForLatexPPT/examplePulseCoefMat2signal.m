@@ -5,7 +5,7 @@ paths = genpath('C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 20
 addpath(paths);
 
 % Options for generation of images
-imagGenFlag = false; % Generate images
+imagGenFlag = true; % Generate images
 
 % Parameters
 pulseCoefMat(:, :, 1) = ...
@@ -138,6 +138,13 @@ mask = shiftAndCrop(mask, shiftSamp, numSamples);
 fig = figure;
 ax = axes(fig);
 plot(ax, t, abs(iq), t, mask)
+
+if imagGenFlag
+    name = 'correlation';
+    print(fig, ['C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Documentos\Img\', name, '.eps'], '-depsc');
+    print(fig, ['C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Documentos\Img\', name, '.pdf'], '-dpdf');
+    print(fig, ['C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Documentos\Img\', name, '.emf'], '-dmeta');
+end
 
 
 
