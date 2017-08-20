@@ -15,6 +15,8 @@ classdef WFSanalyzer < handle
         end
         
         function analyzeSignal(obj, x, xSampleRate)
+            % Any signal
+            
             clf(obj.fig);
             
             posAxSignal = [0 0.5 0.5 0.5];
@@ -49,6 +51,8 @@ classdef WFSanalyzer < handle
         end
         
         function analyzePulseSignal(obj, freq, xPulseCoefMat, xPulseLimits, y, ySampleRate )
+            % Pulse signal
+            
             clf(obj.fig);
             
             posAxSignal = [0 0.5 0.5 0.5];
@@ -73,7 +77,7 @@ classdef WFSanalyzer < handle
             
             % Represent IQ signal
             yPulseCoefMat = signal2pulseCoefficientMatrix(freq, xPulseCoefMat, xPulseLimits, y, ySampleRate);
-
+            
             
             % Represent difference with recovered signal from IQ signal
 
