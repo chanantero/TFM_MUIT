@@ -6,6 +6,8 @@ addpath(paths);
 
 % Options for generation of images
 imagGenFlag = true; % Generate images
+path = 'C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Documentos\Img\';
+formats = {'svg', 'emf'};
 
 % Parameters
 pulseCoefMat(:, :, 1) = ...
@@ -50,8 +52,7 @@ legend(lengendStrings);
 
 if imagGenFlag
     name = 'pulseSignal';
-    print(fig, ['C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Documentos\Img\', name, '.eps'], '-depsc');
-    print(fig, ['C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Documentos\Img\', name, '.emf'], '-dmeta');
+    printfig(fig, path, name, formats);
 end
 
 % Perform DFT
@@ -75,9 +76,7 @@ ax.XLabel.String = 'Frequency (Hz)';
 
 if imagGenFlag
     name = 'DFT_channel2';
-    print(fig, ['C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Documentos\Img\', name, '.eps'], '-depsc');
-    print(fig, ['C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Documentos\Img\', name, '.pdf'], '-dpdf');
-    print(fig, ['C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Documentos\Img\', name, '.emf'], '-dmeta');
+    printfig(fig, path, name, formats);
 end
 
 % Apply filter. Draw Mask
@@ -92,9 +91,7 @@ plot(ax, f_shift, mask)
 
 if imagGenFlag
     name = 'DFT_channel2_filter';
-    print(fig, ['C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Documentos\Img\', name, '.eps'], '-depsc');
-    print(fig, ['C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Documentos\Img\', name, '.pdf'], '-dpdf');
-    print(fig, ['C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Documentos\Img\', name, '.emf'], '-dmeta');
+    printfig(fig, path, name, formats);
 end
 
 % IQ Signal
@@ -118,9 +115,7 @@ ax.XLabel.String = 'Time (s)';
 
 if imagGenFlag
     name = 'IQ';
-    print(fig, ['C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Documentos\Img\', name, '.eps'], '-depsc');
-    print(fig, ['C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Documentos\Img\', name, '.pdf'], '-dpdf');
-    print(fig, ['C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Documentos\Img\', name, '.emf'], '-dmeta');
+    printfig(fig, path, name, formats);
 end
 
 % Find the temporal shift with a correlation
@@ -141,9 +136,7 @@ plot(ax, t, abs(iq), t, mask)
 
 if imagGenFlag
     name = 'correlation';
-    print(fig, ['C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Documentos\Img\', name, '.eps'], '-depsc');
-    print(fig, ['C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Documentos\Img\', name, '.pdf'], '-dpdf');
-    print(fig, ['C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Documentos\Img\', name, '.emf'], '-dmeta');
+    printfig(fig, path, name, formats);
 end
 
 
