@@ -40,7 +40,7 @@ k = k + nd;
 ind = k+1:k+nb;
 x(ind) = v(nb) + cosd(betabd)*nd*d;
 y(ind) = 2*sind(betabd)*nd*d + nl*d;
-alfa(ind) = -90 + betabd;
+alfa(ind) = -90;
 k = k + nb;
 
 % Diagonal top-right

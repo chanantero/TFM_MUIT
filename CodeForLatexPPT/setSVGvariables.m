@@ -1,3 +1,8 @@
+% Based on a SVG template with variables of the form "[variableName]",
+% substitute those variables for the actual values.
+% It was intended for embedding SVGs inside other SVGs in order to authomatize procecess,
+% but I've given up that, it presents some problems I can't solve for now.
+
 % Set size variables
     % Variables chosen by the user
     
@@ -8,6 +13,8 @@
         gridCellHeight = 200;
         frame2CellRatio_width = 0.9; frame2CellRatio_height = 0.9;
         imag2frameRatio_width = 0.9; imag2frameRatio_height = 0.9; % Proportion of the frame that the image occupies
+        imagOriginalWidth = 560;
+        imagOriginalHeight = 420;
     
         % Name of images
         path = 'C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Documentos\Img\';
@@ -41,23 +48,31 @@
     for k = 1:numImages
         varName = ['xRect', num2str(k)];
         value = frameXPos(k);
-        eval([varName, ' = value']);
+        eval([varName, ' = value;']);
         
         varName = ['yRect', num2str(k)];
         value = frameYPos(k);
-        eval([varName, ' = value']);
+        eval([varName, ' = value;']);
 
         varName = ['xImag', num2str(k)];
         value = imagXPos(k);
-        eval([varName, ' = value']);
+        eval([varName, ' = value;']);
         
         varName = ['yImag', num2str(k)];
         value = imagYPos(k);
-        eval([varName, ' = value']);
+        eval([varName, ' = value;']);
         
         varName = ['imagName', num2str(k)];
         name = names{k};
-        eval([varName, ' = [path, name]']);
+        eval([varName, ' = name;']);
+        
+        varName = ['scaleFactorX', num2str(k)];
+        value = imagWidth/imagOriginalWidth;
+        eval([varName, ' = value;']);
+        
+        varName = ['scaleFactorY', num2str(k)];
+        value = imagHeight/imagOriginalHeight;
+        eval([varName, ' = value;']);
     end
 
 % Read file
