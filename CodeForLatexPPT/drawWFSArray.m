@@ -9,7 +9,7 @@ betabd = 45; % Deviation angle between bottom/upper and diagonal sides
 [ xLoud, yLoud, angleLoud ] = octogon(d, nb, nd, nl, betabd);
 
 % Position and orientation of noise loudspeaker
-xNoise = -1; yNoise = 3; angleNoise = 0; noiseName = 'loudspeakerSound';
+xNoise = -1; yNoise = 2; angleNoise = 0; noiseName = 'loudspeakerSound';
 
 % Positions of microphones
 xMicro = [2; 2];
@@ -87,7 +87,9 @@ destFile = fopen('C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2
 fwrite(destFile, svgText, 'char');
 fclose(destFile);
 
-% Export to PNG
+% Export to PNG and emf
+% Matlab should be in the folder with the .svg to avoid path problems
 path = 'C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Documentos\Img\';
 fileName = 'WFSarrayScheme'; % Without extension
 system(['inkscape -z "', path, fileName, '.svg"', ' -e "', path, fileName, '.png"', ' --export-dpi=384']);
+system(['inkscape -z "', path, fileName, '.svg"', ' --export-emf "', path, fileName, '.emf"']);

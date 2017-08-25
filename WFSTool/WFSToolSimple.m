@@ -722,17 +722,15 @@ classdef WFSToolSimple < handle
         end
              
         function nullField(obj)
-            s = obj.exportInformation();
-            sTheo = s.TheoreticalScenario;
-            numFreq = numel(sTheo.frequencies);
+            numFreq = obj.numNoiseSources;
             
-            sourceCoeff = sTheo.sourcesCoeff;
+            sourceCoeff = obj.loudspeakerCoefficient;
             
             [~, noiseOrWFSarrayFlag] = obj.mapLoudspeakersOntoNoiseAndWFSArraySources();
             indepIndices = find(noiseOrWFSarrayFlag); % Noise sources
             depIndices = find(~noiseOrWFSarrayFlag); % WFS array sources
             
-            acPath = obj.expAcPath;
+            acPath = obj.expAcPath; % (numLoudspeakers x numMicrophones x numNoiseSources)
             sourceCoeffDep = zeros(numel(depIndices), numFreq);
             for f = 1:numFreq
                 B = -acPath(indepIndices, :, f).'*sourceCoeff(indepIndices, f);
@@ -933,13 +931,12 @@ classdef WFSToolSimple < handle
         end
 
         function updateForcedDisabledLoudspeakers(obj)
-            numLoudspeakers = obj.scenarioObj.numLoudspeakers;
-            disabledLoudspeakers = false(numLoudspeakers, 1);
+            disabledLoudspeakers = false(obj.numSourcesWFSarray, 1);
             % Assign delay and attenuation functions
             for k = 1:obj.numNoiseSources
                 if obj.real(k)
                     chann = obj.noiseSourceChannelMapping(k);
-                    if chann > 0 && chann <= numLoudspeakers
+                    if chann > 0 && chann <= obj.numSourcesWFSarray
                         disabledLoudspeakers(chann) = true;
                     end
                 end
@@ -1023,39 +1020,50 @@ classdef WFSToolSimple < handle
         end
              
         function delays = getDelays(obj, index)
-            numChannels = obj.scenarioObj.numLoudspeakers;
+            % Find index of source in scenarioObj. Only the sources that
+            % are active (virtual, real or both flags set to true) are in
+            % scenarioObj            
             activeSources = find(obj.virtual | obj.real);
+            ind = (activeSources == activeSources(index));
             
+            % Virtual
             if obj.virtual(index)
-                delays = obj.scenarioObj.delays(:, (activeSources == activeSources(index)));
+                delays = obj.scenarioObj.delays(:, ind);
             else
-                delays= zeros(numChannels, 1);
+                delays= zeros(obj.numSourcesWFSarray, 1);
             end
             
+            % If the real flag is set to true, the real value overrides the
+            % virtual value for the selected loudspeaker
             if obj.real(index)              
                 delays(obj.noiseSourceChannelMapping(index)) = 0;
             end
         end
         
         function attenuations = getAttenuations(obj, index)
-            numChannels = size(obj.scenarioObj.attenuations, 1);
+            % Find index of source in scenarioObj. Only the sources that
+            % are active (virtual, real or both flags set to true) are in
+            % scenarioObj            
             activeSources = find(obj.virtual | obj.real);
+            ind = (activeSources == activeSources(index));
             
+            % Virtual
             if obj.virtual(index)
-                attenuations = obj.virtualVolume(index)*obj.scenarioObj.attenuations(:, (activeSources == activeSources(index)));
+                attenuations = obj.virtualVolume(index)*obj.scenarioObj.attenuations(:, ind);
             else
-                attenuations = zeros(numChannels, 1);
+                attenuations = zeros(obj.numSourcesWFSarray, 1);
             end
             
-            if obj.real(index)
+            % If the real flag is set to true, the real value overrides the
+            % virtual value for the selected loudspeaker
+            if obj.real(index) 
                 attenuations(obj.noiseSourceChannelMapping(index)) = -obj.realVolume(index);
             end
         end
         
         function complexCoeff = getComplexCoeff(obj)
             numFreq = obj.numNoiseSources;
-            numSour = obj.scenarioObj.numLoudspeakers;
-            complexCoeff = zeros(numSour, numFreq);
+            complexCoeff = zeros(obj.numLoudspeakers, numFreq);
             for k = 1:numFreq
                 delays = obj.getDelays(k);
                 atten = obj.getAttenuations(k);
