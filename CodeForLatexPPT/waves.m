@@ -78,14 +78,66 @@ secondsPerPeriod = 1;
 imwrite(indices, extendedColormap, 'C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Documentos\Img\wave.gif', ...
     'LoopCount', 100, 'DelayTime', secondsPerPeriod/numFramesPerPeriod);
 
-%% Simulate second scenario: only virtual noise
+%% Simulate second scenario: only virtual noise and alltogether
 obj.setVirtual(true);
-obj.setReal(false);
+obj.setReal(true);
 obj.updateReprodPanelBasedOnVariables();
 obj.WFScalculation();
-obj.nullField();
-
-delete(obj.simulObj.imag);
-obj.simulObj.ax = ax;
+obj.WFS2realRatio();
 
 obj.simulObj.simulate();
+
+path = 'C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Documentos\Img\';
+fileName = 'waveCancellation';
+% Save BMP
+indices = scaled2indexedColors(size(extendedColormap, 1), ax.CLim, obj.simulObj.imag.CData);
+imwrite(indices, extendedColormap, [path, fileName, '.bmp']);
+
+% Generate GIF
+numFramesPerPeriod = 30; freq = 600;
+t = (0:numFramesPerPeriod-1)/(freq*numFramesPerPeriod);
+numFrames = numel(t);
+imagGIF = zeros(obj.simulObj.YnumPoints, obj.simulObj.XnumPoints, 1, numFrames);
+for k = 1:numFrames
+U = obj.simulObj.field.*repmat(exp(1i*2*pi*obj.simulObj.freq'*t(k)), [obj.simulObj.numMeasurePoints, 1]);
+U = reshape(sum(U, 2), obj.simulObj.XnumPoints, obj.simulObj.YnumPoints).';
+imagGIF(:, :, 1, k) = real(U);
+end
+indices = scaled2indexedColors(size(extendedColormap, 1), ax.CLim, imagGIF);
+
+secondsPerPeriod = 1;
+
+imwrite(indices, extendedColormap, [path, fileName, '.gif'], ...
+    'LoopCount', 100, 'DelayTime', secondsPerPeriod/numFramesPerPeriod);
+
+% Only virtual
+realChannels = obj.noiseSourceChannelMapping(obj.real);
+realFlag = ismember(obj.loudspeakerChannelMapping, realChannels);
+WFSflag = ~realFlag;
+obj.loudspeakerCoefficient(realFlag, :) = 0;
+
+obj.simulObj.simulate();
+
+path = 'C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Documentos\Img\';
+fileName = 'waveWFS';
+
+% Save BMP
+indices = scaled2indexedColors(size(extendedColormap, 1), ax.CLim, obj.simulObj.imag.CData);
+imwrite(indices, extendedColormap, [path, fileName, '.bmp']);
+
+% Generate GIF
+numFramesPerPeriod = 30; freq = 600;
+t = (0:numFramesPerPeriod-1)/(freq*numFramesPerPeriod);
+numFrames = numel(t);
+imagGIF = zeros(obj.simulObj.YnumPoints, obj.simulObj.XnumPoints, 1, numFrames);
+for k = 1:numFrames
+U = obj.simulObj.field.*repmat(exp(1i*2*pi*obj.simulObj.freq'*t(k)), [obj.simulObj.numMeasurePoints, 1]);
+U = reshape(sum(U, 2), obj.simulObj.XnumPoints, obj.simulObj.YnumPoints).';
+imagGIF(:, :, 1, k) = real(U);
+end
+indices = scaled2indexedColors(size(extendedColormap, 1), ax.CLim, imagGIF);
+
+secondsPerPeriod = 1;
+
+imwrite(indices, extendedColormap, [path, fileName, '.gif'], ...
+    'LoopCount', 100, 'DelayTime', secondsPerPeriod/numFramesPerPeriod);

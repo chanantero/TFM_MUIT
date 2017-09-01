@@ -37,10 +37,8 @@ obj.reproduceAndRecordForAcousticPaths();
 obj.calculateExperimentalAcousticPaths();
 sBase = obj.exportInformation();
 
-% Perform a more complex calibration (amplitude counts)
-
 PathName = 'Data\';
-FileName = sprintf('CalibrationLab_17-08-2017.mat');
+FileName = sprintf('CalibrationLab_31-08-2017.mat');
 save([PathName, FileName], 'sBase');
 
 % Test only the real noise source.
@@ -107,11 +105,11 @@ FileName = sprintf('Example.mat');
 sExp = obj.getExperimentalResultVariables();
 save([PathName, FileName], 'sExp');
 
-% Analyse results
-yPulseCoefMat = signal2pulseCoefficientMatrix(frequency, sum(sExp.pulseCoefMat, 3), sExp.pulseLimits, sExp.recordedSignal, sExp.sampleRate);
+%% Analyse results
+yPulseCoefMat = signal2pulseCoefficientMatrix(sExp.pulseLimits, sExp.frequencies(1), sum(sExp.pulseCoefMat, 3), sExp.recordedSignal, sExp.sampleRate);
 
 % Simulate pulse coefficients based on experimental acoustic path
-expAcPath = sExp.acPath;
+expAcPath = tuneAcousticPaths(sExp.acPathStruct.acousticPaths, sExp.acPathStruct.frequencies, frequency);
 numReceivers = obj.numReceivers;
 yPulseCoefMat_pseudoExp = zeros(numPointsMat, numReceivers, 2);
 for p = 1:numPointsMat
@@ -121,4 +119,24 @@ yPulseCoefMat_pseudoExp = sum(yPulseCoefMat_pseudoExp, 3);
 
 % Compare real pulse coefficients with the pseudo-experimental ones
 
+% Use predefined acoustic path
+acPathWFSarray;
+acPathNoiseSources;
+receiverPositions;
+
+acPath = acPathWFSarray;
+[~, indReal] = ismember(obj.noiseSourceChannelMapping(obj.real), obj.loudspeakerChannelMapping);
+acPath(:, indReal, :) = acPathNoiseSources;
+
+yPulseCoefMat = zeros(numPointsMat, numReceivers, 2);
+for f = 1:numFrequencies
+    yPulseCoefMat(:, :, f) = pulseCoefMat(:, :, f)*acPath.';
+end
+yPulseCoefMat = sum(yPulseCoefMat, 3);
+
+obj.simulObj.measurePoints = receiverPositions;
+for p = 1:numPulses
+    obj.simulObj.field = permute(yPulseCoefMat(p, :, :), [2 3 1]);
+    obj.simulObj.draw('scatter');
+end
 

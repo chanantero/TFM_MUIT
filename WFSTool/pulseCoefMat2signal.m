@@ -91,7 +91,7 @@ for p = 1:numPulses
     numPulseSamples = endPulse - startPulse;
     
 %     windMask = ones(numPulseSamples, 1); % Uniform window
-    windMask = windowing2(numPulseSamples, sampleRate, 0.1);
+    windMask = windowing('HanningModRisingDuration', numPulseSamples, sampleRate, 0.1);
     
     ind = startPulse:endPulse-1;
     t = (ind + offsetSample)/sampleRate;
@@ -119,40 +119,3 @@ end
 pulse = sum(aux, 2);
 
 end
-
-function mask = windowing1(numSamples, constantRatio)
-hanningRatio = 1 - constantRatio;
-numHann = floor(hanningRatio*numSamples);
-numPre = ceil(numHann/2);
-numPost = numHann - numPre;
-hannWind = hann(numHann);
-
-preInd = 1:numPre;
-postInd = (numSamples-numPost+1):numSamples;
-constantInd = numPre+1:numSamples-numPost;
-
-mask = zeros(numSamples, 1);
-mask(preInd) = hannWind(1:numPre);
-mask(postInd) = hannWind(numPre+1:end);
-mask(constantInd) = 1;
-
-end
-
-function mask = windowing2(numSamples, sampleRate, risingDuration)
-risingSamples = floor(sampleRate*risingDuration);
-
-numPre = min(risingSamples, floor(numSamples/2));
-numPost = numPre;
-hannWind = hann(numPre*2);
-
-preInd = 1:numPre;
-postInd = (numSamples-numPost+1):numSamples;
-constantInd = numPre+1:numSamples-numPost;
-
-mask = zeros(numSamples, 1);
-mask(preInd) = hannWind(1:numPre);
-mask(postInd) = hannWind(numPre+1:end);
-mask(constantInd) = 1;
-
-end
-

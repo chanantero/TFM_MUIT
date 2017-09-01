@@ -7,6 +7,7 @@ classdef simulator < handle
         sourceOrientations % Mx4 matrix. Rotation vector: [angle of rotation, Xaxis, Yaxis, Zaxis]
         radPatFuns
         freq
+        acPath
         
         % Graphical
         ax
@@ -83,8 +84,9 @@ classdef simulator < handle
 %             obj.generateMeasurePoints();
             
             % Simulate
+            obj.updateSimulatedAcousticPath();
             U = obj.calculate(obj.measurePoints);
-            obj.field = permute(sum(U, 1), [2 3 1]); % (numMeasPoints x numFrequencies)
+            obj.field = permute(sum(U, 2), [1 3 2]); % (numMeasPoints x numFrequencies)
                      
             obj.draw();
         end
@@ -94,29 +96,57 @@ classdef simulator < handle
             obj.measurePoints= plane(obj.XLim, obj.YLim, obj.XnumPoints, obj.YnumPoints, [], [], []);
         end
         
-        function draw(obj)
-            % Reshape as an image
-            U = reshape(sum(obj.field, 2), obj.XnumPoints, obj.YnumPoints).';
-                       
-            if ~isempty(obj.imag) && isvalid(obj.imag)
-                obj.imag.CData = real(U);
+        function draw(obj, option)
+            if nargin < 2
+                option = 'image';
+            end            
+            
+            if ~isempty(obj.imag) && isvalid(obj.imag);
+                type = obj.imag.Type;
             else
-%                 cla(obj.ax)
-                obj.ax.NextPlot = 'Add';
-                obj.imag = image(obj.ax, 'XData', obj.XLim, 'YData', obj.YLim,...
-                    'CData', real(U), 'CDataMapping', 'scaled');
-                obj.imag.HitTest = 'off';
-                obj.ax.Children = obj.ax.Children([2:end, 1]);
-                obj.ax.NextPlot = 'Replace';
+                type = 'invalid';
             end
             
-%             % Draw sources
-%             obj.ax.NextPlot = 'Add';
-%             scatter(obj.ax, obj.sourcePositions(:, 1), obj.sourcePositions(:, 2), 50, [1 1 1],...
-%                 'MarkerEdgeColor', [0 0 0]);
-%             obj.ax.NextPlot = 'Replace';
+            switch option
+                case 'image'
+                    % Reshape as an image
+                    U = reshape(sum(obj.field, 2), obj.XnumPoints, obj.YnumPoints).';
+                        if strcmp(type, 'image')
+                            % Change color according to that
+                            obj.imag.CData = real(U);
+                        else
+                            if strcmp(type, 'scatter')
+                                delete(obj.imag)                                
+                            end
+                            obj.ax.NextPlot = 'Add';
+                            obj.imag = image(obj.ax, 'XData', obj.XLim, 'YData', obj.YLim,...
+                                'CData', real(U), 'CDataMapping', 'scaled');
+                            obj.imag.HitTest = 'off';
+                            obj.ax.Children = obj.ax.Children([2:end, 1]);
+                            obj.ax.NextPlot = 'Replace';
+                        end
+                    
+                case 'scatter'
+                    
+                    U = sum(obj.field, 2);
+                    if strcmp(type, 'scatter')
+                        % Change color according to that
+                        obj.imag.CData = real(U);
+                    else
+                        if strcmp(type, 'image')
+                            delete(obj.imag)
+                        end
+                        obj.ax.NextPlot = 'Add';
+                        obj.imag = scatter(obj.ax, obj.measurePoints(:, 1), obj.measurePoints(:, 2), 50, real(U),...
+                            'MarkerEdgeColor', [0 0 0]);
+                        obj.imag.HitTest = 'off';
+                        obj.ax.Children = obj.ax.Children([2:end, 1]);
+                        obj.ax.NextPlot = 'Replace';
+                    end
+                    
+            end
         end
-       
+                       
         function animate(obj, t, stretchingFactor)
             t_ = t*stretchingFactor;
             
@@ -132,13 +162,15 @@ classdef simulator < handle
         end
         
         function U = calculate(obj, measurePointPositions)
-
-            acPath = obj.calculateAcousticPaths(measurePointPositions);
-            
+        
             numMeasPoints = size(measurePointPositions, 1);
-            U = acPath .* repmat(permute(obj.sourceCoefficients, [1, 3, 2]), [1, numMeasPoints, 1]);
-%             U = permute(sum(U, 2), [1 3 2]); % (numMeasPoints x numFrequencies)
+            U = obj.acPath .* repmat(permute(obj.sourceCoefficients, [3, 1, 2]), [numMeasPoints, 1, 1]); % (numMeasPoints, numSources, numFrequencies)
+%             U = permute(sum(U, 2), [1 3 2]); % (numMeasPoints x numFrequencies)       
                        
+        end
+        
+        function updateSimulatedAcousticPath(obj)
+            obj.acPath = obj.calculateAcousticPaths(obj.measurePoints);
         end
         
         function acPath = calculateAcousticPaths(obj, measurePointPositions)
@@ -150,7 +182,7 @@ classdef simulator < handle
             numFreq = obj.numFrequencies;
             numMeasPoints = size(measurePointPositions, 1);
 
-            acPath = zeros(numSour, numMeasPoints, numFreq);
+            acPath = zeros(numMeasPoints, numSour, numFreq);
             for s = 1:numSour
                 sourcePos = obj.sourcePositions(s, :);
                 radPatFun = obj.radPatFuns{s};
@@ -168,11 +200,11 @@ classdef simulator < handle
                 relDir = diffVec; % quatrotate no va incluído en el matlab del laboratorio. relDir = quatrotate(quat, diffVec);
                 radPatCoef = radPatFun(relDir);
                 
-                aux = zeros(1, numMeasPoints, numFreq);
+                aux = zeros(numMeasPoints, 1, numFreq);
                 for f = 1:obj.numFrequencies
-                    aux(1, :, f) = (radPatCoef.*exp(-1i*obj.k(f)*dist)./dist).';
+                    aux(:, 1, f) = (radPatCoef.*exp(-1i*obj.k(f)*dist)./dist).';
                 end
-                acPath(s, :, :) = aux;
+                acPath(:, s, :) = aux;
             end
                        
         end

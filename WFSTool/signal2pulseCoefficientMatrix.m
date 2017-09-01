@@ -1,4 +1,4 @@
-function yPulseCoefMat = signal2pulseCoefficientMatrix(freq, xPulseCoefMat, xPulseLimits, y, ySampleRate)
+function yPulseCoefMat = signal2pulseCoefficientMatrix(xPulseLimits, freq, xPulseCoefMat, y, ySampleRate)
 % freq. Frequencies
 % xPulseCoefMat. Original pulse coefficient matrix. (numPulsesX x
 % numChannelsX x numFrequencies

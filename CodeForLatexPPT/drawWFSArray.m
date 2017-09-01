@@ -1,4 +1,4 @@
-% Draw WFS array in SVG
+%% Draw WFS array in SVG
 
 % Generate positions and orientations of loudspeakers
 d = 0.18; % Separation between two contiguous loudspeakers. Size of one loudspeaker
@@ -44,6 +44,7 @@ numLoudspeakers = numel(xLoud);
 for k = 1:numLoudspeakers
     strLoud = [strLoud, sprintf(drawLoudspeakerStr, 'loudspeaker', xLoud(k), yLoud(k), angleLoud(k), xLoud(k), yLoud(k))];
 end
+strLoud = [sprintf('<g>\n'), strLoud, sprintf('</g>\n')];
 
 strLoudNoise =  sprintf(drawLoudspeakerStr, noiseName, xNoise, yNoise, angleNoise, xNoise, yNoise);
 
@@ -69,8 +70,7 @@ svgText = strrep(svgText, '[viewPortWidth]', num2str(width));
 svgText = strrep(svgText, '[viewPortHeight]', num2str(height));
 svgText = strrep(svgText, '[viewBox]', num2str(viewBox));
 
-% Insert the string to draw the loudspeakers in the desired positions and
-% orientations
+% Insert loudspeakers in the desired positions and orientations
 svgText = strrep(svgText, '[WFSarray]', strLoud);
 
 % Noise Loudspeakers
@@ -83,13 +83,13 @@ svgText = strrep(svgText, '[MicrophoneArray]', strMicro);
 svgText = strrep(svgText, '[RadDiag]', strDiag);
 
 % Write file
-destFile = fopen('C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Documentos\Img\WFSarrayScheme.svg', 'w', 'n', 'UTF-8');
+path = 'C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Documentos\Img\';
+name = 'WFSarrayScheme';
+destFile = fopen([path, name, '.svg'], 'w', 'n', 'UTF-8');
 fwrite(destFile, svgText, 'char');
 fclose(destFile);
 
-% Export to PNG and emf
+% Export to PNG and EMF
 % Matlab should be in the folder with the .svg to avoid path problems
-path = 'C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Documentos\Img\';
-fileName = 'WFSarrayScheme'; % Without extension
 system(['inkscape -z "', path, fileName, '.svg"', ' -e "', path, fileName, '.png"', ' --export-dpi=384']);
 system(['inkscape -z "', path, fileName, '.svg"', ' --export-emf "', path, fileName, '.emf"']);

@@ -127,7 +127,7 @@ while step > 1
     end
     
     % Set the new step
-    if ind == lowLimit || ind == highLimit
+    if ind == minLag || ind == maxLag
         break;
     end
     
