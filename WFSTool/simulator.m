@@ -2,10 +2,14 @@ classdef simulator < handle
         
     % Tunable properties
     properties
+        % Sources
         sourcePositions
         sourceCoefficients % (numSources x numFrequencies) matrix
         sourceOrientations % Mx4 matrix. Rotation vector: [angle of rotation, Xaxis, Yaxis, Zaxis]
         radPatFuns
+        % Receivers
+        measurePoints
+        % Other
         freq
         acPath
         
@@ -16,7 +20,8 @@ classdef simulator < handle
         XnumPoints
         YnumPoints
         z
-        measurePoints                
+        drawingOption % image or scatter
+                        
     end
     
     properties(SetAccess = private)
@@ -78,36 +83,32 @@ classdef simulator < handle
             obj.XnumPoints = 20;
             obj.YnumPoints = 20;
             obj.z = 0;
+            obj.drawingOption = 'image';
         end
         
         function simulate(obj)
 %             obj.generateMeasurePoints();
             
             % Simulate
-            obj.updateSimulatedAcousticPath();
-            U = obj.calculate(obj.measurePoints);
-            obj.field = permute(sum(U, 2), [1 3 2]); % (numMeasPoints x numFrequencies)
+            obj.updateTheoricAcousticPaths();
+            obj.updateField();
                      
             obj.draw();
         end
         
         function generateMeasurePoints(obj)
             % Create measure points
-            obj.measurePoints= plane(obj.XLim, obj.YLim, obj.XnumPoints, obj.YnumPoints, [], [], []);
+            obj.measurePoints = plane(obj.XLim, obj.YLim, obj.XnumPoints, obj.YnumPoints, [], [], []);
         end
         
-        function draw(obj, option)
-            if nargin < 2
-                option = 'image';
-            end            
-            
+        function draw(obj)            
             if ~isempty(obj.imag) && isvalid(obj.imag);
                 type = obj.imag.Type;
             else
                 type = 'invalid';
             end
             
-            switch option
+            switch obj.drawingOption
                 case 'image'
                     % Reshape as an image
                     U = reshape(sum(obj.field, 2), obj.XnumPoints, obj.YnumPoints).';
@@ -160,20 +161,17 @@ classdef simulator < handle
                 pause(incrT(l))
             end
         end
-        
-        function U = calculate(obj, measurePointPositions)
-        
-            numMeasPoints = size(measurePointPositions, 1);
-            U = obj.acPath .* repmat(permute(obj.sourceCoefficients, [3, 1, 2]), [numMeasPoints, 1, 1]); % (numMeasPoints, numSources, numFrequencies)
-%             U = permute(sum(U, 2), [1 3 2]); % (numMeasPoints x numFrequencies)       
-                       
+              
+        function updateField(obj)
+            U = obj.calculate(obj.measurePoints);
+            obj.field = permute(sum(U, 2), [1 3 2]); % (numMeasPoints x numFrequencies)
         end
         
-        function updateSimulatedAcousticPath(obj)
-            obj.acPath = obj.calculateAcousticPaths(obj.measurePoints);
+        function updateTheoricAcousticPaths(obj)
+            obj.acPath = obj.calculateTheoricAcousticPaths(obj.measurePoints);
         end
         
-        function acPath = calculateAcousticPaths(obj, measurePointPositions)
+        function acPath = calculateTheoricAcousticPaths(obj, measurePointPositions)
             % Calculate the difference vectors between sources and measure
             % points
             % First dimension along measurePoints, second dimension along
@@ -209,6 +207,14 @@ classdef simulator < handle
                        
         end
         
+        function U = calculate(obj, measurePointPositions)
+        
+            numMeasPoints = size(measurePointPositions, 1);
+            U = obj.acPath .* repmat(permute(obj.sourceCoefficients, [3, 1, 2]), [numMeasPoints, 1, 1]); % (numMeasPoints, numSources, numFrequencies)
+%             U = permute(sum(U, 2), [1 3 2]); % (numMeasPoints x numFrequencies)       
+                       
+        end
+   
         function setSources(obj, varargin)
             
             p = inputParser;
