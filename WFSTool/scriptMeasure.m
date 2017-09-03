@@ -3,8 +3,9 @@
 % purpose is to reproduce a signal.
 % The real source will remain always the same. The virtual one will change
 % in amplitude, phase and position.
-obj = WFSToolSimple;
 
+%% Parameters.
+% User can change this:
 numLoudspeakers = 96;
 
 realPosition = [0.6 0 0]; % Assumed real position
@@ -19,12 +20,18 @@ amplitude = 0.5;
 phase = 0;
 frequency = 600;
 
-% Set scenario
-obj.changeScenario(numLoudspeakers);
+PathName = 'C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Matlab\Data\';
+ID = datestr(now, 'yyyy-mm-dd_HH:MM:SS');
+
+%% Processing
+
+% A. Set scenario
+obj = WFSToolSimple;
+
+obj.setNumWFSarraySources(numLoudspeakers);
 
 obj.setNumNoiseSources(2);
 obj.noiseSourceChannelMapping = [1; 0];
-
 obj.amplitude = [amplitude; amplitude];
 obj.phase = [phase; phase];
 obj.frequency = [frequency; frequency];
@@ -32,30 +39,7 @@ obj.noiseSourcePosition = [realPosition; realPosition];
 
 obj.updateReprodPanelBasedOnVariables();
 
-% For the current configuration. Get the experimental acoustic path
-obj.reproduceAndRecordForAcousticPaths();
-obj.calculateExperimentalAcousticPaths();
-sBase = obj.exportInformation();
-
-PathName = 'Data\';
-FileName = sprintf('CalibrationLab_31-08-2017.mat');
-save([PathName, FileName], 'sBase');
-
-% Test only the real noise source.
-obj.setVirtual([false; false]);
-obj.setReal([true; false]);
-obj.updateReprodPanelBasedOnVariables();
-obj.WFScalculation();
-obj.reproduceAndRecord('main');
-sExpOnlyNoise = obj.getExperimentalResultVariables();
-yPulseCoefMat_OnlyNoise = signal2pulseCoefficientMatrix(frequency, ones(1, 1), sExpOnlyNoise.pulseLimits, sExpOnlyNoise.recordedSignal, sExpOnlyNoise.sampleRate);
-
-obj.setVirtual([false; true]);
-obj.setReal([true; false]);
-obj.updateReprodPanelBasedOnVariables();
-obj.WFScalculation();
-
-% Test the multiple cases
+% B. Preparte the variables for the multiple cases
 xVec = linspace(minXPos, maxXPos, numXPoints);
 yVec = linspace(minYPos, maxYPos, numYPoints);
 zVec = linspace(minZPos, maxZPos, numZPoints);
@@ -66,6 +50,7 @@ sizeMat = size(X);
 numPointsMat = numel(X);
 
 pulseCoefMat = zeros(numPointsMat, numLoudspeakers, 2);
+simulatedField = zeros(
 for p = 1:numPointsMat
     % Set virtual position
     virtPos = [X(p), Y(p), Z(p)];
@@ -80,8 +65,46 @@ for p = 1:numPointsMat
     
     % Get the coefficients and save them in the pulse coefficient matrix
     pulseCoefMat(p, :, :) = permute(obj.loudspeakerCoefficient, [3, 1, 2]);
-end
     
+    % Simulate the received signals
+    obj.simulate();
+    obj.simulField;
+end
+
+% C. Experiment
+
+% C.1 Experimental acoustic path
+obj.reproduceAndRecordForAcousticPaths();
+obj.calculateExperimentalAcousticPaths();
+
+% Retrieve and save information
+sBase = obj.exportInformation();
+FileName = ['Session_', ID, 'calibration', '.mat'];
+save([PathName, FileName], 'sBase');
+
+% C.2 Only real noise source
+obj.setVirtual([false; false]); % No virtual sources
+obj.setReal([true; false]); % Only real source
+obj.updateReprodPanelBasedOnVariables();
+
+obj.WFScalculation(); % Update coefficents of loudspeakers. Only the channel of the real loudspeaker should have coefficient different than 0
+obj.reproduceAndRecord('main', 'soundTime', 1); % Simple reproduction of one pulse of 1 second
+
+% Retrieve and save information
+sExpOnlyNoise = obj.getExperimentalResultVariables();
+yPulseCoefMat_OnlyNoise = signal2pulseCoefficientMatrix(sExpOnlyNoise.pulseLimits, frequency, ones(1, 1), sExpOnlyNoise.recordedSignal, sExpOnlyNoise.sampleRate);
+
+FileName = ['Session_', ID, 'onlyNoise', '.mat'];
+save([PathName, FileName], 'sExpOnlyNoise');
+
+% Go back to previous configuration
+obj.setVirtual([false; true]);
+obj.setReal([true; false]);
+obj.updateReprodPanelBasedOnVariables();
+obj.WFScalculation();
+
+% C.3 Reproduce signal for the multiple cases
+
 % Create signal
 pulseDuration = 1;
 silenceDuration = 1;
@@ -99,15 +122,16 @@ obj.pulseLimits = pulseLim;
 obj.reprodFrequencies = obj.frequency;
 
 % Retrieve and save information
-PathName = 'C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Matlab\Data\';
-FileName = sprintf('Example.mat');
-
 sExp = obj.getExperimentalResultVariables();
+
+FileName = ['Session_', ID, 'cases', '.mat'];
 save([PathName, FileName], 'sExp');
 
-%% Analyse results
+% Analyse results
 yPulseCoefMat = signal2pulseCoefficientMatrix(sExp.pulseLimits, sExp.frequencies(1), sum(sExp.pulseCoefMat, 3), sExp.recordedSignal, sExp.sampleRate);
 
+
+%%
 % Simulate pulse coefficients based on experimental acoustic path
 expAcPath = tuneAcousticPaths(sExp.acPathStruct.acousticPaths, sExp.acPathStruct.frequencies, frequency);
 numReceivers = obj.numReceivers;

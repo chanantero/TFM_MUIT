@@ -1,4 +1,4 @@
-function Mapprox = bestApproxMatrix( M, rank )
+function Mapprox = closestKRankMatrix( M, rank )
 % Get the matrix with range == rank that has the minimum square error with the
 % original matrix M (minimum square error = minimum frobenius norm)
 
