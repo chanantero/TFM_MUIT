@@ -93,7 +93,7 @@ classdef scenario < handle
             
             obj.updateDelaysAndAttenuations();
         end
-        
+                
         function setNumReceivers(obj, numReceivers)
             obj.receiversPosition = zeros(numReceivers, 3);
             if numReceivers > 0
@@ -150,19 +150,26 @@ classdef scenario < handle
 
         end
         
-        function setReceiverPosition(obj, receiverPosition, index)
+        function setReceiverPosition(obj, receiverPosition, indices)
             if obj.enabledGUI
                 % Graphics
                 receiver = findobj(obj.ax, 'Tag', 'receiver');
+            end
                 
+            for k = 1:numel(indices)
+                index = indices(k);
+                
+                if obj.enabledGUI
                 receiver.XData(index) = receiverPosition(1);
                 receiver.YData(index) = receiverPosition(2);
                 receiver.ZData(index) = receiverPosition(3);
+                end
+            
+                % Other variables
+                obj.receiversPosition(index, :) = receiverPosition(k, :);
             end
             
-            % Other variables
-            obj.receiverPosition(index, :) = receiverPosition;
-            
+            obj.updateDelaysAndAttenuations();
         end
               
         function setScenario(obj, sourcesPosition, receiversPosition, loudspeakersPosition, loudspeakersOrientation, roomPosition)

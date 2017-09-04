@@ -52,7 +52,7 @@ classdef WFSToolSimple < handle
         WFSarrayAcPathStruct
         
         % Simulation results
-        simulField
+        
         
         % Infrastructure variables
         fig
@@ -90,6 +90,9 @@ classdef WFSToolSimple < handle
         
         % Experiment
         recorded
+        
+        % Simulation
+        simulField
         
         % Counting
         numNoiseSources
@@ -166,7 +169,7 @@ classdef WFSToolSimple < handle
         end
         
         function set.receiverPosition(obj, value)
-            obj.scenarioObj.receiversPosition = value;
+            obj.scenarioObj.setReceiverPosition(value, (1:size(value, 1)));
             obj.simulObj.recPositions = value;
         end
            
@@ -216,7 +219,7 @@ classdef WFSToolSimple < handle
         end
         
         function set.loudspeakerRadiattionPattern(obj, value)
-            obj.scenarioObj.radPatFuns = value;
+            obj.simulObj.radPatFuns = value;
         end
         
         function loudspeakerFrequencies = get.loudspeakerFrequencies(obj)
@@ -232,6 +235,10 @@ classdef WFSToolSimple < handle
             recorded = obj.player.recorded{1};
         end
                 
+        % Simulation
+        function simulField = get.simulField(obj)
+            simulField = obj.simulObj.field;
+        end
     end
     
     methods
@@ -355,7 +362,7 @@ classdef WFSToolSimple < handle
             obj.updateComMat();
             obj.updateSignalProvidersVariables();
             
-            uniqueFreq = obj.frequency;
+            uniqueFreq = unique(obj.frequency);
             obj.noiseSourceAcPathStruct = struct('acousticPaths', zeros(obj.numReceivers, numNoiseSources, numel(uniqueFreq)), 'frequencies', uniqueFreq);
         end
         
@@ -363,8 +370,8 @@ classdef WFSToolSimple < handle
                   
             s = WFSToolSimple.generateScenario(numLoudspeakers);
             obj.WFSarrayChannelMapping = (1:numLoudspeakers)';
-            obj.WFSarrayRadiationPattern = repmat({{@ simulator.monopoleRadPat}}, numLoudspeakers, 1);
-            uniqueFreq = unique(obj.frequencies);
+            obj.WFSarrayRadiationPattern = repmat({@ simulator.monopoleRadPat}, numLoudspeakers, 1);
+            uniqueFreq = unique(obj.frequency);
             obj.WFSarrayAcPathStruct = struct('acousticPaths', zeros(obj.numReceivers, numLoudspeakers, numel(uniqueFreq)), 'frequencies', uniqueFreq);
             
             % Reset noise sources and receivers
@@ -389,7 +396,7 @@ classdef WFSToolSimple < handle
             obj.receiverRadiationPattern = repmat({@ simulator.monopoleRadPat}, numReceivers);
             obj.receiverCorr = ones(numReceivers, 1);
             obj.receiverChannelMapping = (1:numReceivers)';
-            obj.uniqueFreq = obj.frequency;
+            uniqueFreq = unique(obj.frequency);
             obj.noiseSourceAcPathStruct = struct('acousticPaths', zeros(obj.numReceivers, obj.numNoiseSources, numel(uniqueFreq)), 'frequencies', uniqueFreq);
             obj.WFSarrayAcPathStruct = struct('acousticPaths', zeros(obj.numReceivers, obj.numSourcesWFSarray, numel(uniqueFreq)), 'frequencies', uniqueFreq);
         end
@@ -440,16 +447,16 @@ classdef WFSToolSimple < handle
             
             % Unify the acoustic paths for the same frequencies
             uniqueFreq = unique(obj.frequency);
-            WFSarrayAcPath = tuneAcousticPaths(obj.WFSarrayAcPathStruct.acousticPaths, obj.WFSarrayAcPathStruct.frequencies, uniqueFreq);
-            noiseSourcesAcPath = tuneAcousticPaths(obj.noiseSourceAcPathStruct.acousticPaths, obj.noiseSourceAcPathStruct.frequencies, uniqueFreq);
+            WFSarrayAcPath = WFSToolSimple.tuneAcousticPaths(obj.WFSarrayAcPathStruct.acousticPaths, obj.WFSarrayAcPathStruct.frequencies, uniqueFreq);
+            noiseSourcesAcPath = WFSToolSimple.tuneAcousticPaths(obj.noiseSourceAcPathStruct.acousticPaths, obj.noiseSourceAcPathStruct.frequencies, uniqueFreq);
             
             % Apply virtual flags and virtualVolume
             WFSarrayCoef = obj.getComplexCoeffWFS();
-            WFSarrayCoef = WFSarrayCoef * repmat(obj.virtualVolume', [obj.numSourcesWFSarray, 1]);
+            WFSarrayCoef = WFSarrayCoef .* repmat(obj.virtualVolume', [obj.numSourcesWFSarray, 1]);
             WFSarrayCoef(:, ~obj.virtual) = 0;
             
             % Apply real flags and realVolume
-            noiseSourceCoef = diag(obj.amplitude .* exp(1i*obj.phase) * (-obj.realVolume));
+            noiseSourceCoef = diag(obj.amplitude .* exp(1i*obj.phase) .* (-obj.realVolume));
             noiseSourceCoef(:, ~obj.real) = 0;   
             
             % Substitute data for the loudspeakers used as real noise
@@ -464,13 +471,13 @@ classdef WFSToolSimple < handle
             nSrcAcPath_real = noiseSourcesAcPath(:, obj.real, :);
                              
             [ldspkrsChannelMapping, mapping] = combineIndices(obj.WFSarrayChannelMapping, nSrcChannelMapping_real);
-            numLdsprks = numel(combKey);
+            numLdsprks = numel(ldspkrsChannelMapping);
             
-            ldspkrsCoef = zeros(numel(combKey), obj.numNoiseSources);
+            ldspkrsCoef = zeros(numLdsprks, obj.numNoiseSources);
             ldspkrsPos = zeros(numLdsprks, 3);
             ldspkrsOrient = zeros(numLdsprks, 4);
-            ldspkrsRadPat = cell(numLdsprks);
-            ldspkrsAcPath = zeros(obj.numReceivers, numLdsprks, obj.numNoiseSources);
+            ldspkrsRadPat = cell(numLdsprks, 1);
+            ldspkrsAcPath = zeros(obj.numReceivers, numLdsprks, numel(uniqueFreq));
             
             ldspkrsCoef(mapping(1).destinationInd, :) = WFSarrayCoef(mapping(1).originInd, :);
             ldspkrsPos(mapping(1).destinationInd, :) = obj.WFSarrayPosition(mapping(1).originInd, :);
@@ -555,17 +562,12 @@ classdef WFSToolSimple < handle
         end        
         
         function simulate(obj)
-            % In case we used the simulator object to draw an image of the
-            % theoric field
-                % Set measure points to the real receiver positions
-                obj.simulObj.measurePoints = obj.receiverPosition;
-                % Set the acoustic path
-                simulAcPath = WFSToolSimple.tuneAcousticPaths(obj.loudspeakerAcPathStruct.acousticPaths, obj.loudspeakerAcPathStruct.frequencies, obj.loudspeakerFrequencies);
-                obj.simulObj.acPath = simulAcPath;
-            
+            % Set the acoustic path
+            simulAcPath = WFSToolSimple.tuneAcousticPaths(obj.loudspeakerAcPathStruct.acousticPaths, obj.loudspeakerAcPathStruct.frequencies, obj.loudspeakerFrequencies);
+            obj.simulObj.acPath = simulAcPath;
+
             % Simulate
-            obj.simulField = obj.simulObj.updateField();
-            obj.simulField = obj.simulObj.field;
+            obj.simulObj.updateField();
             
             % Draw
             obj.simulObj.drawingOption = 'scatter';
@@ -1232,8 +1234,12 @@ classdef WFSToolSimple < handle
             
             % Simulate
             obj.simulObj.generateMeasurePoints();
+            obj.simulObj.updateTheoricAcousticPathsImage();
+            obj.simulObj.updateFieldImage();
+            
+            % Draw
             obj.simulObj.drawingOption = 'image';
-            obj.simulObj.simulate();
+            obj.simulObj.draw();
         end
         
     end
@@ -1300,16 +1306,33 @@ classdef WFSToolSimple < handle
             % contains the frequencies at which the acPath has been
             % measured
             
-            [numReceiv, numSources, ~] = size(acPath);
+            [numReceiv, numSources, numFreqs] = size(acPath);
             
             % Create gridded interpolant
-            F = griddedInterpolant({1:numReceiv, 1:numSources, acPathFrequencies}, acPath);
+            recPoints = 1:numReceiv;
+            sourPoints = 1:numSources;
             
-            % Create query points
-            queryPoints = {1:numReceiv, 1:numSources, queryFrequencies};
+            gridPoints = {recPoints, sourPoints, acPathFrequencies};
+            queryPoints = {recPoints, sourPoints, queryFrequencies};
             
-            % Evaluate
-            acPath_query = F(queryPoints);
+            flag = [numReceiv, numSources, numFreqs] > 1;
+            
+            if numFreqs == 1
+                acPath_query = repmat(acPath, [1, 1, numel(queryFrequencies)]);
+            else
+                gridPoints = gridPoints(flag);
+                queryPoints = queryPoints(flag);
+                
+                F = griddedInterpolant(gridPoints, acPath, 'linear', 'nearest');
+                acPath_query = F(queryPoints);
+                if numReceiv == 1 && numSources > 1
+                    F = griddedInterpolant(gridPoints, permute(acPath, [2 3 1]), 'linear', 'nearest');
+                    acPath_query = permute(acPath_query, [3 1 2]);
+                elseif numReceiv > 1 && numSources == 1
+                    acPath_query = permute(acPath_query, [1 3 2]);
+                end
+            end
+            
         end
         
         function coefficients_new = nullField(coefficients, channelMapping, frequencies, fixedChannels, acousticPathStructure)

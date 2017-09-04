@@ -46,8 +46,9 @@ priorityInd = priorityInd(flagComb);
 
 % Do the same but only with the combination key elements that are not
 % occupied by the priority assignation
-[flagComb, baseInd] = ismember(combKey(~flagComb), baseKey);
-combInd_base = find(flagComb);
+restInd = find(~flagComb);
+[flagComb, baseInd] = ismember(combKey(restInd), baseKey);
+combInd_base = combKey(restInd(flagComb));
 baseInd = baseInd(flagComb);
 
 mapping = struct('destinationInd', combInd_base, 'originInd', baseInd);

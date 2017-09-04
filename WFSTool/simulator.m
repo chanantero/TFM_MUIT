@@ -23,6 +23,8 @@ classdef simulator < handle
         YLim
         XnumPoints
         YnumPoints
+        measurePointsImage
+        acPathImage
         z
         drawingOption % image or scatter
         
@@ -31,6 +33,7 @@ classdef simulator < handle
     properties(SetAccess = private)
         field % Result of simulation
         imag % Result of simulation
+        fieldImage
     end
     
     properties(Constant)
@@ -40,7 +43,8 @@ classdef simulator < handle
     properties(Dependent)
         numSources
         numFrequencies
-        numMeasurePoints
+        numRec
+        numPointsImage
         k % Propagation constant. numFrequencies-element vector
     end
     
@@ -50,8 +54,12 @@ classdef simulator < handle
             numSources = size(obj.sourcePositions, 1);
         end
         
-        function numMeasurePoints = get.numMeasurePoints(obj)
-            numMeasurePoints = size(obj.recPositions, 1);
+        function numRec = get.numRec(obj)
+            numRec = size(obj.recPositions, 1);
+        end
+        
+        function numPointsImage = get.numPointsImage(obj)
+            numPointsImage = size(obj.measurePointsImage, 1);
         end
         
         function numFrequencies = get.numFrequencies(obj)
@@ -83,11 +91,10 @@ classdef simulator < handle
                 'radiationPattern', radPatFun);
             
             recPos = [0 0 0];
-            recCoef = 1;
             theta = 0; rotAxis = [1 0 0];
             recOrient = [theta, rotAxis];
             radPatFun = {@simulator.monopoleRadPat};
-            obj.setReceivers(recPos, 'coefficient', recCoef, 'orientation', recOrient,...
+            obj.setReceivers(recPos, 'orientation', recOrient,...
                 'radiationPattern', radPatFun);
             
             obj.freq = 340;
@@ -111,7 +118,7 @@ classdef simulator < handle
         
         function generateMeasurePoints(obj)
             % Create measure points
-            obj.recPositions = plane(obj.XLim, obj.YLim, obj.XnumPoints, obj.YnumPoints, [], [], []);
+            obj.measurePointsImage = plane(obj.XLim, obj.YLim, obj.XnumPoints, obj.YnumPoints, [], [], []);
         end
         
         function draw(obj)
@@ -123,8 +130,8 @@ classdef simulator < handle
             
             switch obj.drawingOption
                 case 'image'
-                    % Reshape as an image
-                    U = reshape(sum(obj.field, 2), obj.XnumPoints, obj.YnumPoints).';
+                    % Reshape as an image                    
+                    U = reshape(sum(obj.fieldImage, 2), obj.XnumPoints, obj.YnumPoints).';
                     if strcmp(type, 'image')
                         % Change color according to that
                         obj.imag.CData = real(U);
@@ -177,7 +184,7 @@ classdef simulator < handle
         
         function updateField(obj)
             
-            U = zeros(obj.numMeasurePoints, obj.numFrequencies);
+            U = zeros(obj.numRec, obj.numFrequencies);
             for f = 1:obj.numFrequencies
                 U(:, f) = (obj.acPath(:, :, f) * obj.sourceCoefficients(:, f));
             end
@@ -186,8 +193,27 @@ classdef simulator < handle
             
         end
         
+        function updateFieldImage(obj)
+            U = zeros(obj.numPointsImage, obj.numFrequencies);
+            for f = 1:obj.numFrequencies
+                U(:, f) = (obj.acPathImage(:, :, f) * obj.sourceCoefficients(:, f));
+            end
+            
+            obj.fieldImage = U;
+        end
+        
         function updateTheoricAcousticPaths(obj)
-            obj.acPath = calculateTheoricAcousticPaths_(obj.sourcePositions, obj.radPatFuns, obj.sourceOrientations, obj.recPositions, obj.recRadPatFuns, obj.recOrientations, obj.recCoefficients, obj.freq, obj.c);
+            obj.acPath = simulator.calculateTheoricAcousticPaths(obj.sourcePositions, obj.radPatFuns, obj.sourceOrientations, obj.recPositions, obj.recRadPatFuns, obj.recOrientations, obj.freq, obj.c);
+        end
+        
+        function updateTheoricAcousticPathsImage(obj)
+            recRadPat = repmat({@simulator.monopoleRadPat}, [obj.numPointsImage, 1]);
+            recOrient = repmat([0 0 0 1], [obj.numPointsImage, 1]);
+                    
+            obj.acPathImage = simulator.calculateTheoricAcousticPaths(...
+                obj.sourcePositions, obj.radPatFuns, obj.sourceOrientations,...
+                obj.measurePointsImage, recRadPat, recOrient,...
+                obj.freq, obj.c);        
         end
         
         function setSources(obj, varargin)
@@ -242,7 +268,7 @@ classdef simulator < handle
             parse(p, varargin{:})
             
             obj.recPositions = p.Results.position;
-            N = obj.numMeasurePoints;
+            N = obj.numRec;
             orientation = p.Results.orientation;
             radiationPattern = p.Results.radiationPattern;
             
@@ -405,8 +431,8 @@ classdef simulator < handle
             % Rotation vector to quaternion
             % rotVec is a Mx4 matrix. Each row is a rotation vector
             % quat is a Mx4 matrix. Each row is a quaternion
-            rotVecNorm = sqrt(sum(rotVec(2:end).^2, 2));
-            rotVec(2:end) = rotVec(2:end)./repmat(rotVecNorm, 1, 3);
+            rotVecNorm = sqrt(sum(rotVec(:, 2:end).^2, 2));
+            rotVec(:, 2:end) = rotVec(:, 2:end)./repmat(rotVecNorm, 1, 3);
             
             theta = -rotVec(:, 1);
             x = rotVec(:, 2);
@@ -440,7 +466,7 @@ classdef simulator < handle
             vec = quatrotate_custom(quat, z);
         end
         
-        function acPath = calculateTheoricAcousticPaths_(sourcePos, sourceRadPat, sourceOrient, recPos, recRadPat, recOrient, frequencies, propagVeloc)
+        function acPath = calculateTheoricAcousticPaths(sourcePos, sourceRadPat, sourceOrient, recPos, recRadPat, recOrient, frequencies, propagVeloc)
             % Calculate the difference vectors between sources and measure
             % points
             % First dimension along recPositions, second dimension along
@@ -463,34 +489,31 @@ classdef simulator < handle
             
             acPath = zeros(numRec, numSour, numFreq);
             for s = 1:numSour
-                sourcePos = sourcePos(s, :);
                 sourceRadPatFun = sourceRadPat{s};
-              
-                diffVec = recPos - repmat(sourcePos, numRec, 1);
+
+                diffVec = recPos - repmat(sourcePos(s, :), numRec, 1);
                 dist = sqrt(sum(diffVec.^2, 2));
-                
+
                 % Quatrotate no va incluído en el matlab del laboratorio. relDir = quatrotate(quat, diffVec); Usar quatrotate_custom.
                 relDir = quatrotate_custom( quat_source(s, :), diffVec );
-                sourceRadPatCoef = zeros(numRec, 1, numFreq);
-                for r = 1:numRec
-                    for f = 1:numFreq
-                        sourceRadPatCoef(r, 1, f) = sourceRadPatFun(relDir(r, :), frequencies(f));
-                    end
+                try
+                sourceRadPatCoef = permute(sourceRadPatFun(relDir, frequencies), [1, 3, 2]);
+                catch
+                    4
                 end
-                                              
+                
                 % Receiver radiation pattern coefficent
                 relDir = quatrotate_custom( quat_rec, -diffVec );
                 recRadPatCoef = zeros(numRec, 1, numFreq);
                 for r = 1:numRec
-                    for f = 1:numFreq
-                        recRadPatCoef(r, 1, f) = recRadPat{r}(relDir(r, :));
-                    end
+                    recRadPatFun = recRadPat{r};
+                    recRadPatCoef(r, 1, :) = recRadPatFun(relDir(r, :), frequencies);
                 end
-
+                
                 % Calculate
                 aux = zeros(numRec, 1, numFreq);
                 for f = 1:numFreq
-                    aux(:, 1, f) = (sourceRadPatCoef.*exp(-1i*k(f)*dist)./dist .* recRadPatCoef);
+                    aux(:, 1, f) = (sourceRadPatCoef(:, 1, f).*exp(-1i*k(f)*dist)./dist .* recRadPatCoef(:, 1, f));
                 end
                 acPath(:, s, :) = aux;
             end

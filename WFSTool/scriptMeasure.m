@@ -36,6 +36,8 @@ obj.amplitude = [amplitude; amplitude];
 obj.phase = [phase; phase];
 obj.frequency = [frequency; frequency];
 obj.noiseSourcePosition = [realPosition; realPosition];
+obj.setVirtual([false; true]);
+obj.setReal([true; false]);
 
 obj.updateReprodPanelBasedOnVariables();
 
@@ -50,7 +52,7 @@ sizeMat = size(X);
 numPointsMat = numel(X);
 
 pulseCoefMat = zeros(numPointsMat, numLoudspeakers, 2);
-simulatedField = zeros(
+simulatedField = zeros(obj.numReceivers, obj.numSourcesWFSarray);
 for p = 1:numPointsMat
     % Set virtual position
     virtPos = [X(p), Y(p), Z(p)];
@@ -68,7 +70,7 @@ for p = 1:numPointsMat
     
     % Simulate the received signals
     obj.simulate();
-    obj.simulField;
+    simulatedField = obj.simulField;
 end
 
 % C. Experiment
