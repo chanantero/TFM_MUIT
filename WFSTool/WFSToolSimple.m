@@ -47,13 +47,10 @@ classdef WFSToolSimple < handle
         % - yChannelMapping
         % - frequencies
         expAcPathStruct % Last experimental acoustic path calculated. If it's done well, it is supposed to be updated for the current physical scenario.
-        loudspeakerAcPathStruct
+        loudspeakerAcPathStruct % Its not dependent because in the simulator object we are dealing with a matrix, not a structure
         noiseSourceAcPathStruct
         WFSarrayAcPathStruct
-        
-        % Simulation results
-        
-        
+
         % Infrastructure variables
         fig
         player
@@ -570,8 +567,7 @@ classdef WFSToolSimple < handle
             obj.simulObj.updateField();
             
             % Draw
-            obj.simulObj.drawingOption = 'scatter';
-            obj.simulObj.draw();
+            obj.simulObj.drawField();
             
         end        
         
@@ -671,6 +667,44 @@ classdef WFSToolSimple < handle
             obj.updateSignalSpecFromParameters();
             obj.reprodPanel.setSignals(obj.signalsSpec);
         end
+        
+        function theoricWFSacousticPath(obj)
+            
+            uniqueFreq = unique(obj.frequency);
+            
+            acPath = simulator.calculateTheoricAcousticPaths(...
+                obj.WFSarrayPosition, obj.WFSarrayRadiationPattern, obj.WFSarrayOrientation,...
+                obj.receiverPosition, obj.receiverRadiationPattern, obj.receiverOrientation, uniqueFreq, obj.c);
+            
+            obj.WFSarrayAcPathStruct = struct('acousticPaths', acPath, 'frequencies', uniqueFreq);
+            
+        end
+        
+        function theoricNoiseSourceAcousticPath(obj)
+            
+            uniqueFreq = unique(obj.frequency);
+
+            acPath = simulator.calculateTheoricAcousticPaths(...
+                obj.noiseSourcePosition, obj.noiseSourceRadiationPattern, obj.noiseSourceOrientation,...
+                obj.receiverPosition, obj.receiverRadiationPattern, obj.receiverOrientation, uniqueFreq, obj.c);
+            
+            obj.noiseSourceAcPathStruct = struct('acousticPaths', acPath, 'frequencies', uniqueFreq);
+            
+        end
+        
+        function updateForcedDisabledLoudspeakers(obj)
+            disabledLoudspeakers = false(obj.numSourcesWFSarray, 1);
+            % Assign delay and attenuation functions
+            for k = 1:obj.numNoiseSources
+                if obj.real(k)
+                    chann = obj.noiseSourceChannelMapping(k);
+                    if chann > 0 && chann <= obj.numSourcesWFSarray
+                        disabledLoudspeakers(chann) = true;
+                    end
+                end
+            end
+            obj.scenarioObj.setForcedDisabledLoudspeakers(disabledLoudspeakers);
+        end             
         
     end
     
@@ -788,7 +822,8 @@ classdef WFSToolSimple < handle
             [X, Y, Z] = ndgrid(x, y, z);
             testPoints = [X(:), Y(:), Z(:)];
             
-            U = mean(obj.simulObj.calculate(testPoints), 2); % Mean along test points
+            U = mean(obj.simulObj.calculateField(testPoints), 2); % Mean along test points
+            
             U_WFS = sum(U(WFSflag, :, :), 1);
             U_real = sum(U(realFlag, :, :), 1);
             
@@ -800,17 +835,17 @@ classdef WFSToolSimple < handle
                         
         end
              
-        function nullField_(obj)
+        function cancellField(obj)
                                   
             coefficients_new = WFSToolSimple.nullField(obj.loudspeakerCoefficient,...
                 obj.loudspeakerChannelMapping, obj.loudspeakerFrequencies,...
-                obj.noiseSourceChannelMapping(obj.real), obj.expAcPathStruct);
+                obj.noiseSourceChannelMapping(obj.real), obj.loudspeakerAcPathStruct);
             
             obj.loudspeakerCoefficient = coefficients_new;
+            
         end
-                 
-    end
-    
+                   
+    end    
     
     methods(Access = private)
         
@@ -995,20 +1030,6 @@ classdef WFSToolSimple < handle
             
         end
 
-        function updateForcedDisabledLoudspeakers(obj)
-            disabledLoudspeakers = false(obj.numSourcesWFSarray, 1);
-            % Assign delay and attenuation functions
-            for k = 1:obj.numNoiseSources
-                if obj.real(k)
-                    chann = obj.noiseSourceChannelMapping(k);
-                    if chann > 0 && chann <= obj.numSourcesWFSarray
-                        disabledLoudspeakers(chann) = true;
-                    end
-                end
-            end
-            obj.scenarioObj.setForcedDisabledLoudspeakers(disabledLoudspeakers);
-        end
-                
         function updateGUIConnectionsStuff(obj)
             % The devices need to have some variables specified:
             % driver and device
@@ -1238,8 +1259,7 @@ classdef WFSToolSimple < handle
             obj.simulObj.updateFieldImage();
             
             % Draw
-            obj.simulObj.drawingOption = 'image';
-            obj.simulObj.draw();
+            obj.simulObj.drawImage();
         end
         
     end
@@ -1339,23 +1359,33 @@ classdef WFSToolSimple < handle
             % Input arguments
             % - coefficients. (numSources x numFrequencies)
             
+            numSources = size(coefficients, 1);
+            numFrequencies = size(coefficients, 2);
+            
             acPath = WFSToolSimple.tuneAcousticPaths(acousticPathStructure.acousticPaths, acousticPathStructure.frequencies, frequencies); % (numReceivers x numSources x numFrequencies)
+            numRec = size(acPath, 1);
             
             % Map acoustic path channels onto coefficient channels
-            [~, ind] = ismember(channelMapping, acousticPathStructure.xChannelMapping);
-            acPath = acPath(:, ind, :);
+            if isfield(acousticPathStructure, 'xChannelMapping')
+                acPathXchannelMapping = acousticPathStructure.xChannelMapping;
+            else
+                acPathXchannelMapping = 1:size(acPath, 2);
+            end
+            [flag, ind] = ismember(channelMapping, acPathXchannelMapping);
             
-            numFrequencies = size(coefficients, 2);
+            acPath_adapt = zeros(numRec, numSources, numFrequencies);
+            acPath_adapt(:, flag, :) = acPath(:, ind(flag), :);
             
             fixedIndices = ismember(channelMapping, fixedChannels);
             variableIndices = ~fixedIndices; % WFS array sources
             
             coefficients_new = zeros(size(coefficients));            
             for f = 1:numFrequencies
-                y = -acPath(:, fixedIndices, f)*coefficients(fixedIndices, f);
-                A = acPath(:, variableIndices, f);                
+                y = -acPath_adapt(:, fixedIndices, f)*coefficients(fixedIndices, f);
+                A = acPath_adapt(:, variableIndices, f);                
                 
                 coefficients_new(variableIndices, f) = A\y;
+                coefficients_new(fixedIndices, f) = coefficients(fixedIndices, f);
             end
                       
         end

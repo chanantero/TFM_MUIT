@@ -20,6 +20,15 @@ amplitude = 0.5;
 phase = 0;
 frequency = 600;
 
+% Receivers
+receiverPositions = [0 0 0];
+
+% Predefined acoustic paths.
+theoricWFSAcPath = true;
+theoricNoiseSourceAcPath = true;
+% acPathWFSarray;
+% acPathNoiseSources;
+
 PathName = 'C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Matlab\Data\';
 ID = datestr(now, 'yyyy-mm-dd_HH:MM:SS');
 
@@ -38,8 +47,23 @@ obj.frequency = [frequency; frequency];
 obj.noiseSourcePosition = [realPosition; realPosition];
 obj.setVirtual([false; true]);
 obj.setReal([true; false]);
+obj.setNumReceivers(size(receiverPositions, 1));
+obj.receiverPosition = receiverPositions;
+
+if theoricWFSAcPath
+    obj.theoricWFSacousticPath();
+else
+    obj.WFSarrayAcPathStruct.acousticPaths = acPathWFSarray;
+end
+
+if theoricNoiseSourceAcPath
+    obj.theoricNoiseSourceAcousticPath();
+else
+    obj.noiseSourceAcPathStruct.acousticPaths = acPathNoiseSources;
+end
 
 obj.updateReprodPanelBasedOnVariables();
+obj.updateForcedDisabledLoudspeakers();
 
 % B. Preparte the variables for the multiple cases
 xVec = linspace(minXPos, maxXPos, numXPoints);
@@ -51,8 +75,8 @@ phaseVec = 2*pi/numPhasePoints*(0:numPhasePoints - 1);
 sizeMat = size(X);
 numPointsMat = numel(X);
 
-pulseCoefMat = zeros(numPointsMat, numLoudspeakers, 2);
-simulatedField = zeros(obj.numReceivers, obj.numSourcesWFSarray);
+pulseCoefMat = zeros(numPointsMat, obj.numLoudspeakers, 2);
+simulatedField = zeros(obj.numReceivers, obj.numNoiseSources, numPointsMat);
 for p = 1:numPointsMat
     % Set virtual position
     virtPos = [X(p), Y(p), Z(p)];
@@ -64,14 +88,18 @@ for p = 1:numPointsMat
     
     % Apply WFS calculation
     obj.WFScalculation();
-    
+    % Simulate the received signals
+    obj.simulate();
+    % Correct coefficients and simulate again
+    obj.cancellField();
+    obj.simulate();
+    simulatedField(:, :, p) = obj.simulField;
+
     % Get the coefficients and save them in the pulse coefficient matrix
     pulseCoefMat(p, :, :) = permute(obj.loudspeakerCoefficient, [3, 1, 2]);
     
-    % Simulate the received signals
-    obj.simulate();
-    simulatedField = obj.simulField;
 end
+simulatedField = sum(permute(simulatedField, [3, 1, 2]), 3);
 
 % C. Experiment
 
@@ -97,7 +125,7 @@ sExpOnlyNoise = obj.getExperimentalResultVariables();
 yPulseCoefMat_OnlyNoise = signal2pulseCoefficientMatrix(sExpOnlyNoise.pulseLimits, frequency, ones(1, 1), sExpOnlyNoise.recordedSignal, sExpOnlyNoise.sampleRate);
 
 FileName = ['Session_', ID, 'onlyNoise', '.mat'];
-save([PathName, FileName], 'sExpOnlyNoise');
+save([PathName, FileName], 'sExpOnlyNoise', 'yPulseCoefMat_OnlyNoise');
 
 % Go back to previous configuration
 obj.setVirtual([false; true]);
@@ -125,12 +153,10 @@ obj.reprodFrequencies = obj.frequency;
 
 % Retrieve and save information
 sExp = obj.getExperimentalResultVariables();
+yPulseCoefMat = signal2pulseCoefficientMatrix(sExp.pulseLimits, sExp.frequencies(1), sum(sExp.pulseCoefMat, 3), sExp.recordedSignal, sExp.sampleRate);
 
 FileName = ['Session_', ID, 'cases', '.mat'];
-save([PathName, FileName], 'sExp');
-
-% Analyse results
-yPulseCoefMat = signal2pulseCoefficientMatrix(sExp.pulseLimits, sExp.frequencies(1), sum(sExp.pulseCoefMat, 3), sExp.recordedSignal, sExp.sampleRate);
+save([PathName, FileName], 'sExp', 'yPulseCoefMat');
 
 
 %%
@@ -145,24 +171,21 @@ yPulseCoefMat_pseudoExp = sum(yPulseCoefMat_pseudoExp, 3);
 
 % Compare real pulse coefficients with the pseudo-experimental ones
 
-% Use predefined acoustic path
-acPathWFSarray;
-acPathNoiseSources;
-receiverPositions;
 
-acPath = acPathWFSarray;
-[~, indReal] = ismember(obj.noiseSourceChannelMapping(obj.real), obj.loudspeakerChannelMapping);
-acPath(:, indReal, :) = acPathNoiseSources;
+%% Visualize
 
-yPulseCoefMat = zeros(numPointsMat, numReceivers, 2);
-for f = 1:numFrequencies
-    yPulseCoefMat(:, :, f) = pulseCoefMat(:, :, f)*acPath.';
-end
-yPulseCoefMat = sum(yPulseCoefMat, 3);
+% Rearrange data into multidimensional array
+% 1st dimension: x position of the virtual noise source
+% 2nd dimension: y position of the virtual noise source
+% 3rd dimension: z position of the virtual noise source
+% 4th dimension: amplitude vector
+% 5th dimension: phase vector
+% 6th dimension: channels
 
-obj.simulObj.measurePoints = receiverPositions;
-for p = 1:numPulses
-    obj.simulObj.field = permute(yPulseCoefMat(p, :, :), [2 3 1]);
-    obj.simulObj.draw('scatter');
-end
+% The operation to obtain simulatedField from the described array is:
+modVec = {[1, 2, 3, 4, 5], 6};
+sizeFormatted = [numXPoints, numYPoints, numZPoints, numAmplitudePoints, numPhasePoints, obj.numReceivers];
+simulFieldFormatted = mergeAndPermute(simulatedField, modVec, true, sizeFormatted);
 
+visualObj = animation({xVec, yVec, zVec, amplitudeVec, phaseVec, 1:obj.numReceivers},...
+    {abs(simulFieldFormatted)}, {'x', 'y', 'z', 'Amplitude', 'Phase', 'Microphone'}, {'data'}, [], []);

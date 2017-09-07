@@ -26,14 +26,14 @@ classdef simulator < handle
         measurePointsImage
         acPathImage
         z
-        drawingOption % image or scatter
         
     end
     
     properties(SetAccess = private)
-        field % Result of simulation
-        imag % Result of simulation
+        field
+        scat
         fieldImage
+        imag
     end
     
     properties(Constant)
@@ -103,7 +103,6 @@ classdef simulator < handle
             obj.XnumPoints = 20;
             obj.YnumPoints = 20;
             obj.z = 0;
-            obj.drawingOption = 'image';
         end
         
         function simulate(obj)
@@ -121,50 +120,50 @@ classdef simulator < handle
             obj.measurePointsImage = plane(obj.XLim, obj.YLim, obj.XnumPoints, obj.YnumPoints, [], [], []);
         end
         
-        function draw(obj)
-            if ~isempty(obj.imag) && isvalid(obj.imag);
-                type = obj.imag.Type;
-            else
-                type = 'invalid';
+        function draw(obj, drawingOption)
+            
+            if nargin == 1
+                drawingOption = 'image';
             end
             
-            switch obj.drawingOption
+            switch drawingOption
                 case 'image'
-                    % Reshape as an image                    
-                    U = reshape(sum(obj.fieldImage, 2), obj.XnumPoints, obj.YnumPoints).';
-                    if strcmp(type, 'image')
-                        % Change color according to that
-                        obj.imag.CData = real(U);
-                    else
-                        if strcmp(type, 'scatter')
-                            delete(obj.imag)
-                        end
-                        obj.ax.NextPlot = 'Add';
-                        obj.imag = image(obj.ax, 'XData', obj.XLim, 'YData', obj.YLim,...
-                            'CData', real(U), 'CDataMapping', 'scaled');
-                        obj.imag.HitTest = 'off';
-                        obj.ax.Children = obj.ax.Children([2:end, 1]);
-                        obj.ax.NextPlot = 'Replace';
-                    end
+                    obj.drawImage();
                     
                 case 'scatter'
+                    obj.drawField();
                     
-                    U = sum(obj.field, 2);
-                    if strcmp(type, 'scatter')
-                        % Change color according to that
-                        obj.imag.CData = real(U);
-                    else
-                        if strcmp(type, 'image')
-                            delete(obj.imag)
-                        end
-                        obj.ax.NextPlot = 'Add';
-                        obj.imag = scatter(obj.ax, obj.recPositions(:, 1), obj.recPositions(:, 2), 50, real(U),...
-                            'MarkerEdgeColor', [0 0 0]);
-                        obj.imag.HitTest = 'off';
-                        obj.ax.Children = obj.ax.Children([2:end, 1]);
-                        obj.ax.NextPlot = 'Replace';
-                    end
-                    
+            end
+            
+        end
+        
+        function drawImage(obj)
+            % Reshape as an image
+            U = reshape(sum(obj.fieldImage, 2), obj.XnumPoints, obj.YnumPoints).';
+            if ~isempty(obj.imag) && isvalid(obj.imag);
+                % Change color according to that
+                obj.imag.CData = real(U);
+            else
+                obj.ax.NextPlot = 'Add';
+                obj.imag = image(obj.ax, 'XData', obj.XLim, 'YData', obj.YLim,...
+                    'CData', real(U), 'CDataMapping', 'scaled');
+                obj.imag.HitTest = 'off';
+                obj.ax.Children = obj.ax.Children([2:end, 1]); % Image to the background
+                obj.ax.NextPlot = 'Replace';
+            end
+        end
+        
+        function drawField(obj)
+            U = sum(obj.field, 2);
+            if ~isempty(obj.scat) && isvalid(obj.scat);
+                % Change color according to that
+                obj.scat.CData = real(U);
+            else
+                obj.ax.NextPlot = 'Add';
+                obj.scat = scatter(obj.ax, obj.recPositions(:, 1), obj.recPositions(:, 2), 50, real(U),...
+                    'MarkerEdgeColor', [0 0 0]);
+                obj.scat.HitTest = 'off';
+                obj.ax.NextPlot = 'Replace';
             end
         end
         
@@ -207,6 +206,8 @@ classdef simulator < handle
         end
         
         function updateTheoricAcousticPathsImage(obj)
+            % The effect of receivers is null. This means that they are
+            % ideal: the radiation pattern is a monopole.
             recRadPat = repmat({@simulator.monopoleRadPat}, [obj.numPointsImage, 1]);
             recOrient = repmat([0 0 0 1], [obj.numPointsImage, 1]);
                     
@@ -214,6 +215,24 @@ classdef simulator < handle
                 obj.sourcePositions, obj.radPatFuns, obj.sourceOrientations,...
                 obj.measurePointsImage, recRadPat, recOrient,...
                 obj.freq, obj.c);        
+        end
+        
+        function U = calculateField(obj, recPos)
+            % The effect of receivers is null. This means that they are
+            % ideal: the radiation pattern is a monopole.
+            recRadPat = repmat({@simulator.monopoleRadPat}, [obj.numPointsImage, 1]);
+            recOrient = repmat([0 0 0 1], [obj.numPointsImage, 1]);
+                    
+            obj.acPathImage = simulator.calculateTheoricAcousticPaths(...
+                obj.sourcePositions, obj.radPatFuns, obj.sourceOrientations,...
+                recPos, recRadPat, recOrient,...
+                obj.freq, obj.c);
+            
+            U = zeros(size(recPos, 1), obj.numFrequencies);
+            for f = 1:obj.numFrequencies
+                U(:, f) = (obj.acPath(:, :, f) * obj.sourceCoefficients(:, f));
+            end
+            
         end
         
         function setSources(obj, varargin)
@@ -467,57 +486,105 @@ classdef simulator < handle
         end
         
         function acPath = calculateTheoricAcousticPaths(sourcePos, sourceRadPat, sourceOrient, recPos, recRadPat, recOrient, frequencies, propagVeloc)
-            % Calculate the difference vectors between sources and measure
-            % points
-            % First dimension along recPositions, second dimension along
-            % the X, Y and Z coordinates, third dimension along sources
-            numSour = size(sourcePos, 1);
-            numFreq = numel(frequencies);            
-            numRec = size(recPos, 1);
-            
-            k = 2 * pi * frequencies / propagVeloc;
-            
-            % Quaterions for the rotation of the relative directions based
-            % on orientations
-            rotVec = sourceOrient;
-            rotVec(:, 1) = -rotVec(:, 1); % Negative angle to compensate
-            quat_source = simulator.rotVec2quat(rotVec);
-            
-            rotVec = recOrient;
-            rotVec(:, 1) = -rotVec(:, 1); % Negative angle to compensate
-            quat_rec = simulator.rotVec2quat(rotVec);
-            
-            acPath = zeros(numRec, numSour, numFreq);
-            for s = 1:numSour
-                sourceRadPatFun = sourceRadPat{s};
 
-                diffVec = recPos - repmat(sourcePos(s, :), numRec, 1);
-                dist = sqrt(sum(diffVec.^2, 2));
-
-                % Quatrotate no va incluído en el matlab del laboratorio. relDir = quatrotate(quat, diffVec); Usar quatrotate_custom.
-                relDir = quatrotate_custom( quat_source(s, :), diffVec );
-                try
-                sourceRadPatCoef = permute(sourceRadPatFun(relDir, frequencies), [1, 3, 2]);
-                catch
-                    4
+            acPath = default(sourcePos, sourceRadPat, sourceOrient, recPos, recRadPat, recOrient, frequencies, propagVeloc);
+            
+            function acPath = default(sourcePos, sourceRadPat, sourceOrient, recPos, recRadPat, recOrient, frequencies, propagVeloc)
+                
+                numSour = size(sourcePos, 1);
+                numFreq = numel(frequencies);
+                numRec = size(recPos, 1);
+                
+                % Precalculations
+                k = 2 * pi * frequencies / propagVeloc;
+                
+                % Quaterions for the rotation of the relative directions based
+                % on orientations
+                rotVec = sourceOrient;
+                rotVec(:, 1) = -rotVec(:, 1); % Negative angle to compensate
+                quat_source = simulator.rotVec2quat(rotVec);
+                
+                rotVec = recOrient;
+                rotVec(:, 1) = -rotVec(:, 1); % Negative angle to compensate
+                quat_rec = simulator.rotVec2quat(rotVec);
+                
+                % Source radiation pattern coefficients
+                sourceRadPatCoefs = zeros(numRec, numSour, numFreq);
+                for s = 1:numSour
+                    diffVec = recPos - repmat(sourcePos(s, :), numRec, 1);
+                    relDir = quatrotate_custom( quat_source(s, :), diffVec );  % Quatrotate no va incluído en el matlab del laboratorio. relDir = quatrotate(quat, diffVec); Usar quatrotate_custom.
+                    sourceRadPatCoefs(:, s, :) = permute(sourceRadPat{s}(relDir, frequencies), [1 3 2]);
                 end
                 
-                % Receiver radiation pattern coefficent
-                relDir = quatrotate_custom( quat_rec, -diffVec );
-                recRadPatCoef = zeros(numRec, 1, numFreq);
+                % Receiver radiation pattern coefficients
+                recRadPatCoefs = zeros(numRec, numSour, numFreq);
                 for r = 1:numRec
-                    recRadPatFun = recRadPat{r};
-                    recRadPatCoef(r, 1, :) = recRadPatFun(relDir(r, :), frequencies);
+                    diffVec = sourcePos - repmat(recPos(r, :), numSour, 1);
+                    relDir = quatrotate_custom( quat_rec(r, :), diffVec ); % Quatrotate no va incluído en el matlab del laboratorio. relDir = quatrotate(quat, diffVec); Usar quatrotate_custom.
+                    recRadPatCoefs(r, :, :) = permute(recRadPat{r}(relDir, frequencies), [3 1 2]);
                 end
                 
-                % Calculate
-                aux = zeros(numRec, 1, numFreq);
-                for f = 1:numFreq
-                    aux(:, 1, f) = (sourceRadPatCoef(:, 1, f).*exp(-1i*k(f)*dist)./dist .* recRadPatCoef(:, 1, f));
+                acPath = zeros(numRec, numSour, numFreq);
+                for s = 1:numSour
+                    diffVec = recPos - repmat(sourcePos(s, :), numRec, 1);
+                    dist = sqrt(sum(diffVec.^2, 2));
+                    
+                    % Calculate
+                    aux = zeros(numRec, 1, numFreq);
+                    for f = 1:numFreq
+                        aux(:, 1, f) = (sourceRadPatCoefs(:, s, f).*exp(-1i*k(f)*dist)./dist .* recRadPatCoefs(:, s, f));
+                    end
+                    acPath(:, s, :) = aux;
                 end
-                acPath(:, s, :) = aux;
+                
             end
             
+            function acPath = memoryLigh(sourcePos, sourceRadPat, sourceOrient, recPos, recRadPat, recOrient, frequencies, propagVeloc)
+                numSour = size(sourcePos, 1);
+                numFreq = numel(frequencies);
+                numRec = size(recPos, 1);
+                
+                % Precalculations
+                k = 2 * pi * frequencies / propagVeloc;
+                
+                % Quaterions for the rotation of the relative directions based
+                % on orientations
+                rotVec = sourceOrient;
+                rotVec(:, 1) = -rotVec(:, 1); % Negative angle to compensate
+                quat_source = simulator.rotVec2quat(rotVec);
+                
+                rotVec = recOrient;
+                rotVec(:, 1) = -rotVec(:, 1); % Negative angle to compensate
+                quat_rec = simulator.rotVec2quat(rotVec);
+                
+                % Memory light version
+                acPath = zeros(numRec, numSour, numFreq);
+                for s = 1:numSour
+                    sourceRadPatFun = sourceRadPat{s};
+                    
+                    diffVec = recPos - repmat(sourcePos(s, :), numRec, 1);
+                    dist = sqrt(sum(diffVec.^2, 2));
+                    
+                    % Source radiation pattern coefficients
+                    relDir = quatrotate_custom( quat_source(s, :), diffVec ); % Quatrotate no va incluído en el matlab del laboratorio. relDir = quatrotate(quat, diffVec); Usar quatrotate_custom.
+                    sourceRadPatCoef = permute(sourceRadPatFun(relDir, frequencies), [1, 3, 2]);
+                    
+                    % Receiver radiation pattern coefficent
+                    relDir = quatrotate_custom( quat_rec, -diffVec ); % Quatrotate no va incluído en el matlab del laboratorio. relDir = quatrotate(quat, diffVec); Usar quatrotate_custom.
+                    recRadPatCoef = zeros(numRec, 1, numFreq);
+                    for r = 1:numRec
+                        recRadPatFun = recRadPat{r};
+                        recRadPatCoef(r, 1, :) = recRadPatFun(relDir(r, :), frequencies);
+                    end
+                    
+                    % Calculate
+                    aux = zeros(numRec, 1, numFreq);
+                    for f = 1:numFreq
+                        aux(:, 1, f) = (sourceRadPatCoef(:, 1, f).*exp(-1i*k(f)*dist)./dist .* recRadPatCoef(:, 1, f));
+                    end
+                    acPath(:, s, :) = aux;
+                end
+            end
             
         end
         
