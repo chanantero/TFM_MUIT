@@ -6,8 +6,6 @@ classdef WFSToolSimple < handle
         simplePerformance = true;
         
         % Noise source
-        noiseSourceOrientation % Future dependent variable
-        noiseSourceRadiationPattern % Future dependent variable
         virtual
         virtualVolume
         real
@@ -16,14 +14,15 @@ classdef WFSToolSimple < handle
         signalsSpec % String that specifies the coefficient
         amplitude
         phase
-        frequency
         
         % WFS Array
-        WFSarrayRadiationPattern % Future dependent variable
         WFSarrayChannelMapping
         
         % Microphones
         receiverChannelMapping % Active channels of the receiver device
+        
+        % Other
+        activeSourceFlags
 
         % Loudspeakers
         loudspeakerChannelMapping
@@ -66,10 +65,15 @@ classdef WFSToolSimple < handle
         % Noise source
         noiseSourcePosition
         noiseSourceCoefficient
+        noiseSourceOrientation
+        noiseSourceRadiationPattern
+        frequency
    
         % WFS Array
-        WFSarrayPosition % Dependent on scenarioObj
-        WFSarrayOrientation % Dependent on scenarioObj
+        WFSarrayPosition
+        WFSarrayOrientation
+        WFSarrayRadiationPattern
+        WFSarrayCoefficient
         
         % Microphones
         receiverPosition
@@ -139,6 +143,10 @@ classdef WFSToolSimple < handle
             else
                 warning('WFSToolSimple:WrongNumberNoiseSources', 'The number of positions must be equal to the number of sources');
             end
+            
+            % Set it in the simulator object
+            noiseSourceInd = (1:obj.numNoiseSources) + obj.numSourcesWFSarray;
+            obj.simulTheo.sourcePositions(noiseSourceInd, :) = value;
         end
         
         function noiseSourceCoefficient = get.noiseSourceCoefficient(obj)
@@ -147,8 +155,38 @@ classdef WFSToolSimple < handle
         end
         
         function set.noiseSourceCoefficient(obj, value)
+            noiseSourceInd = (1:obj.numNoiseSources) + obj.numSourcesWFSarray;
             obj.simulTheo.sourceCoefficients(noiseSourceInd, :) = diag(value);
         end
+        
+        function noiseSourceOrientation = get.noiseSourceOrientation(obj)
+            noiseSourceInd = (1:obj.numNoiseSources) + obj.numSourcesWFSarray;
+            noiseSourceOrientation = obj.simulTheo.sourceOrientations(noiseSourceInd, :);
+        end
+        
+        function set.noiseSourceOrientation(obj, value)
+            noiseSourceInd = (1:obj.numNoiseSources) + obj.numSourcesWFSarray;
+            obj.simulTheo.sourceOrientations(noiseSourceInd, :) = value;
+        end
+        
+        function noiseSourceRadiationPattern = get.noiseSourceRadiationPattern(obj)
+            noiseSourceInd = (1:obj.numNoiseSources) + obj.numSourcesWFSarray;
+            noiseSourceRadiationPattern = obj.simulTheo.radPatFuns(noiseSourceInd);
+        end
+        
+        function set.noiseSourceRadiationPattern(obj, value)
+            noiseSourceInd = (1:obj.numNoiseSources) + obj.numSourcesWFSarray;
+            obj.simulTheo.radPatFuns(noiseSourceInd) = value;
+        end
+        
+        function frequency = get.frequency(obj)
+            frequency = obj.simulTheo.freq;
+        end
+        
+        function set.frequency(obj, value)
+            obj.simulTheo.freq = value;
+        end
+
 
         % WFS array
         function WFSarrayPosition = get.WFSarrayPosition(obj)
@@ -165,6 +203,26 @@ classdef WFSToolSimple < handle
 
         function WFSarrayOrientation = get.WFSarrayOrientation(obj)
             WFSarrayOrientation = simulator.vec2rotVec(obj.scenarioObj.loudspeakersOrientation);
+        end
+        
+        function WFSarrayRadiationPattern = get.WFSarrayRadiationPattern(obj)
+            WFSarrayInd = 1:obj.numSourcesWFSarray;
+            WFSarrayRadiationPattern = obj.simulTheo.radPatFuns(WFSarrayInd);
+        end
+        
+        function set.WFSarrayRadiationPattern(obj, value)
+            WFSarrayInd = 1:obj.numSourcesWFSarray;
+            obj.simulTheo.radPatFuns(WFSarrayInd) = value;
+        end
+        
+        function WFSarrayCoefficient = get.WFSarrayCoefficient(obj)
+            WFSarrayInd = 1:obj.numSourcesWFSarray;
+            WFSarrayCoefficient = obj.simulTheo.sourceCoefficients(WFSarrayInd, :);
+        end
+        
+        function set.WFSarrayCoefficient(obj, value)
+            WFSarrayInd = 1:obj.numSourcesWFSarray;
+            obj.simulTheo.sourceCoefficients(WFSarrayInd, :) = value;
         end
         
         % Microphones
@@ -268,7 +326,7 @@ classdef WFSToolSimple < handle
             addlistener(obj.reprodPanel, 'updatedValues', @(~, evntData) obj.reprodPanelListener(evntData.type));
             addlistener(obj.recordPanel, 'updatedValues', @(~, evntData) obj.recordPanelListener(evntData.type));
             addlistener(obj.player, 'playingState', 'PostSet', @(~, eventData) obj.GUIenabling(eventData.AffectedObject.playingState));
-            addlistener(obj.player, 'numChannels', 'PostSet', @(~, eventData) obj.changeScenario(eventData.AffectedObject.numChannels(1)));
+            addlistener(obj.player, 'numChannels', 'PostSet', @(~, eventData) obj.setNumWFSarraySources(eventData.AffectedObject.numChannels(1)));
             addlistener(obj.player, 'count', 'PostSet', @(~, eventData) obj.timeDisplay(eventData.AffectedObject.count*eventData.AffectedObject.frameDuration));
                                  
             obj.setNumNoiseSources(1);
@@ -359,12 +417,12 @@ classdef WFSToolSimple < handle
             obj.realVolume = ones(numNoiseSources, 1);
             obj.noiseSourceOrientation = repmat([1, 0, 0, 1], numNoiseSources, 1);
             obj.noiseSourceRadiationPattern = repmat({@ simulator.monopoleRadPat}, numNoiseSources, 1);
+            obj.simulTheo.sourceCoefficients = zeros(obj.numSourcesWFSarray + numNoiseSources, numNoiseSources);
             obj.noiseSourceCoefficient = zeros(numNoiseSources, 1);
            
             for k = 1:numNoiseSources
                 obj.signalsSpec{k} = '';
             end
-
             
             obj.updateComMat();
             obj.updateSignalProvidersVariables();
@@ -392,6 +450,8 @@ classdef WFSToolSimple < handle
             delete(obj.simulObj.imag);
             
             obj.updateForcedDisabledLoudspeakers();
+            
+            obj.WFSarrayCoefficient = zeros(numLoudspeakers, obj.numFrequencies);
             
         end
         
@@ -979,7 +1039,7 @@ classdef WFSToolSimple < handle
             
             obj.amplitude = zeros(obj.numNoiseSources, 1);
             obj.phase = zeros(obj.numNoiseSources, 1);
-            obj.frequency = zeros(obj.numNoiseSources, 1);
+            freq = zeros(obj.numNoiseSources, 1);
             
             for k = 1:obj.numNoiseSources
                 signalSpec = obj.signalsSpec{k};
@@ -991,15 +1051,19 @@ classdef WFSToolSimple < handle
                     % As default, treat it as a tone
                     obj.amplitude(k) = 0;
                     obj.phase(k) = 0;
-                    obj.frequency(k) = 1;
+                    freq(k) = 1;
                 else
                     % It is a complex number, set the
                     % properties
                     obj.amplitude(k) = str2double(param.Amplitude);
                     obj.phase(k) = str2double(param.Phase);
-                    obj.frequency(k) = str2double(param.Frequency);
+                    freq(k) = str2double(param.Frequency);
                 end
             end
+            
+            obj.frequency = freq;
+            
+            obj.noiseSourceCoefficient = obj.amplitude .* exp(1i*obj.phase);
         end
         
         function updateSignalSpecFromParameters(obj)
