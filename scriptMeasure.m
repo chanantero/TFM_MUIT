@@ -5,6 +5,9 @@
 % in amplitude, phase and position.
 
 %% Parameters.
+paths = genpath('C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Matlab\');
+addpath(paths);
+
 % User can change this:
 numLoudspeakers = 96;
 
@@ -63,7 +66,6 @@ else
 end
 
 obj.updateReprodPanelBasedOnVariables();
-obj.updateForcedDisabledLoudspeakers();
 
 % B. Preparte the variables for the multiple cases
 xVec = linspace(minXPos, maxXPos, numXPoints);

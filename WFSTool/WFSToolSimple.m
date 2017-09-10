@@ -6,8 +6,8 @@ classdef WFSToolSimple < handle
         simplePerformance = true;
         
         % Noise source
-        noiseSourceOrientation
-        noiseSourceRadiationPattern
+        noiseSourceOrientation % Future dependent variable
+        noiseSourceRadiationPattern % Future dependent variable
         virtual
         virtualVolume
         real
@@ -19,7 +19,7 @@ classdef WFSToolSimple < handle
         frequency
         
         % WFS Array
-        WFSarrayRadiationPattern
+        WFSarrayRadiationPattern % Future dependent variable
         WFSarrayChannelMapping
         
         % Microphones
@@ -27,11 +27,7 @@ classdef WFSToolSimple < handle
 
         % Loudspeakers
         loudspeakerChannelMapping
-        
-        % Calibration
-        sourceCorr % Correction factor from adimensional variable to physic variable
-        receiverCorr % Correction factor from physics magnitude of pressure to adimiensional units
-                             
+                                   
         % Experimental results
         pulseCoeffMat
         pulseLimits % Dimension 1 of pulseCoeffMat
@@ -59,6 +55,7 @@ classdef WFSToolSimple < handle
         propPanel
         recordPanel
         simulObj
+        simulTheo
                 
         % Other
         ax
@@ -68,6 +65,7 @@ classdef WFSToolSimple < handle
     properties(Dependent)
         % Noise source
         noiseSourcePosition
+        noiseSourceCoefficient
    
         % WFS Array
         WFSarrayPosition % Dependent on scenarioObj
@@ -141,6 +139,15 @@ classdef WFSToolSimple < handle
             else
                 warning('WFSToolSimple:WrongNumberNoiseSources', 'The number of positions must be equal to the number of sources');
             end
+        end
+        
+        function noiseSourceCoefficient = get.noiseSourceCoefficient(obj)
+            noiseSourceInd = (1:obj.numNoiseSources) + obj.numSourcesWFSarray;
+            noiseSourceCoefficient = diag(obj.simulTheo.sourceCoefficients(noiseSourceInd, :));
+        end
+        
+        function set.noiseSourceCoefficient(obj, value)
+            obj.simulTheo.sourceCoefficients(noiseSourceInd, :) = diag(value);
         end
 
         % WFS array
@@ -250,6 +257,7 @@ classdef WFSToolSimple < handle
             obj.propPanel = propertiesPanel(fig, [0.05 0.1 0.4 0.2]);
             obj.recordPanel = recorderPanel(fig, [0.05 0.35 0.4 0.2]);
             obj.simulObj = simulator;
+            obj.simulTheo = simulator;
             obj.ax = obj.scenarioObj.ax;
             obj.simulObj.ax = obj.ax;
             colormap(obj.ax, 'gray')
@@ -351,10 +359,12 @@ classdef WFSToolSimple < handle
             obj.realVolume = ones(numNoiseSources, 1);
             obj.noiseSourceOrientation = repmat([1, 0, 0, 1], numNoiseSources, 1);
             obj.noiseSourceRadiationPattern = repmat({@ simulator.monopoleRadPat}, numNoiseSources, 1);
-                        
+            obj.noiseSourceCoefficient = zeros(numNoiseSources, 1);
+           
             for k = 1:numNoiseSources
                 obj.signalsSpec{k} = '';
             end
+
             
             obj.updateComMat();
             obj.updateSignalProvidersVariables();
@@ -383,7 +393,6 @@ classdef WFSToolSimple < handle
             
             obj.updateForcedDisabledLoudspeakers();
             
-            obj.sourceCorr = ones(numLoudspeakers, 1);
         end
         
         function setNumReceivers(obj, numReceivers)
@@ -391,7 +400,6 @@ classdef WFSToolSimple < handle
             obj.receiverPosition = obj.receiverPosition;
             obj.receiverOrientation = repmat([1, 0, 0, 1], numReceivers, 1);
             obj.receiverRadiationPattern = repmat({@ simulator.monopoleRadPat}, numReceivers);
-            obj.receiverCorr = ones(numReceivers, 1);
             obj.receiverChannelMapping = (1:numReceivers)';
             uniqueFreq = unique(obj.frequency);
             obj.noiseSourceAcPathStruct = struct('acousticPaths', zeros(obj.numReceivers, obj.numNoiseSources, numel(uniqueFreq)), 'frequencies', uniqueFreq);
@@ -591,25 +599,6 @@ classdef WFSToolSimple < handle
             obj.reprodFrequencies = frequencies;
         end
         
-        function calibrate(obj)
-                        
-            % Calculate experimental acoustic paths
-            obj.reproduceAndRecordForAcousticPaths();
-            obj.calculateExperimentalAcousticPaths();
-            
-            % Simulate acoustic path
-            obj.calculateSimulatedAcousticPaths();
-            
-            % Get the ratio between them
-            rat = obj.expAcPath./obj.simulAcPath;
-            
-            % Set source coefficient corrections (Best rank 1 approximation)
-            [U, S, V] = svd(rat);
-            obj.sourceCorr = U(:, 1);
-            obj.receiverCorr = V(:, 1)*S(1);
-            
-        end
-        
         function position = calculatePosition(obj)
             
             % Create pulse coefficient matrix that uses different
@@ -666,6 +655,7 @@ classdef WFSToolSimple < handle
             obj.reprodPanel.setChannelNumber(obj.noiseSourceChannelMapping);
             obj.updateSignalSpecFromParameters();
             obj.reprodPanel.setSignals(obj.signalsSpec);
+            obj.updateForcedDisabledLoudspeakers();
         end
         
         function theoricWFSacousticPath(obj)
@@ -691,20 +681,6 @@ classdef WFSToolSimple < handle
             obj.noiseSourceAcPathStruct = struct('acousticPaths', acPath, 'frequencies', uniqueFreq);
             
         end
-        
-        function updateForcedDisabledLoudspeakers(obj)
-            disabledLoudspeakers = false(obj.numSourcesWFSarray, 1);
-            % Assign delay and attenuation functions
-            for k = 1:obj.numNoiseSources
-                if obj.real(k)
-                    chann = obj.noiseSourceChannelMapping(k);
-                    if chann > 0 && chann <= obj.numSourcesWFSarray
-                        disabledLoudspeakers(chann) = true;
-                    end
-                end
-            end
-            obj.scenarioObj.setForcedDisabledLoudspeakers(disabledLoudspeakers);
-        end             
         
     end
     
@@ -835,6 +811,53 @@ classdef WFSToolSimple < handle
                         
         end
              
+        function tuneWFSField(obj)
+            % When the coefficients returned by the scenario object don't cancel the field,
+            % this function can multiply all of them by a single complex value in order to create a
+            % field that cancels the original field.
+            
+            % This is only applied to components of the loudspeaker
+            % coefficients that come from virtual noise sources, as the WFS
+            % processing only is relevant on them.
+            
+            % Define a set of points where the theoric field should be
+            % null because of the cancellation
+            xLim = [1, 2]; yLim = [2, 4];
+            x = linspace(xLim(1), xLim(2), 100);
+            y = linspace(yLim(1), yLim(2), 100);
+            z = 0;
+            [X, Y, Z] = ndgrid(x, y, z);
+            testPoints = [X(:), Y(:), Z(:)];
+            
+            % Calculate the contribution of each source to each receiver
+            % point
+            % Use a simulator object of the theoric scenario. In this
+            % object, all noise sources are situated, as well as all WFS
+            % array sources. All noise sources are active.
+            
+            U = obj.simulObj.calculateTheoricField(testPoints, true); % (numTestPoints x obj.numLoudspeakers x obj.numNoiseSources)            
+            
+            % Apply the correction/tunning for each layer on the 3rd
+            % dimension, i.e., for each noise source
+            
+            % Find which of the loudspeakers correspond to real sources and
+            % which of them belong to the WFS array
+            realChannels = obj.noiseSourceChannelMapping(obj.real);
+            realFlag = ismember(obj.loudspeakerChannelMapping, realChannels);
+            WFSflag = ~realFlag;
+            
+            U_WFS = sum(U(:, WFSflag, :), 2); % Contribution of all WFS array sources to each test point. (numTestPoints x 1 x obj.numNoiseSources)
+            U_real = sum(U(:, realFlag, :), 2); % Contribution of all noise sources. (numTestPoints x 1 x obj.numNoiseSources)
+            
+            % Find a coefficient C that minimizes the squared error: (U_WFS * C + U_real).^2
+            C = zeros(1, obj.numNoiseSources, 1);
+            for k = 1:obj.numNoiseSources
+                C(k) = -U_WFS(:, 1, k)\U_real(:, 1, k);
+            end
+        
+            obj.loudspeakerCoefficient(WFSflag, :) = obj.loudspeakerCoefficient(WFSflag, :).*repmat(C, [sum(WFSflag), 1]);
+        end
+        
         function cancellField(obj)
                                   
             coefficients_new = WFSToolSimple.nullField(obj.loudspeakerCoefficient,...
@@ -1030,6 +1053,20 @@ classdef WFSToolSimple < handle
             
         end
 
+        function updateForcedDisabledLoudspeakers(obj)
+            disabledLoudspeakers = false(obj.numSourcesWFSarray, 1);
+            % Assign delay and attenuation functions
+            for k = 1:obj.numNoiseSources
+                if obj.real(k)
+                    chann = obj.noiseSourceChannelMapping(k);
+                    if chann > 0 && chann <= obj.numSourcesWFSarray
+                        disabledLoudspeakers(chann) = true;
+                    end
+                end
+            end
+            obj.scenarioObj.setForcedDisabledLoudspeakers(disabledLoudspeakers);
+        end             
+                
         function updateGUIConnectionsStuff(obj)
             % The devices need to have some variables specified:
             % driver and device
@@ -1094,14 +1131,14 @@ classdef WFSToolSimple < handle
         function delays = delayFunction(obj, index)
                       
             delays = obj.getDelays(index);
-            delayShift = angle(obj.sourceCorr)/(2*pi*obj.frequency(index));
-            delays = delays + delayShift;
+%             delayShift = angle(obj.sourceCorr)/(2*pi*obj.frequency(index));
+%             delays = delays + delayShift;
             
         end
         
         function attenuations = attenuationFunction(obj, index)
             
-            attenuations = obj.getAttenuations(index)./abs(obj.sourceCorr);
+            attenuations = obj.getAttenuations(index); %./abs(obj.sourceCorr);
             
         end
              

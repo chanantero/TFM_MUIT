@@ -202,7 +202,10 @@ classdef simulator < handle
         end
         
         function updateTheoricAcousticPaths(obj)
-            obj.acPath = simulator.calculateTheoricAcousticPaths(obj.sourcePositions, obj.radPatFuns, obj.sourceOrientations, obj.recPositions, obj.recRadPatFuns, obj.recOrientations, obj.freq, obj.c);
+            obj.acPath = simulator.calculateTheoricAcousticPaths(...
+                obj.sourcePositions, obj.radPatFuns, obj.sourceOrientations,...
+                obj.recPositions, obj.recRadPatFuns, obj.recOrientations,...
+                obj.freq, obj.c);
         end
         
         function updateTheoricAcousticPathsImage(obj)
@@ -217,20 +220,30 @@ classdef simulator < handle
                 obj.freq, obj.c);        
         end
         
-        function U = calculateField(obj, recPos)
+        function U = calculateTheoricField(obj, recPos, separatedSources)
+            if nargin < 3
+                separatedSources = false;
+            end
+            
+            numRecPos = size(recPos, 1);
+            
             % The effect of receivers is null. This means that they are
             % ideal: the radiation pattern is a monopole.
             recRadPat = repmat({@simulator.monopoleRadPat}, [obj.numPointsImage, 1]);
             recOrient = repmat([0 0 0 1], [obj.numPointsImage, 1]);
                     
-            obj.acPathImage = simulator.calculateTheoricAcousticPaths(...
+            acousPath = simulator.calculateTheoricAcousticPaths(...
                 obj.sourcePositions, obj.radPatFuns, obj.sourceOrientations,...
                 recPos, recRadPat, recOrient,...
                 obj.freq, obj.c);
             
-            U = zeros(size(recPos, 1), obj.numFrequencies);
-            for f = 1:obj.numFrequencies
-                U(:, f) = (obj.acPath(:, :, f) * obj.sourceCoefficients(:, f));
+            if separatedSources
+                U = acousPath .* repmat(permute(obj.sourceCoefficients, [3 1 2]), [numRecPos, 1, 1]); % (numRec, obj.numSources, obj.numFrequencies)
+            else
+                U = zeros(numRecPos, obj.numFrequencies);
+                for f = 1:obj.numFrequencies
+                    U(:, f) = (acousPath(:, :, f) * obj.sourceCoefficients(:, f));
+                end
             end
             
         end
