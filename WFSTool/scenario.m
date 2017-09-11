@@ -35,6 +35,10 @@ classdef scenario < handle
         receiverColor = [1 0 1];
     end
     
+    events
+        updatedValues
+    end
+    
     % Getters and setters
     methods
         function numSources = get.numSources(obj)
@@ -172,6 +176,30 @@ classdef scenario < handle
             obj.updateDelaysAndAttenuations();
         end
               
+        function setLoudspeakerPosition(obj, loudspeakerPosition, indices)
+            
+            if obj.enabledGUI
+                % Graphics
+                loudspeaker = findobj(obj.ax, 'Tag', 'loudspeakers');
+            end
+            
+            for k = 1:numel(indices)
+                index = indices(k);
+                
+                if obj.enabledGUI
+                    loudspeaker.XData(index) = loudspeakerPosition(k, 1);
+                    loudspeaker.YData(index) = loudspeakerPosition(k, 2);
+                    loudspeaker.ZData(index) = loudspeakerPosition(k, 3);
+                end
+                
+                % Other variables
+                obj.loudspeakersPosition(index, :) = loudspeakerPosition(k, :);
+            end
+            
+            obj.updateDelaysAndAttenuations();
+
+        end
+        
         function setScenario(obj, sourcesPosition, receiversPosition, loudspeakersPosition, loudspeakersOrientation, roomPosition)
             if isempty(receiversPosition)
                 receiversPosition = double.empty(0, 3);
@@ -302,6 +330,9 @@ classdef scenario < handle
                     obj.receiversPosition(obj.activeReceiver, 2) = y;
                     
             end
+            
+            evntData = updatedValuesEvntData(obj.lastActive);
+            notify(obj, 'updatedValues', evntData);
         end
         
         function loudspeakersCallback(obj, scat)
