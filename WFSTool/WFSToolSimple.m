@@ -64,7 +64,8 @@ classdef WFSToolSimple < handle
     properties(Dependent)
         % Noise source
         noiseSourcePosition
-        noiseSourceCoefficient
+        noiseSourceCoefficient % Without specifying the frequencies. (obj.numNoiseSources x 1)
+        noiseSourceCoefficient_complete % All frequencies. (obj.numNoiseSources x obj.numNoiseSources)
         noiseSourceOrientation
         noiseSourceRadiationPattern
         frequency
@@ -164,6 +165,14 @@ classdef WFSToolSimple < handle
         function set.noiseSourceCoefficient(obj, value)
             obj.amplitude = abs(value);
             obj.phase = angle(value);
+        end
+        
+        function noiseSourceCoefficient_complete = get.noiseSourceCoefficient_complete(obj)
+            noiseSourceCoefficient_complete = obj.simulTheo.sourceCoefficients(obj.noiseSourceIndSimulTheo, :);
+        end
+        
+        function set.noiseSourceCoefficient_complete(obj, value)
+            obj.simulTheo.sourceCoefficients(obj.noiseSourceIndSimulTheo, :) = value;
         end
         
         function noiseSourceOrientation = get.noiseSourceOrientation(obj)
@@ -274,7 +283,14 @@ classdef WFSToolSimple < handle
         end
         
         function loudspeakerCoefficient = get.loudspeakerCoefficient(obj)
-            loudspeakerCoefficient = obj.simulObj.sourceCoefficients;
+            % Calculate the loudspeaker coefficients and channel mapping
+            realInd = find(obj.real);
+            noiseSourceChannelMapping_real = obj.noiseSourceChannelMapping(realInd);
+            [ldspkrsChannelMapping, mapping] = combineIndices(obj.WFSarrayChannelMapping, noiseSourceChannelMapping_real);
+            
+            loudspeakerCoefficient = zeros(numel(ldspkrsChannelMapping), obj.numNoiseSources);
+            loudspeakerCoefficient(mapping(1).destinationInd, :) = obj.WFSarrayCoefficient(mapping(1).originInd, :);
+            loudspeakerCoefficient(mapping(2).destinationInd, :) = obj.noiseSourceCoefficient_complete(realInd(mapping(2).originInd), :);
         end
         
         function set.loudspeakerCoefficient(obj, value)
@@ -682,32 +698,56 @@ classdef WFSToolSimple < handle
         end
               
         function WFScalculation_new(obj)
-                    
-            % Update the coefficients stored in simulTheo and the flags
-            % that enable or disable sources
             
-            % Unify the acoustic paths for the same frequencies
-            uniqueFreq = unique(obj.frequency);
-            WFSarrayAcPath = WFSToolSimple.tuneAcousticPaths(obj.WFSarrayAcPathStruct.acousticPaths, obj.WFSarrayAcPathStruct.frequencies, uniqueFreq);
-            noiseSourcesAcPath = WFSToolSimple.tuneAcousticPaths(obj.noiseSourceAcPathStruct.acousticPaths, obj.noiseSourceAcPathStruct.frequencies, uniqueFreq);
+            % Calculate coefficients
+                % A) Set noise source coefficients
+                obj.noiseSourceCoefficient_complete = diag(obj.noiseSourceCoefficient);
+
+                % B) Set WFS array coefficients
+                obj.WFSarrayCoefficient = obj.getComplexCoeffWFS();
+
+                % C) Adjust WFS array coefficients
+                obj.tuneWFSField();
+
+                % D) Apply real and virtual flags
+                obj.noiseSourceCoefficient_complete(:, ~obj.real) = 0;
+                obj.WFSarrayCoefficient(:, ~obj.virtual) = 0;
             
-            % Set noise source coefficients
-            obj.
+            % Set acoustic paths
+            WFSarrayAcPath = WFSToolSimple.tuneAcousticPaths(obj.WFSarrayAcPathStruct.acousticPaths, obj.WFSarrayAcPathStruct.frequencies, obj.frequency);
+            noiseSourcesAcPath = WFSToolSimple.tuneAcousticPaths(obj.noiseSourceAcPathStruct.acousticPaths, obj.noiseSourceAcPathStruct.frequencies, obj.frequency);
             
-            % Get the WFS array coefficients.
-            obj.WFSarrayCoefficient = obj.getComplexCoeffWFS();
-            obj.tuneWFSField();
+            acPath = zeros(obj.numReceivers, obj.numSourcesTheo, obj.numNoiseSources);
+            acPath(:, obj.WFSarrayIndSimulTheo, :) = WFSarrayAcPath;
+            acPath(:, obj.noiseSourceIndSimulTheo, :) = noiseSourcesAcPath;
             
-            % Apply volumes and flags
-            obj.WFSarrayCoefficient = obj.WFSarrayCoefficient .* repmat(obj.virtualVolume', [obj.numSourcesWFSarray, 1]);            
-            obj.WFSarrayCoefficient(:, ~obj.virtual) = 0;
-            obj.noiseSourceCoefficient = obj.noiseSourceCoefficient .* obj.realVolume;
-            obj.noiseSourceCoefficient(~obj.real) = 0;
+            obj.simulTheo.acPath = acPath;
             
-            % Apply real flags and realVolume
-            noiseSourceCoef = diag(obj.amplitude .* exp(1i*obj.phase) .* (-obj.realVolume));
-            noiseSourceCoef(:, ~obj.real) = 0;    
-    
+            % The environment is already setup.
+            % Calculate the loudspeaker coefficients and channel mapping
+            [obj.loudspeakerChannelMapping, obj.loudspeakerCoefficients] = calculateLoudspeakerVariables(obj);
+                       
+        end
+        
+        function [ldspkrsChannelMapping, loudspeakerCoefficients] = calculateLoudspeakerVariables(obj)
+%             % Calculate the loudspeaker coefficients and channel mapping
+            realInd = find(obj.real);
+            noiseSourceChannelMapping_real = obj.noiseSourceChannelMapping(realInd);
+            [ldspkrsChannelMapping, mapping] = combineIndices(obj.WFSarrayChannelMapping, noiseSourceChannelMapping_real);
+            
+            loudspeakerCoefficients = zeros(numel(ldspkrsChannelMapping), obj.numNoiseSources);
+            loudspeakerCoefficients(mapping(1).destinationInd, :) = obj.WFSarrayCoefficient(mapping(1).originInd, :);
+            loudspeakerCoefficients(mapping(2).destinationInd, :) = obj.noiseSourceCoefficient_complete(realInd(mapping(2).originInd), :);
+            
+%             % Other way
+%             % Indices from simulTheo to loudspeakers
+%             loudspeakerIndices = zeros(numel(ldspkrsChannelMapping), 1);
+%             loudspeakerIndices(mapping(1).destinationInd) = obj.WFSarrayIndSimulTheo(mapping(1).originInd, :);
+%             loudspeakerIndices(mapping(2).destinationInd) = obj.noiseSourceIndSimulTheo(realInd(mapping(2).originInd), :);
+%             
+%             loudspeakerCoefficients = obj.simulTheo.sourceCoefficient(loudspeakerIndices, :);
+
+           
         end
          
         function reproduceSignalFunction(obj, signalFunction, signalSampleRate, channelMapping)
@@ -917,8 +957,8 @@ classdef WFSToolSimple < handle
             
             % Find which of the loudspeakers correspond to real sources and
             % which of them belong to the WFS array
-            realFlag = obj.numSourcesWFSarray + (1:obj.numNoiseSources);
-            WFSflag = 1:obj.numSourcesWFSarray;
+            realFlag = obj.noiseSourceIndSimulTheo;
+            WFSflag = obj.WFSarrayIndSimulTheo;
             
             numVirtualSources = sum(obj.virtual);
             U_WFS = sum(U(:, WFSflag, obj.virtual), 2); % Contribution of all WFS array sources to each test point. (numTestPoints x 1 x obj.numNoiseSources)
