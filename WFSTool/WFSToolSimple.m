@@ -158,11 +158,12 @@ classdef WFSToolSimple < handle
         end
         
         function noiseSourceCoefficient = get.noiseSourceCoefficient(obj)
-            noiseSourceCoefficient = diag(obj.simulTheo.sourceCoefficients(obj.noiseSourceIndSimulTheo, :));
+            noiseSourceCoefficient = obj.amplitude .* exp(1i*obj.phase);
         end
         
         function set.noiseSourceCoefficient(obj, value)
-            obj.simulTheo.sourceCoefficients(obj.noiseSourceIndSimulTheo, :) = diag(value);
+            obj.amplitude = abs(value);
+            obj.phase = angle(value);
         end
         
         function noiseSourceOrientation = get.noiseSourceOrientation(obj)
@@ -313,6 +314,104 @@ classdef WFSToolSimple < handle
         function simulField = get.simulField(obj)
             simulField = obj.simulObj.field;
         end
+    end
+    
+    % Export methods
+    methods
+               
+        function saveInformation(obj)
+            defaultName = datestr(now, 'yyyy-mm-dd_HH-MM-SS');
+            [FileName,PathName, ~] = uiputfile('*.mat', 'Save Information', ['../Data/', defaultName]);
+            
+            if FileName ~= 0
+                
+                [~, ~, ext] = fileparts(FileName);
+                if isempty(ext)
+                    FileName = [FileName, '.mat'];
+                end
+                
+                s = obj.exportInformation();
+                save([PathName, FileName], 's');            
+            end
+        end
+               
+        function s = exportInformation(obj)
+                        
+            % Noise source variables
+            s.NoiseSource = obj.getNoiseSourceVariables();
+            
+            % WFS array variables
+            s.WFSarray = obj.getWFSarrayVariables();
+            
+            % Receiver variables
+            s.Receiver = obj.getReceiverVariables();
+            
+            % Loudspeaker variables
+            s.Loudspeaker = obj.getLoudspeakerVariables();
+            
+            % Simulation Results Variables
+            s.Simulation = obj.getSimulationResultVariables();
+            
+            % Experimental Results Variables
+            s.Experiment = obj.getExperimentalResultVariables();
+
+        end
+        
+        function s = getExperimentalResultVariables(obj)
+                        
+            s.recordedSignal = obj.recorded;
+            s.sampleRate = obj.recordedSampleRate;
+            s.recordedChannelMapping = obj.recordedChannelMapping;
+            s.pulseCoefMat = obj.pulseCoeffMat;
+            s.pulseLimits = obj.pulseLimits;
+            s.channelMapping = obj.reprodChannelMapping;
+            s.frequencies = obj.reprodFrequencies;
+            s.acPathStruct = obj.expAcPathStruct; % Sometimes it won't have been calculated
+                   
+        end
+        
+        function s = getSimulationResultVariables(obj)
+            s.simulatedField = obj.simulField;
+        end
+        
+        function s = getNoiseSourceVariables(obj)
+            % Noise source
+            s.noiseSourceOrientation = obj.noiseSourceOrientation;
+            s.noiseSourceRadiationPattern = obj.noiseSourceRadiationPattern;
+            s.virtual = obj.virtual;
+            s.virtualVolume = obj.virtualVolume;
+            s.real = obj.real;
+            s.realVolume = obj.realVolume;
+            s.noiseSourceChannelMapping = obj.noiseSourceChannelMapping;
+            s.amplitude = obj.amplitude;
+            s.phase = obj.phase;
+            s.frequency = obj.frequency;
+            s.noiseSourcePosition = obj.noiseSourcePosition;
+        end
+        
+        function s = getWFSarrayVariables(obj)
+            s.WFSarrayRadiationPattern = obj.WFSarrayRadiationPattern;
+            s.WFSarrayChannelMapping = obj.WFSarrayChannelMapping;
+            s.WFSarrayPosition = obj.WFSarrayPosition;
+            s.WFSarrayOrientation = obj.WFSarrayOrientation;
+        end
+        
+        function s = getReceiverVariables(obj)
+            s.receiverOrientation = obj.receiverOrientation;
+            s.receiverRadiationPattern = obj.receiverRadiationPattern;
+            s.receiverChannelMapping = obj.receiverChannelMapping;
+            s.receiverPosition = obj.receiverPosition;
+        end
+        
+        function s = getLoudspeakerVariables(obj)
+            s.loudspeakerChannelMapping = obj.loudspeakerChannelMapping;
+            s.loudspeakerPosition = obj.loudspeakerPosition;
+            s.loudspeakerCoefficient = obj.loudspeakerCoefficient;
+            s.loudspeakerOrientation = obj.loudspeakerOrientation;
+            s.loudspeakerRadiattionPattern = obj.loudspeakerRadiattionPattern;
+            s.loudspeakerFrequencies = obj.loudspeakerFrequencies;
+        end     
+        
     end
     
     methods
@@ -592,62 +691,25 @@ classdef WFSToolSimple < handle
             WFSarrayAcPath = WFSToolSimple.tuneAcousticPaths(obj.WFSarrayAcPathStruct.acousticPaths, obj.WFSarrayAcPathStruct.frequencies, uniqueFreq);
             noiseSourcesAcPath = WFSToolSimple.tuneAcousticPaths(obj.noiseSourceAcPathStruct.acousticPaths, obj.noiseSourceAcPathStruct.frequencies, uniqueFreq);
             
-            % Apply virtual flags and virtualVolume
-            WFSarrayCoef = obj.getComplexCoeffWFS();
-            WFSarrayCoef = WFSarrayCoef .* repmat(obj.virtualVolume', [obj.numSourcesWFSarray, 1]);
-            WFSarrayCoef(:, ~obj.virtual) = 0;
+            % Set noise source coefficients
+            obj.
+            
+            % Get the WFS array coefficients.
+            obj.WFSarrayCoefficient = obj.getComplexCoeffWFS();
+            obj.tuneWFSField();
+            
+            % Apply volumes and flags
+            obj.WFSarrayCoefficient = obj.WFSarrayCoefficient .* repmat(obj.virtualVolume', [obj.numSourcesWFSarray, 1]);            
+            obj.WFSarrayCoefficient(:, ~obj.virtual) = 0;
+            obj.noiseSourceCoefficient = obj.noiseSourceCoefficient .* obj.realVolume;
+            obj.noiseSourceCoefficient(~obj.real) = 0;
             
             % Apply real flags and realVolume
             noiseSourceCoef = diag(obj.amplitude .* exp(1i*obj.phase) .* (-obj.realVolume));
-            noiseSourceCoef(:, ~obj.real) = 0;   
-            
-            % Substitute data for the loudspeakers used as real noise
-            % sources
-            
-                % Select the noise source values         
-            nSrcChannelMapping_real = obj.noiseSourceChannelMapping(obj.real);
-            nSrcCoef_real = noiseSourceCoef(obj.real, :);
-            nSrcPos_real = obj.noiseSourcePosition(obj.real, :);
-            nSrcOrient_real = obj.noiseSourceOrientation(obj.real, :); % simulator.vec2rotVec(repmat([0 0 1], [numReal, 1]));
-            nSrcRadPat_real = obj.noiseSourceRadiationPattern(obj.real);
-            nSrcAcPath_real = noiseSourcesAcPath(:, obj.real, :);
-                             
-            [ldspkrsChannelMapping, mapping] = combineIndices(obj.WFSarrayChannelMapping, nSrcChannelMapping_real);
-            numLdsprks = numel(ldspkrsChannelMapping);
-            
-            ldspkrsCoef = zeros(numLdsprks, obj.numNoiseSources);
-            ldspkrsPos = zeros(numLdsprks, 3);
-            ldspkrsOrient = zeros(numLdsprks, 4);
-            ldspkrsRadPat = cell(numLdsprks, 1);
-            ldspkrsAcPath = zeros(obj.numReceivers, numLdsprks, numel(uniqueFreq));
-            
-            ldspkrsCoef(mapping(1).destinationInd, :) = WFSarrayCoef(mapping(1).originInd, :);
-            ldspkrsPos(mapping(1).destinationInd, :) = obj.WFSarrayPosition(mapping(1).originInd, :);
-            ldspkrsOrient(mapping(1).destinationInd, :) = obj.WFSarrayOrientation(mapping(1).originInd, :);
-            ldspkrsRadPat(mapping(1).destinationInd) = obj.WFSarrayRadiationPattern(mapping(1).originInd);
-            ldspkrsAcPath(:, mapping(1).destinationInd, :) = WFSarrayAcPath(:, mapping(1).originInd, :);
-            
-            ldspkrsCoef(mapping(2).destinationInd, :) = nSrcCoef_real(mapping(2).originInd, :);
-            ldspkrsPos(mapping(2).destinationInd, :) = nSrcPos_real(mapping(2).originInd, :);
-            ldspkrsOrient(mapping(2).destinationInd, :) = nSrcOrient_real(mapping(2).originInd, :);
-            ldspkrsRadPat(mapping(2).destinationInd) = nSrcRadPat_real(mapping(2).originInd);
-            ldspkrsAcPath(:, mapping(2).destinationInd, :) = nSrcAcPath_real(:, mapping(2).originInd, :);
-                       
-            % Prepare acoustic paths structure
-            ldspkrsAcPathStruct = struct('acousticPaths', ldspkrsAcPath, 'frequencies', uniqueFreq); % completar
-            
-            % Set the variables in the simulation object
-            obj.loudspeakerPosition = ldspkrsPos;
-            obj.loudspeakerCoefficient = ldspkrsCoef;
-            obj.loudspeakerOrientation = ldspkrsOrient;
-            obj.loudspeakerRadiattionPattern = ldspkrsRadPat; % repmat({@(x) simulator.monopoleRadPat(x)}, [obj.numLoudspeakers, 1]);
-            obj.loudspeakerFrequencies = obj.frequency;
-            obj.loudspeakerChannelMapping = ldspkrsChannelMapping;
-            obj.loudspeakerAcPathStruct = ldspkrsAcPathStruct;
-
+            noiseSourceCoef(:, ~obj.real) = 0;    
+    
         end
-        
-        
+         
         function reproduceSignalFunction(obj, signalFunction, signalSampleRate, channelMapping)
                
             % Save ReproductorRecorder parameters
@@ -819,104 +881,6 @@ classdef WFSToolSimple < handle
             obj.noiseSourceAcPathStruct = struct('acousticPaths', acPath, 'frequencies', uniqueFreq);
             
         end
-        
-    end
-    
-    % Export and import methods
-    methods
-               
-        function saveInformation(obj)
-            defaultName = datestr(now, 'yyyy-mm-dd_HH-MM-SS');
-            [FileName,PathName, ~] = uiputfile('*.mat', 'Save Information', ['../Data/', defaultName]);
-            
-            if FileName ~= 0
-                
-                [~, ~, ext] = fileparts(FileName);
-                if isempty(ext)
-                    FileName = [FileName, '.mat'];
-                end
-                
-                s = obj.exportInformation();
-                save([PathName, FileName], 's');            
-            end
-        end
-               
-        function s = exportInformation(obj)
-                        
-            % Noise source variables
-            s.NoiseSource = obj.getNoiseSourceVariables();
-            
-            % WFS array variables
-            s.WFSarray = obj.getWFSarrayVariables();
-            
-            % Receiver variables
-            s.Receiver = obj.getReceiverVariables();
-            
-            % Loudspeaker variables
-            s.Loudspeaker = obj.getLoudspeakerVariables();
-            
-            % Simulation Results Variables
-            s.Simulation = obj.getSimulationResultVariables();
-            
-            % Experimental Results Variables
-            s.Experiment = obj.getExperimentalResultVariables();
-
-        end
-        
-        function s = getExperimentalResultVariables(obj)
-                        
-            s.recordedSignal = obj.recorded;
-            s.sampleRate = obj.recordedSampleRate;
-            s.recordedChannelMapping = obj.recordedChannelMapping;
-            s.pulseCoefMat = obj.pulseCoeffMat;
-            s.pulseLimits = obj.pulseLimits;
-            s.channelMapping = obj.reprodChannelMapping;
-            s.frequencies = obj.reprodFrequencies;
-            s.acPathStruct = obj.expAcPathStruct; % Sometimes it won't have been calculated
-                   
-        end
-        
-        function s = getSimulationResultVariables(obj)
-            s.simulatedField = obj.simulField;
-        end
-        
-        function s = getNoiseSourceVariables(obj)
-            % Noise source
-            s.noiseSourceOrientation = obj.noiseSourceOrientation;
-            s.noiseSourceRadiationPattern = obj.noiseSourceRadiationPattern;
-            s.virtual = obj.virtual;
-            s.virtualVolume = obj.virtualVolume;
-            s.real = obj.real;
-            s.realVolume = obj.realVolume;
-            s.noiseSourceChannelMapping = obj.noiseSourceChannelMapping;
-            s.amplitude = obj.amplitude;
-            s.phase = obj.phase;
-            s.frequency = obj.frequency;
-            s.noiseSourcePosition = obj.noiseSourcePosition;
-        end
-        
-        function s = getWFSarrayVariables(obj)
-            s.WFSarrayRadiationPattern = obj.WFSarrayRadiationPattern;
-            s.WFSarrayChannelMapping = obj.WFSarrayChannelMapping;
-            s.WFSarrayPosition = obj.WFSarrayPosition;
-            s.WFSarrayOrientation = obj.WFSarrayOrientation;
-        end
-        
-        function s = getReceiverVariables(obj)
-            s.receiverOrientation = obj.receiverOrientation;
-            s.receiverRadiationPattern = obj.receiverRadiationPattern;
-            s.receiverChannelMapping = obj.receiverChannelMapping;
-            s.receiverPosition = obj.receiverPosition;
-        end
-        
-        function s = getLoudspeakerVariables(obj)
-            s.loudspeakerChannelMapping = obj.loudspeakerChannelMapping;
-            s.loudspeakerPosition = obj.loudspeakerPosition;
-            s.loudspeakerCoefficient = obj.loudspeakerCoefficient;
-            s.loudspeakerOrientation = obj.loudspeakerOrientation;
-            s.loudspeakerRadiattionPattern = obj.loudspeakerRadiattionPattern;
-            s.loudspeakerFrequencies = obj.loudspeakerFrequencies;
-        end     
         
     end
     
@@ -1148,7 +1112,6 @@ classdef WFSToolSimple < handle
             
             obj.frequency = freq;
             
-            obj.noiseSourceCoefficient = obj.amplitude .* exp(1i*obj.phase);
         end
         
         function updateSignalSpecFromParameters(obj)
@@ -1312,19 +1275,25 @@ classdef WFSToolSimple < handle
             end
         end
         
-        function delays = getDelaysWFS(obj, index)
+        function delays = getDelaysWFS(obj, indices)
                         
-            if obj.virtual(index)
-                % Find index of source in scenarioObj. Only the sources that
-                % are active (virtual, real or both flags set to true) are in
-                % scenarioObj
-                activeSources = find(obj.virtual | obj.real);
-                ind = (activeSources == activeSources(index));
-                
-                delays = obj.scenarioObj.delays(:, ind);
-            else
-                delays= zeros(obj.numSourcesWFSarray, 1);
-            end
+            activeSources = find(obj.virtual | obj.real);
+            [isActive, indScenario] = ismember(indices, activeSources);
+            
+            delays = zeros(obj.numSourcesWFSarray, numel(indices));
+            delays(:, isActive) = obj.scenarioObj.delays(:, indScenario(isActive));
+                        
+%             if obj.virtual(index)
+%                 % Find index of source in scenarioObj. Only the sources that
+%                 % are active (virtual, real or both flags set to true) are in
+%                 % scenarioObj
+%                 activeSources = find(obj.virtual | obj.real);
+%                 ind = (activeSources == activeSources(index));
+%                 
+%                 delays = obj.scenarioObj.delays(:, ind);
+%             else
+%                 delays= zeros(obj.numSourcesWFSarray, 1);
+%             end
             
         end
         
@@ -1349,46 +1318,34 @@ classdef WFSToolSimple < handle
             end
         end
         
-        function attenuations = getAttenuationsWFS(obj, index)
+        function attenuations = getAttenuationsWFS(obj, indices)
                     
-            if obj.virtual(index)
-                % Find index of source in scenarioObj. Only the sources that
-                % are active (virtual, real or both flags set to true) are in
-                % scenarioObj
-                activeSources = find(obj.virtual | obj.real);
-                ind = (activeSources == activeSources(index));
-                
-                attenuations = obj.scenarioObj.attenuations(:, ind);
-            else
-                attenuations = zeros(obj.numSourcesWFSarray, 1);
-            end
+            activeSources = find(obj.virtual | obj.real);
+            [isActive, indScenario] = ismember(indices, activeSources);
             
+            attenuations = zeros(obj.numSourcesWFSarray, numel(indices));
+            attenuations(:, isActive) = obj.scenarioObj.attenuations(:, indScenario(isActive));
+                                    
         end
         
         function complexCoeff = getComplexCoeffWFS(obj)
             complexCoeff = zeros(obj.numSourcesWFSarray, obj.numNoiseSources);
+            
             for k = 1:obj.numNoiseSources
                 delays = obj.getDelaysWFS(k);
-                atten = obj.getAttenuationsWFS(k);
-                                
-                amp = obj.amplitude(k);
-                pha = obj.phase(k);
-                sourceCoef = amp * exp(1i*pha);
+                atten = obj.getAttenuationsWFS(k);                                
+                sourceCoef = obj.noiseSourceCoefficient(k);
                 
                 complexCoeff(:, k) = sourceCoef * atten .* exp(-1i*2*pi*obj.frequency(k)*delays);
-            end
+            end          
         end
                
         function complexCoeff = getComplexCoeff(obj)
-            numFreq = obj.numNoiseSources;
-            complexCoeff = zeros(obj.numLoudspeakers, numFreq);
-            for k = 1:numFreq
+            complexCoeff = zeros(obj.numLoudspeakers, obj.numNoiseSources);
+            for k = 1:obj.numNoiseSources
                 delays = obj.getDelays(k);
                 atten = obj.getAttenuations(k);
-                
-                amp = obj.amplitude(k);
-                pha = obj.phase(k);
-                sourceCoef = amp * exp(1i*pha);
+                sourceCoef = obj.noiseSourceCoefficient(k);
                 
                 complexCoeff(:, k) = sourceCoef * atten .* exp(-1i*2*pi*obj.frequency(k)*delays);
             end
@@ -1450,6 +1407,7 @@ classdef WFSToolSimple < handle
         
     end
     
+    % Static methods
     methods(Static)
         
         function comMat = createCommutationMatrix(virtual, ~)
