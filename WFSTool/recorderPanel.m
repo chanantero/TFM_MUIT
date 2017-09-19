@@ -39,8 +39,10 @@ classdef recorderPanel < handle
             % Check they are unique
             assert(numel(unique(activeChannels)) == numel(activeChannels), 'recorderPanel:setActiveChannels', 'The activeChannels vector mustn''t have repeated values');
             
-            obj.activeChannels = activeChannels;
+            obj.activeChannels = activeChannels(:);
             obj.list.Data = num2cell(activeChannels(:));
+            numSourcesPopUp = findobj(obj.panel, 'Tag', 'numSources');
+            numSourcesPopUp.String = num2str(numel(activeChannels));
         end
         
     end

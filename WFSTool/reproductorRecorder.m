@@ -75,6 +75,10 @@ classdef reproductorRecorder < matlab.System
         numChannels % Number of channels of the player objects
     end
     
+    properties(SetAccess = private)
+        numUnderruns % Underrun matrix of the last reproduction
+    end
+    
     properties(Dependent, SetAccess = private)
         Fs_reader % Sampling frequency of readers.
         numReaders
@@ -523,7 +527,10 @@ classdef reproductorRecorder < matlab.System
             % Buffer control
             offset = zeros(numPlay, 1);
             t_eps = cell(numPlay, 1); % Times of the ending of loading to the buffer queue
-            numUnderruns = cell(numPlay, 1);
+            numUnderruns_aux = cell(numPlay, 1);
+            % Underrun control
+            assumedMaxIterations = 100;
+            numUnderruns = zeros(assumedMaxIterations, obj.numPlayers);
             % Recorder timing
             del = 3; % Delay of the reproduction with respect to the recording in seconds
                         
@@ -554,23 +561,24 @@ classdef reproductorRecorder < matlab.System
                     % Step
                     try
                         [numUnderrun, t_ep] = step(obj, delays, attenuations);
-                                                
+                                              
+                        numUnderruns(obj.count, :) = numUnderrun;
                         % Delay between writing devices control
                         for k = 1:obj.numPlayers
                             if numel(t_eps{k}) == 20
                                 t_eps{k}(1:end-1) = t_eps{k}(2:end); % Shift
                                 t_eps{k}(end) = toc(tref) - toc(t_ep(k)); % New value to the end
 
-                                numUnderruns{k}(1:end-1) = numUnderruns{k}(2:end); % Shift
-                                numUnderruns{k}(end) = numUnderrun(k); % New value to the end
+                                numUnderruns_aux{k}(1:end-1) = numUnderruns_aux{k}(2:end); % Shift
+                                numUnderruns_aux{k}(end) = numUnderrun(k); % New value to the end
                             else
                                 t_eps{k} = [t_eps{k}; toc(tref) - toc(t_ep(k))];
-                                numUnderruns{k} = [numUnderruns{k}; numUnderrun(k)];
+                                numUnderruns_aux{k} = [numUnderruns_aux{k}; numUnderrun(k)];
                             end
                         end
                         
                         if numel(t_eps{1}) > 1
-                            offset = obj.delayBetweenDevices(t_eps, numUnderruns);
+                            offset = obj.delayBetweenDevices(t_eps, numUnderruns_aux);
                             offset = max(offset) - offset;
                         end
                     catch e
@@ -609,7 +617,7 @@ classdef reproductorRecorder < matlab.System
                         % Record to overcompensate delays
                         numAcumUnd = zeros(obj.numPlayers, 1);
                         for k = 1:obj.numPlayers
-                            numAcumUnd(k) = sum(numUnderruns{k})/obj.frameSizeWriting;
+                            numAcumUnd(k) = sum(numUnderruns_aux{k})/obj.frameSizeWriting;
                         end
                                                 
                         N = ceil(del/obj.frameDuration) + max(numAcumUnd);
@@ -625,6 +633,8 @@ classdef reproductorRecorder < matlab.System
                 end
                 
             end
+            
+            obj.numUnderruns = numUnderruns;
             
         end
         

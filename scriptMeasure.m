@@ -5,21 +5,21 @@
 % in amplitude, phase and position.
 
 %% Parameters.
-paths = genpath('C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Matlab\');
+paths = genpath('E:\Rubén TFM\Matlab_sesion_19-09-2017\');
 addpath(paths);
 
 % User can change this:
-numLoudspeakers = 2;
+numLoudspeakers = 96;
 
-realPosition = [1 -0.2 0]; % Assumed real position
+realPosition = [3.35 -0.2 0]; % Assumed real position
 amplitude = 0.5;
 phase = 0;
 frequency = 600;
 
-minXPos = 0.8; maxXPos = 1.2; numXPoints = 10;
+minXPos = 3.35; maxXPos = 3.35; numXPoints = 1;
 minYPos = -0.2; maxYPos = -0.2; numYPoints = 1;
 minZPos = 0; maxZPos = 0; numZPoints = 1;
-minAmplitude = 0.5; maxAmplitude = 0.5; numAmplitudePoints = 1;
+minAmplitude = 0; maxAmplitude = 1; numAmplitudePoints = 11;
 numPhasePoints = 1;
 
 % Receivers
@@ -31,7 +31,7 @@ theoricNoiseSourceAcPath = true;
 % acPathWFSarray;
 % acPathNoiseSources;
 
-PathName = 'C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Matlab\Data\';
+PathName = 'E:\Rubén TFM\Matlab_sesion_19-09-2017\Data\';
 ID = datestr(now, 'yyyy-mm-dd_HH-MM-SS');
 
 %% Processing
@@ -123,7 +123,7 @@ obj.calculateExperimentalAcousticPaths();
 
 % Retrieve and save information
 sBase = obj.exportInformation();
-FileName = ['Session_', ID, 'calibration', '.mat'];
+FileName = ['Session_', ID, 'calibration_microsCambiadosLugar', '.mat'];
 save([PathName, FileName], 'sBase');
 
 % C.2 Only real noise source
@@ -132,7 +132,7 @@ obj.setReal([true; false]); % Only real source
 obj.updateReprodPanelBasedOnVariables();
 
 obj.WFScalculation(); % Update coefficents of loudspeakers. Only the channel of the real loudspeaker should have coefficient different than 0
-obj.reproduceAndRecord('main', 'soundTime', 1); % Simple reproduction of one pulse of 1 second
+obj.reproduceAndRecord('main', 'soundTime', 2); % Simple reproduction of one pulse of 1 second
 
 % Retrieve and save information
 sExpOnlyNoise = obj.getExperimentalResultVariables();
@@ -201,7 +201,17 @@ visualObj = animation({xVec, yVec, zVec, amplitudeVec, phaseVec, 1:obj.numReceiv
 
 %% Analyse
 sExp = sBase.Experiment;
+acPath = sExp.acPathStruct.acousticPaths;
 [expAcPath, freq, yPulseCoefMat] = getAcousticPath( sExp.pulseLimits, sExp.frequencies, sExp.pulseCoefMat, sExp.recordedSignal, sExp.sampleRate);
+
+aux = yPulseCoefMat((1:96) + 96, :)./yPulseCoefMat((1:96), :);
+ax = axes(figure);
+ax1 = subplot(3, 1, 1);
+ax2 = subplot(3, 1, 2);
+ax3 = subplot(3, 1, 3);
+bar(ax1, abs(yPulseCoefMat(1:end-2, :)));
+plot(ax2, rad2deg(angle(aux)));
+plot(ax3, abs(aux)); ax3.YLim = [0, 1.5];
 
 bar(abs(expAcPath)')
 bar(rad2deg(angle(expAcPath))')

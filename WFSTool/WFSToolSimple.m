@@ -692,20 +692,21 @@ classdef WFSToolSimple < handle
             SampleRate = 44100;
             numChannels = obj.numLoudspeakers;
             frequencies = obj.frequency;
-            numFreq = numel(frequencies);
+            uniqueFreq = unique(frequencies);
+            numUniqueFreq = numel(uniqueFreq);
             
-            % Set coefficients for calibration
-            calCoeff = 0.4*ones(numChannels, numFreq);
+            % Set coefficients for calibration          
+            calCoeff = 0.4*ones(numChannels, numUniqueFreq);
             
             % Reproduce
-            [ pulseCoefMat, pulseLim ] = coefficients2pulseSignalParameters( calCoeff, frequencies, SampleRate, 'preludeAndMain', 1, 1, 2 );
-            signalFunc = @(startSample, endSample) pulseCoefMat2signal(pulseCoefMat, pulseLim, frequencies, SampleRate, startSample, endSample, 'type_marker', 'sample');          
+            [ pulseCoefMat, pulseLim ] = coefficients2pulseSignalParameters( calCoeff, uniqueFreq, SampleRate, 'preludeAndMain', 1, 1, 2 );
+            signalFunc = @(startSample, endSample) pulseCoefMat2signal(pulseCoefMat, pulseLim, uniqueFreq, SampleRate, startSample, endSample, 'type_marker', 'sample');          
             obj.reproduceSignalFunction(signalFunc, SampleRate);
             
             % Save information about the reproduced signal
             obj.pulseCoeffMat = pulseCoefMat;
             obj.pulseLimits = pulseLim/SampleRate;
-            obj.reprodFrequencies = frequencies;
+            obj.reprodFrequencies = uniqueFreq;
         end
         
         function position = calculatePosition(obj)
@@ -1331,10 +1332,7 @@ classdef WFSToolSimple < handle
         end
         
         function s = generateScenario(numLoudspeakers)
-            if ~ismember(numLoudspeakers, [0 2 96])
-                numLoudspeakers = 0;
-            end
-            
+                        
             switch numLoudspeakers
                 case 0
 
@@ -1365,7 +1363,9 @@ classdef WFSToolSimple < handle
                     roomPosition = [xmin - xmargin, ymin - ymargin, xDim + 2*xmargin, yDim + 2*ymargin];
                     
                 otherwise
-                    warning('Wrong number of output channels. There is not possible scenario for that case')
+                    loudspeakersPosition = zeros(numLoudspeakers, 3);
+                    loudspeakersOrientation = repmat([1 0 0], [numLoudspeakers, 1]);
+                    roomPosition = [-1, -1, 2, 2];
             end
             
             s.loudspeakersPosition = loudspeakersPosition;
