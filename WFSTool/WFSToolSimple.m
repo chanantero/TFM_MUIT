@@ -20,12 +20,10 @@ classdef WFSToolSimple < handle
         
         % Microphones
         receiverChannelMapping % Active channels of the receiver device
-        
-        % Other
-        activeSourceFlags
 
         % Loudspeakers
         loudspeakerChannelMapping
+        loudspeakerMapping % Structure
                                    
         % Experimental results
         pulseCoeffMat
@@ -42,7 +40,6 @@ classdef WFSToolSimple < handle
         % - yChannelMapping
         % - frequencies
         expAcPathStruct % Last experimental acoustic path calculated. If it's done well, it is supposed to be updated for the current physical scenario.
-        loudspeakerAcPathStruct % Its not dependent because in the simulator object we are dealing with a matrix, not a structure
         noiseSourceAcPathStruct
         WFSarrayAcPathStruct
 
@@ -53,7 +50,6 @@ classdef WFSToolSimple < handle
         scenarioObj
         propPanel
         recordPanel
-        simulObj
         simulTheo
                 
         % Other
@@ -84,11 +80,7 @@ classdef WFSToolSimple < handle
         receiverRadiationPattern
         
         % Loudspeakers
-        loudspeakerPosition
         loudspeakerCoefficient
-        loudspeakerOrientation
-        loudspeakerRadiattionPattern
-        loudspeakerFrequencies
         
         % Experiment
         recorded
@@ -117,7 +109,7 @@ classdef WFSToolSimple < handle
         end   
         
         function numReceivers = get.numReceivers(obj)
-            numReceivers = numel(obj.receiverChannelMapping, 1);
+            numReceivers = numel(obj.receiverChannelMapping);
         end
         
         function numSourcesWFSarray = get.numSourcesWFSarray(obj)
@@ -125,8 +117,7 @@ classdef WFSToolSimple < handle
         end
         
         function numLoudspeakers = get.numLoudspeakers(obj)
-%             numLoudspeakers = obj.player.numChannels(1);
-            numLoudspeakers = size(obj.loudspeakerCoefficient, 1);
+            numLoudspeakers = numel(obj.loudspeakerChannelMapping);
         end
         
         function numSourcesTheo = get.numSourcesTheo(obj)
@@ -251,76 +242,36 @@ classdef WFSToolSimple < handle
         
         function set.receiverPosition(obj, value)
             obj.scenarioObj.setReceiverPosition(value, (1:size(value, 1)));
-            obj.simulObj.recPositions = value;
             obj.simulTheo.recPositions = value;
         end
            
         function receiverOrientation = get.receiverOrientation(obj)
-            receiverOrientation = obj.simulObj.recOrientations;
+            receiverOrientation = obj.simulTheo.recOrientations;
         end
         
         function set.receiverOrientation(obj, value)
-            obj.simulObj.recOrientations = value;
             obj.simulTheo.recOrientations = value;
         end
          
         function receiverRadiationPattern = get.receiverRadiationPattern(obj)
-            receiverRadiationPattern = obj.simulObj.recRadPatFuns;
+            receiverRadiationPattern = obj.simulTheo.recRadPatFuns;
         end
         
         function set.receiverRadiationPattern(obj, value)
-            obj.simulObj.recRadPatFuns = value;
             obj.simulTheo.recRadPatFuns = value;
-        end        
+        end
         
+         
         % Loudspeakers
-        function loudspeakerPosition = get.loudspeakerPosition(obj)
-            loudspeakerPosition = obj.simulObj.sourcePositions;
-        end
-        
-        function set.loudspeakerPosition(obj, value)
-            obj.simulObj.sourcePositions = value;
-        end
-        
         function loudspeakerCoefficient = get.loudspeakerCoefficient(obj)
-            % Calculate the loudspeaker coefficients and channel mapping
-            realInd = find(obj.real);
-            noiseSourceChannelMapping_real = obj.noiseSourceChannelMapping(realInd);
-            [ldspkrsChannelMapping, mapping] = combineIndices(obj.WFSarrayChannelMapping, noiseSourceChannelMapping_real);
+            % Calculate the loudspeaker coefficients
+            mapping = obj.loudspeakerMapping;
             
-            loudspeakerCoefficient = zeros(numel(ldspkrsChannelMapping), obj.numNoiseSources);
+            loudspeakerCoefficient = zeros(obj.numLoudspeakers, obj.numNoiseSources);
             loudspeakerCoefficient(mapping(1).destinationInd, :) = obj.WFSarrayCoefficient(mapping(1).originInd, :);
-            loudspeakerCoefficient(mapping(2).destinationInd, :) = obj.noiseSourceCoefficient_complete(realInd(mapping(2).originInd), :);
+            loudspeakerCoefficient(mapping(2).destinationInd, :) = obj.noiseSourceCoefficient_complete(mapping(2).originInd, :);
         end
-        
-        function set.loudspeakerCoefficient(obj, value)
-            obj.simulObj.sourceCoefficients = value;
-        end
-        
-        function loudspeakerOrientation = get.loudspeakerOrientation(obj)
-            loudspeakerOrientation = obj.simulObj.sourceOrientations;
-        end
-        
-        function set.loudspeakerOrientation(obj, value)
-            obj.simulObj.sourceOrientations = value;
-        end
-        
-        function loudspeakerRadiattionPattern = get.loudspeakerRadiattionPattern(obj)
-            loudspeakerRadiattionPattern = obj.simulObj.radPatFuns;
-        end
-        
-        function set.loudspeakerRadiattionPattern(obj, value)
-            obj.simulObj.radPatFuns = value;
-        end
-        
-        function loudspeakerFrequencies = get.loudspeakerFrequencies(obj)
-            loudspeakerFrequencies = obj.simulObj.freq;
-        end
-        
-        function set.loudspeakerFrequencies(obj, value)
-            obj.simulObj.freq = value;
-        end
-       
+                      
         % Experimental
         function recorded = get.recorded(obj)
             recorded = obj.player.recorded{1};
@@ -328,7 +279,18 @@ classdef WFSToolSimple < handle
                 
         % Simulation
         function simulField = get.simulField(obj)
-            simulField = obj.simulObj.field;
+            simulField = obj.simulTheo.field;
+        end
+        
+        % Channel mappings
+        function set.noiseSourceChannelMapping(obj, value)
+            obj.noiseSourceChannelMapping = value;
+            obj.updateLoudspeakerMappingVariables();
+        end
+        
+        function set.WFSarrayChannelMapping(obj, value)
+            obj.WFSarrayChannelMapping = value;
+            obj.updateLoudspeakerMappingVariables();
         end
     end
     
@@ -421,11 +383,7 @@ classdef WFSToolSimple < handle
         
         function s = getLoudspeakerVariables(obj)
             s.loudspeakerChannelMapping = obj.loudspeakerChannelMapping;
-            s.loudspeakerPosition = obj.loudspeakerPosition;
             s.loudspeakerCoefficient = obj.loudspeakerCoefficient;
-            s.loudspeakerOrientation = obj.loudspeakerOrientation;
-            s.loudspeakerRadiattionPattern = obj.loudspeakerRadiattionPattern;
-            s.loudspeakerFrequencies = obj.loudspeakerFrequencies;
         end     
         
     end
@@ -441,10 +399,9 @@ classdef WFSToolSimple < handle
             obj.scenarioObj = scenario(fig);
             obj.propPanel = propertiesPanel(fig, [0.05 0.1 0.4 0.2]);
             obj.recordPanel = recorderPanel(fig, [0.05 0.35 0.4 0.2]);
-            obj.simulObj = simulator;
             obj.simulTheo = simulator;
             obj.ax = obj.scenarioObj.ax;
-            obj.simulObj.ax = obj.ax;
+            obj.simulTheo.ax = obj.ax;
             colormap(obj.ax, 'gray')
             obj.ax.CLim = [-1 1];            
                         
@@ -469,8 +426,8 @@ classdef WFSToolSimple < handle
             obj.changed.numNoiseSources = true;
             obj.updateEverything();          
             
-            obj.simulObj.XnumPoints = 200;
-            obj.simulObj.YnumPoints = 200;
+            obj.simulTheo.XnumPoints = 200;
+            obj.simulTheo.YnumPoints = 200;
             obj.simulateOnAxis();
             
             uicontrol(fig, 'Style', 'pushbutton',...
@@ -542,11 +499,11 @@ classdef WFSToolSimple < handle
             obj.signalsSpec = cell(numNoiseSources, 1);
             obj.adjustSimulTheoSources(obj.numSourcesWFSarray, obj.numNoiseSources, 'noiseSource', numNoiseSources);
             obj.noiseSourceChannelMapping = zeros(numNoiseSources, 1);
+            obj.updateLoudspeakerMappingVariables();
             obj.virtualVolume = ones(numNoiseSources, 1);
             obj.realVolume = ones(numNoiseSources, 1);
             obj.noiseSourceOrientation = repmat([1, 0, 0, 1], numNoiseSources, 1);
             obj.noiseSourceRadiationPattern = repmat({@ simulator.monopoleRadPat}, numNoiseSources, 1);
-            obj.activeSourceFlags = true(obj.numSourcesTheo, 1);
            
             for k = 1:numNoiseSources
                 obj.signalsSpec{k} = '';
@@ -564,21 +521,21 @@ classdef WFSToolSimple < handle
             s = WFSToolSimple.generateScenario(numWFSsources);
             obj.adjustSimulTheoSources(obj.numSourcesWFSarray, obj.numNoiseSources, 'WFSarray', numWFSsources);
             obj.WFSarrayChannelMapping = (1:numWFSsources)';
+            obj.updateLoudspeakerMappingVariables();
+            obj.scenarioObj.setScenario(obj.noiseSourcePosition, obj.receiverPosition, s.loudspeakersPosition, s.loudspeakersOrientation, s.roomPosition);
             obj.WFSarrayPosition = s.loudspeakersPosition;
             obj.WFSarrayRadiationPattern = repmat({@ simulator.monopoleRadPat}, numWFSsources, 1);
             uniqueFreq = unique(obj.frequency);
             obj.WFSarrayAcPathStruct = struct('acousticPaths', zeros(obj.numReceivers, numWFSsources, numel(uniqueFreq)), 'frequencies', uniqueFreq);
             
-            obj.scenarioObj.setScenario(obj.noiseSourcePosition, obj.receiverPosition, s.loudspeakersPosition, s.loudspeakersOrientation, s.roomPosition);
             
-            obj.simulObj.XLim = [s.roomPosition(1), s.roomPosition(1) + s.roomPosition(3)];
-            obj.simulObj.YLim = [s.roomPosition(2), s.roomPosition(2) + s.roomPosition(4)];
-            delete(obj.simulObj.imag);
+            obj.simulTheo.XLim = [s.roomPosition(1), s.roomPosition(1) + s.roomPosition(3)];
+            obj.simulTheo.YLim = [s.roomPosition(2), s.roomPosition(2) + s.roomPosition(4)];
+            delete(obj.simulTheo.imag);
             
             obj.updateForcedDisabledLoudspeakers();
             
             obj.WFSarrayCoefficient = zeros(numWFSsources, obj.numNoiseSources);
-            obj.activeSourceFlags = true(obj.numSourcesTheo, 1);
             
         end
         
@@ -588,6 +545,7 @@ classdef WFSToolSimple < handle
             obj.receiverOrientation = repmat([1, 0, 0, 1], numReceivers, 1);
             obj.receiverRadiationPattern = repmat({@ simulator.monopoleRadPat}, numReceivers);
             obj.receiverChannelMapping = (1:numReceivers)';
+            obj.player.setProps('channelMapping_recorder', obj.receiverChannelMapping, 1);
             uniqueFreq = unique(obj.frequency);
             obj.noiseSourceAcPathStruct = struct('acousticPaths', zeros(obj.numReceivers, obj.numNoiseSources, numel(uniqueFreq)), 'frequencies', uniqueFreq);
             obj.WFSarrayAcPathStruct = struct('acousticPaths', zeros(obj.numReceivers, obj.numSourcesWFSarray, numel(uniqueFreq)), 'frequencies', uniqueFreq);
@@ -601,6 +559,7 @@ classdef WFSToolSimple < handle
         function setReal(obj, value)
             obj.real = value;
             obj.changed.real = true;
+            obj.updateLoudspeakerMappingVariables();
         end
         
         function setSignalsSpec(obj, value)
@@ -627,77 +586,8 @@ classdef WFSToolSimple < handle
             obj.expAcPathStruct = acPathStruct;
             
         end
-                
+                         
         function WFScalculation(obj)
-                    
-            % We assume that ldspkrsCoef is a matrix of size
-            % (numSourcesWFSarray x numNoiseSources). The (i, j)-th element
-            % is the complex coefficient of the i-th WFS array element
-            % destinated to synthesize the j-th noise source (with, of
-            % course, the frequency corresponding to the j-th source). It
-            % is not modified by the virtualVolume yet.
-            
-            % Unify the acoustic paths for the same frequencies
-            uniqueFreq = unique(obj.frequency);
-            WFSarrayAcPath = WFSToolSimple.tuneAcousticPaths(obj.WFSarrayAcPathStruct.acousticPaths, obj.WFSarrayAcPathStruct.frequencies, uniqueFreq);
-            noiseSourcesAcPath = WFSToolSimple.tuneAcousticPaths(obj.noiseSourceAcPathStruct.acousticPaths, obj.noiseSourceAcPathStruct.frequencies, uniqueFreq);
-            
-            % Apply virtual flags and virtualVolume
-            WFSarrayCoef = obj.getComplexCoeffWFS();
-            WFSarrayCoef = WFSarrayCoef .* repmat(obj.virtualVolume', [obj.numSourcesWFSarray, 1]);
-            WFSarrayCoef(:, ~obj.virtual) = 0;
-            
-            % Apply real flags and realVolume
-            noiseSourceCoef = diag(obj.amplitude .* exp(1i*obj.phase) .* (-obj.realVolume));
-            noiseSourceCoef(:, ~obj.real) = 0;   
-            
-            % Substitute data for the loudspeakers used as real noise
-            % sources
-            
-                % Select the noise source values         
-            nSrcChannelMapping_real = obj.noiseSourceChannelMapping(obj.real);
-            nSrcCoef_real = noiseSourceCoef(obj.real, :);
-            nSrcPos_real = obj.noiseSourcePosition(obj.real, :);
-            nSrcOrient_real = obj.noiseSourceOrientation(obj.real, :); % simulator.vec2rotVec(repmat([0 0 1], [numReal, 1]));
-            nSrcRadPat_real = obj.noiseSourceRadiationPattern(obj.real);
-            nSrcAcPath_real = noiseSourcesAcPath(:, obj.real, :);
-                             
-            [ldspkrsChannelMapping, mapping] = combineIndices(obj.WFSarrayChannelMapping, nSrcChannelMapping_real);
-            numLdsprks = numel(ldspkrsChannelMapping);
-            
-            ldspkrsCoef = zeros(numLdsprks, obj.numNoiseSources);
-            ldspkrsPos = zeros(numLdsprks, 3);
-            ldspkrsOrient = zeros(numLdsprks, 4);
-            ldspkrsRadPat = cell(numLdsprks, 1);
-            ldspkrsAcPath = zeros(obj.numReceivers, numLdsprks, numel(uniqueFreq));
-            
-            ldspkrsCoef(mapping(1).destinationInd, :) = WFSarrayCoef(mapping(1).originInd, :);
-            ldspkrsPos(mapping(1).destinationInd, :) = obj.WFSarrayPosition(mapping(1).originInd, :);
-            ldspkrsOrient(mapping(1).destinationInd, :) = obj.WFSarrayOrientation(mapping(1).originInd, :);
-            ldspkrsRadPat(mapping(1).destinationInd) = obj.WFSarrayRadiationPattern(mapping(1).originInd);
-            ldspkrsAcPath(:, mapping(1).destinationInd, :) = WFSarrayAcPath(:, mapping(1).originInd, :);
-            
-            ldspkrsCoef(mapping(2).destinationInd, :) = nSrcCoef_real(mapping(2).originInd, :);
-            ldspkrsPos(mapping(2).destinationInd, :) = nSrcPos_real(mapping(2).originInd, :);
-            ldspkrsOrient(mapping(2).destinationInd, :) = nSrcOrient_real(mapping(2).originInd, :);
-            ldspkrsRadPat(mapping(2).destinationInd) = nSrcRadPat_real(mapping(2).originInd);
-            ldspkrsAcPath(:, mapping(2).destinationInd, :) = nSrcAcPath_real(:, mapping(2).originInd, :);
-                       
-            % Prepare acoustic paths structure
-            ldspkrsAcPathStruct = struct('acousticPaths', ldspkrsAcPath, 'frequencies', uniqueFreq); % completar
-            
-            % Set the variables in the simulation object
-            obj.loudspeakerPosition = ldspkrsPos;
-            obj.loudspeakerCoefficient = ldspkrsCoef;
-            obj.loudspeakerOrientation = ldspkrsOrient;
-            obj.loudspeakerRadiattionPattern = ldspkrsRadPat; % repmat({@(x) simulator.monopoleRadPat(x)}, [obj.numLoudspeakers, 1]);
-            obj.loudspeakerFrequencies = obj.frequency;
-            obj.loudspeakerChannelMapping = ldspkrsChannelMapping;
-            obj.loudspeakerAcPathStruct = ldspkrsAcPathStruct;
-
-        end
-              
-        function WFScalculation_new(obj)
             
             % Calculate coefficients
                 % A) Set noise source coefficients
@@ -722,32 +612,15 @@ classdef WFSToolSimple < handle
             acPath(:, obj.noiseSourceIndSimulTheo, :) = noiseSourcesAcPath;
             
             obj.simulTheo.acPath = acPath;
-            
-            % The environment is already setup.
-            % Calculate the loudspeaker coefficients and channel mapping
-            [obj.loudspeakerChannelMapping, obj.loudspeakerCoefficients] = calculateLoudspeakerVariables(obj);
-                       
+                     
         end
         
-        function [ldspkrsChannelMapping, loudspeakerCoefficients] = calculateLoudspeakerVariables(obj)
-%             % Calculate the loudspeaker coefficients and channel mapping
-            realInd = find(obj.real);
-            noiseSourceChannelMapping_real = obj.noiseSourceChannelMapping(realInd);
-            [ldspkrsChannelMapping, mapping] = combineIndices(obj.WFSarrayChannelMapping, noiseSourceChannelMapping_real);
-            
-            loudspeakerCoefficients = zeros(numel(ldspkrsChannelMapping), obj.numNoiseSources);
-            loudspeakerCoefficients(mapping(1).destinationInd, :) = obj.WFSarrayCoefficient(mapping(1).originInd, :);
-            loudspeakerCoefficients(mapping(2).destinationInd, :) = obj.noiseSourceCoefficient_complete(realInd(mapping(2).originInd), :);
-            
-%             % Other way
-%             % Indices from simulTheo to loudspeakers
-%             loudspeakerIndices = zeros(numel(ldspkrsChannelMapping), 1);
-%             loudspeakerIndices(mapping(1).destinationInd) = obj.WFSarrayIndSimulTheo(mapping(1).originInd, :);
-%             loudspeakerIndices(mapping(2).destinationInd) = obj.noiseSourceIndSimulTheo(realInd(mapping(2).originInd), :);
-%             
-%             loudspeakerCoefficients = obj.simulTheo.sourceCoefficient(loudspeakerIndices, :);
-
-           
+        function updateLoudspeakerMappingVariables(obj)
+            indReal = find(obj.real);
+            noiseSourceChannelMapping_real = obj.noiseSourceChannelMapping(obj.real);
+            [obj.loudspeakerChannelMapping, mapping] = combineIndices(obj.WFSarrayChannelMapping, noiseSourceChannelMapping_real);
+            mapping(2).originInd = indReal(mapping(2).originInd);
+            obj.loudspeakerMapping = mapping;
         end
          
         function reproduceSignalFunction(obj, signalFunction, signalSampleRate, channelMapping)
@@ -765,6 +638,7 @@ classdef WFSToolSimple < handle
             obj.player.setProps('driver', writingDrivers{1}, 1);
             obj.player.setProps('device', writingDevices{1}, 1);
             obj.player.setProps('signalFunc', signalFunction, 1);
+            obj.player.setProps('channelMapping_recorder', obj.receiverChannelMapping, 1);
             if nargin == 4
                 obj.player.setProps('defaultChannelMapping', false, 1);
                 obj.player.setProps('channelMapping_player', channelMapping, 1);
@@ -792,10 +666,10 @@ classdef WFSToolSimple < handle
         
         function reproduceAndRecord(obj, option, varargin)
             SampleRate = 44100;
-            frequencies = obj.loudspeakerFrequencies;
+            frequencies = obj.frequency;
             
             [ pulseCoefMat, pulseLim ] = coefficients2pulseSignalParameters( obj.loudspeakerCoefficient, frequencies, SampleRate, option, varargin{:} );
-            signalFunc = @(startSample, endSample) pulseCoefMat2signal(frequencies, pulseCoefMat, pulseLim, SampleRate, startSample, endSample, 'sample');           
+            signalFunc = @(startSample, endSample) pulseCoefMat2signal(pulseCoefMat, pulseLim, frequencies, SampleRate, startSample, endSample);           
 %             signalFunc = @(startSample, endSample) coefficients2signal( sourcesCoef, frequencies, SampleRate, startSample, endSample, false, option, varargin{:});
 
             obj.reproduceSignalFunction(signalFunc, SampleRate, obj.loudspeakerChannelMapping);
@@ -807,16 +681,11 @@ classdef WFSToolSimple < handle
         end        
         
         function simulate(obj)
-            % Set the acoustic path
-            simulAcPath = WFSToolSimple.tuneAcousticPaths(obj.loudspeakerAcPathStruct.acousticPaths, obj.loudspeakerAcPathStruct.frequencies, obj.loudspeakerFrequencies);
-            obj.simulObj.acPath = simulAcPath;
-
             % Simulate
-            obj.simulObj.updateField();
+            obj.simulTheo.updateField();
             
-            % Draw
-            obj.simulObj.drawField();
-            
+%             % Draw
+%             obj.simulTheo.drawField();           
         end        
         
         function reproduceAndRecordForAcousticPaths(obj)
@@ -898,6 +767,10 @@ classdef WFSToolSimple < handle
             obj.updateForcedDisabledLoudspeakers();
         end
         
+        function updateRecordPanelBasedOnVariables(obj)
+           obj.recordPanel.setActiveChannels(obj.receiverChannelMapping);
+        end
+        
         function theoricWFSacousticPath(obj)
             
             uniqueFreq = unique(obj.frequency);
@@ -939,8 +812,8 @@ classdef WFSToolSimple < handle
             % Define a set of points where the theoric field should be
             % null because of the cancellation
             xLim = [1, 2]; yLim = [2, 4];
-            x = linspace(xLim(1), xLim(2), 100);
-            y = linspace(yLim(1), yLim(2), 100);
+            x = linspace(xLim(1), xLim(2), 10);
+            y = linspace(yLim(1), yLim(2), 10);
             z = 0;
             [X, Y, Z] = ndgrid(x, y, z);
             testPoints = [X(:), Y(:), Z(:)];
@@ -950,6 +823,8 @@ classdef WFSToolSimple < handle
             % Use a simulator object of the theoric scenario. In this
             % object, all noise sources are situated, as well as all WFS
             % array sources. All noise sources are active.
+%             U = calculateField(acousticPaths, sourceCoefficients, true);
+            
             U = obj.simulTheo.calculateTheoricField(testPoints, true); % (numTestPoints x obj.numSourcesTheo x obj.numNoiseSources)            
             
             % Apply the correction/tunning for each layer on the 3rd
@@ -970,7 +845,7 @@ classdef WFSToolSimple < handle
                 C(k) = -U_WFS(:, 1, k)\U_real(:, 1, k);
             end
                   
-            obj.WFSarrayCoefficient(obj.virtual) = obj.WFSarrayCoefficient(:, obj.virtual).*repmat(C, [obj.numSourcesWFSarray, 1]);
+            obj.WFSarrayCoefficient(:, obj.virtual) = obj.WFSarrayCoefficient(:, obj.virtual).*repmat(C, [obj.numSourcesWFSarray, 1]);
         end
         
         function cancellField(obj)
@@ -1437,12 +1312,12 @@ classdef WFSToolSimple < handle
             obj.WFScalculation();
             
             % Simulate
-            obj.simulObj.generateMeasurePoints();
-            obj.simulObj.updateTheoricAcousticPathsImage();
-            obj.simulObj.updateFieldImage();
+            obj.simulTheo.generateMeasurePoints();
+            obj.simulTheo.updateTheoricAcousticPathsImage();
+            obj.simulTheo.updateFieldImage();
             
             % Draw
-            obj.simulObj.drawImage();
+            obj.simulTheo.drawImage();
         end
         
     end
@@ -1530,7 +1405,6 @@ classdef WFSToolSimple < handle
                 F = griddedInterpolant(gridPoints, acPath, 'linear', 'nearest');
                 acPath_query = F(queryPoints);
                 if numReceiv == 1 && numSources > 1
-                    F = griddedInterpolant(gridPoints, permute(acPath, [2 3 1]), 'linear', 'nearest');
                     acPath_query = permute(acPath_query, [3 1 2]);
                 elseif numReceiv > 1 && numSources == 1
                     acPath_query = permute(acPath_query, [1 3 2]);
@@ -1542,6 +1416,10 @@ classdef WFSToolSimple < handle
         function coefficients_new = nullField(coefficients, channelMapping, frequencies, fixedChannels, acousticPathStructure)
             % Input arguments
             % - coefficients. (numSources x numFrequencies)
+            % - channelMapping. (numSources x 1)
+            % - frequencies. (numFrequencies x 1)
+            % - fixedChannels. (numFixedChannels x 1)
+            % - acousticPathStructure.
             
             numSources = size(coefficients, 1);
             numFrequencies = size(coefficients, 2);
@@ -1560,6 +1438,7 @@ classdef WFSToolSimple < handle
             acPath_adapt = zeros(numRec, numSources, numFrequencies);
             acPath_adapt(:, flag, :) = acPath(:, ind(flag), :);
             
+            % Set fixed and variable flags
             fixedIndices = ismember(channelMapping, fixedChannels);
             variableIndices = ~fixedIndices; % WFS array sources
             

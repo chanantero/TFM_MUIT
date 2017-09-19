@@ -9,22 +9,21 @@ paths = genpath('C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 20
 addpath(paths);
 
 % User can change this:
-numLoudspeakers = 96;
+numLoudspeakers = 2;
 
-realPosition = [0.6 0 0]; % Assumed real position
-
-minXPos = realPosition(1); maxXPos = realPosition(1); numXPoints = 1;
-minYPos = realPosition(2); maxYPos = realPosition(2); numYPoints = 1;
-minZPos = 0; maxZPos = 0; numZPoints = 1;
-minAmplitude = 0; maxAmplitude = 1; numAmplitudePoints = 5;
-numPhasePoints = 1;
-
+realPosition = [1 -0.2 0]; % Assumed real position
 amplitude = 0.5;
 phase = 0;
 frequency = 600;
 
+minXPos = 0.8; maxXPos = 1.2; numXPoints = 10;
+minYPos = -0.2; maxYPos = -0.2; numYPoints = 1;
+minZPos = 0; maxZPos = 0; numZPoints = 1;
+minAmplitude = 0.5; maxAmplitude = 0.5; numAmplitudePoints = 1;
+numPhasePoints = 1;
+
 % Receivers
-receiverPositions = [0 0 0];
+receiverPositions = [1.5 3 0; 1.5 1.5 0];
 
 % Predefined acoustic paths.
 theoricWFSAcPath = true;
@@ -33,14 +32,17 @@ theoricNoiseSourceAcPath = true;
 % acPathNoiseSources;
 
 PathName = 'C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Matlab\Data\';
-ID = datestr(now, 'yyyy-mm-dd_HH:MM:SS');
+ID = datestr(now, 'yyyy-mm-dd_HH-MM-SS');
 
 %% Processing
 
-% A. Set scenario
-obj = WFSToolSimple;
+%% A. Set scenario
+if exist('obj', 'var') == 0 || ~isvalid(obj) || ~isvalid(obj.ax)
+    obj = WFSToolSimple;
+end
 
 obj.setNumWFSarraySources(numLoudspeakers);
+obj.setNumReceivers(size(receiverPositions, 1));
 
 obj.setNumNoiseSources(2);
 obj.noiseSourceChannelMapping = [1; 0];
@@ -66,12 +68,21 @@ else
 end
 
 obj.updateReprodPanelBasedOnVariables();
+obj.updateRecordPanelBasedOnVariables();
+%% B. Preparte the variables for the multiple cases
+% Calculate the received field only with the real source, without
+% cancellation
+obj.setVirtual([false; false]); % No virtual sources
+obj.WFScalculation();
+obj.simulate();
+onlySourceSimulField = obj.simulField(:, 1);
+obj.setVirtual([false; true]); % No virtual sources
 
-% B. Preparte the variables for the multiple cases
+% Calculate the multiple cases
 xVec = linspace(minXPos, maxXPos, numXPoints);
 yVec = linspace(minYPos, maxYPos, numYPoints);
 zVec = linspace(minZPos, maxZPos, numZPoints);
-amplitudeVec = linspace(0, 1, numAmplitudePoints);
+amplitudeVec = linspace(minAmplitude, maxAmplitude, numAmplitudePoints);
 phaseVec = 2*pi/numPhasePoints*(0:numPhasePoints - 1);
 [X, Y, Z, A, P] = ndgrid(xVec, yVec, zVec, amplitudeVec, phaseVec);
 sizeMat = size(X);
@@ -80,9 +91,11 @@ numPointsMat = numel(X);
 pulseCoefMat = zeros(numPointsMat, obj.numLoudspeakers, 2);
 simulatedField = zeros(obj.numReceivers, obj.numNoiseSources, numPointsMat);
 for p = 1:numPointsMat
+    fprintf('Point %d\n', p);
     % Set virtual position
     virtPos = [X(p), Y(p), Z(p)];
     obj.noiseSourcePosition = [realPosition; virtPos];
+    obj.theoricNoiseSourceAcousticPath();
     
     % Set amplitude and phase
     obj.amplitude(2) = A(p);
@@ -90,10 +103,8 @@ for p = 1:numPointsMat
     
     % Apply WFS calculation
     obj.WFScalculation();
+    
     % Simulate the received signals
-    obj.simulate();
-    % Correct coefficients and simulate again
-    obj.cancellField();
     obj.simulate();
     simulatedField(:, :, p) = obj.simulField;
 
@@ -102,8 +113,9 @@ for p = 1:numPointsMat
     
 end
 simulatedField = sum(permute(simulatedField, [3, 1, 2]), 3);
+simulatedFieldRelative = simulatedField./repmat(onlySourceSimulField.', [numPointsMat, 1]);
 
-% C. Experiment
+%% C. Experiment
 
 % C.1 Experimental acoustic path
 obj.reproduceAndRecordForAcousticPaths();
@@ -144,7 +156,7 @@ startPulse = (0:numPointsMat - 1)'*(pulseDuration + silenceDuration);
 endPulse = startPulse + pulseDuration;
 pulseLim = [startPulse, endPulse];
 SampleRate = 44100;
-signalFunc = @(startSample, endSample) pulseCoefMat2signal(obj.frequency, pulseCoefMat, floor(pulseLim*SampleRate), SampleRate, startSample, endSample, 'sample');
+signalFunc = @(startSample, endSample) pulseCoefMat2signal(pulseCoefMat, pulseLim, obj.frequency, SampleRate, startSample, endSample, 'type_pulseLimits', 'time');
 
 % Reproduce
 obj.reproduceSignalFunction(signalFunc, SampleRate, obj.loudspeakerChannelMapping);
@@ -163,13 +175,7 @@ save([PathName, FileName], 'sExp', 'yPulseCoefMat');
 
 %%
 % Simulate pulse coefficients based on experimental acoustic path
-expAcPath = tuneAcousticPaths(sExp.acPathStruct.acousticPaths, sExp.acPathStruct.frequencies, frequency);
-numReceivers = obj.numReceivers;
-yPulseCoefMat_pseudoExp = zeros(numPointsMat, numReceivers, 2);
-for p = 1:numPointsMat
-    yPulseCoefMat_pseudoExp(p, :, :) = sum(expAcPath .* repmat(permute(pulseCoefMat(p, :, :), [2, 1, 3]), [1, numReceivers, 1]), 1);    
-end
-yPulseCoefMat_pseudoExp = sum(yPulseCoefMat_pseudoExp, 3);
+
 
 % Compare real pulse coefficients with the pseudo-experimental ones
 
@@ -187,7 +193,15 @@ yPulseCoefMat_pseudoExp = sum(yPulseCoefMat_pseudoExp, 3);
 % The operation to obtain simulatedField from the described array is:
 modVec = {[1, 2, 3, 4, 5], 6};
 sizeFormatted = [numXPoints, numYPoints, numZPoints, numAmplitudePoints, numPhasePoints, obj.numReceivers];
-simulFieldFormatted = mergeAndPermute(simulatedField, modVec, true, sizeFormatted);
+simulFieldFormatted = mergeAndPermute(simulatedFieldRelative, modVec, true, sizeFormatted);
 
 visualObj = animation({xVec, yVec, zVec, amplitudeVec, phaseVec, 1:obj.numReceivers},...
-    {abs(simulFieldFormatted)}, {'x', 'y', 'z', 'Amplitude', 'Phase', 'Microphone'}, {'data'}, [], []);
+    {20*log10(abs(simulFieldFormatted))}, {'x', 'y', 'z', 'Amplitude', 'Phase', 'Microphone'}, {'Cancellation (dB)'}, [], []);
+
+
+%% Analyse
+sExp = sBase.Experiment;
+[expAcPath, freq, yPulseCoefMat] = getAcousticPath( sExp.pulseLimits, sExp.frequencies, sExp.pulseCoefMat, sExp.recordedSignal, sExp.sampleRate);
+
+bar(abs(expAcPath)')
+bar(rad2deg(angle(expAcPath))')

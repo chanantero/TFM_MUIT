@@ -158,21 +158,14 @@ classdef scenario < handle
             if obj.enabledGUI
                 % Graphics
                 receiver = findobj(obj.ax, 'Tag', 'receiver');
-            end
-                
-            for k = 1:numel(indices)
-                index = indices(k);
-                
-                if obj.enabledGUI
-                receiver.XData(index) = receiverPosition(1);
-                receiver.YData(index) = receiverPosition(2);
-                receiver.ZData(index) = receiverPosition(3);
-                end
-            
-                % Other variables
-                obj.receiversPosition(index, :) = receiverPosition(k, :);
+                receiver.XData(indices) = receiverPosition(:, 1);
+                receiver.YData(indices) = receiverPosition(:, 2);
+                receiver.ZData(indices) = receiverPosition(:, 3);
+                receiver.CData(indices, :) = repmat(obj.receiverColor, [numel(indices), 1]);
             end
             
+            obj.receiversPosition(indices, :) = receiverPosition;
+         
             obj.updateDelaysAndAttenuations();
         end
               
@@ -181,20 +174,13 @@ classdef scenario < handle
             if obj.enabledGUI
                 % Graphics
                 loudspeaker = findobj(obj.ax, 'Tag', 'loudspeakers');
+                loudspeaker.XData(indices) = loudspeakerPosition(:, 1);
+                loudspeaker.YData(indices) = loudspeakerPosition(:, 2);
+                loudspeaker.ZData(indices) = loudspeakerPosition(:, 3);
+                loudspeaker.CData(indices, :) = repmat(scenario.state2RGB({'inactive'}), [numel(indices), 1]);
             end
             
-            for k = 1:numel(indices)
-                index = indices(k);
-                
-                if obj.enabledGUI
-                    loudspeaker.XData(index) = loudspeakerPosition(k, 1);
-                    loudspeaker.YData(index) = loudspeakerPosition(k, 2);
-                    loudspeaker.ZData(index) = loudspeakerPosition(k, 3);
-                end
-                
-                % Other variables
-                obj.loudspeakersPosition(index, :) = loudspeakerPosition(k, :);
-            end
+            obj.loudspeakersPosition(indices, :) = loudspeakerPosition;
             
             obj.updateDelaysAndAttenuations();
 
@@ -368,18 +354,19 @@ classdef scenario < handle
         end
         
         function updateLoudspeakersColor(obj)            
-            activeState = 2*ones(obj.numLoudspeakers, 1);
-            activeState(obj.loudspeakersState(:, obj.activeSource)) = 1;
-            activeState(obj.forcedEnabledLoudspeakers) = 3;
-            activeState(obj.forcedDisabledLoudspeakers) = 4;
+%             activeState = 2*ones(obj.numLoudspeakers, 1);
+%             activeState(obj.loudspeakersState(:, obj.activeSource)) = 1;
+%             activeState(obj.forcedEnabledLoudspeakers) = 3;
+%             activeState(obj.forcedDisabledLoudspeakers) = 4;
             
-            colors = [0 0 1; % Active
-                      0 0 0.25; % Inactive
-                      0 1 0; % Forced Enabled
-                      1 0 0]; % Forced Disabled
-                              
+            activeState = cell(obj.numLoudspeakers, 1);
+            activeState(:) = {'inactive'};
+            activeState(obj.loudspeakersState(:, obj.activeSource)) = {'active'};
+            activeState(obj.forcedEnabledLoudspeakers) = {'forced_enabled'};
+            activeState(obj.forcedDisabledLoudspeakers) = {'forced_disabled'};
+            
             scat = findobj(obj.ax, 'Tag', 'loudspeakers');
-            scat.CData = colors(activeState, :);
+            scat.CData = scenario.state2RGB(activeState);
         end
         
         function updateDelaysAndAttenuations(obj)
@@ -469,8 +456,23 @@ classdef scenario < handle
             forcedDisabled = repmat(obj.forcedDisabledLoudspeakers, 1, numel(sourceIndices));
             ind = (obj.loudspeakersState | forcedEnabled) & ~forcedDisabled;
         end
-        
-        
+              
+    end
+    
+    methods(Static)
+        function RGB = state2RGB(states)
+            stateNames = {'active', 'inactive', 'forced_enabled', 'forced_disabled'};
+            if iscell(states)
+                [~, states] = ismember(states, stateNames);
+            end
+            
+            colors = [0 0 1; % Active
+                      0 0 0.25; % Inactive
+                      0 1 0; % Forced Enabled
+                      1 0 0]; % Forced Disabled
+                  
+            RGB = colors(states, :);
+        end
     end
     
 end

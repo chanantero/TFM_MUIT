@@ -1,4 +1,4 @@
-function [expAcPath, freq] = getAcousticPath( xPulseLimits, freq, xPulseCoefMat, y, ySampleRate)
+function [expAcPath, freq, yPulseCoefMat] = getAcousticPath( xPulseLimits, freq, xPulseCoefMat, y, ySampleRate)
 % Get the experimental acoustic path.
 % freq. numFrequencies-element vector. The i-th element is the i-th
 % frequency in Hz.
@@ -43,7 +43,7 @@ yPulseCoefMat = signal2pulseCoefficientMatrix(xPulseLimits, freq, xPulseCoefMat_
 % "frequencies" (which are the same) are reproducing at the same time.
 expAcPath = zeros(numChannelsY, numChannelsX, numFrequencies);
 for f = 1:numFrequencies
-    expAcPath(:, :, f) = (xPulseCoefMat_uniqueFreq\yPulseCoefMat).';
+    expAcPath(:, :, f) = (xPulseCoefMat_uniqueFreq(:, :, f)\yPulseCoefMat(:, :, f)).';
 end
 
 end

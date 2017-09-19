@@ -35,6 +35,14 @@ classdef recorderPanel < handle
             numSourcesPopUp.Enable = 'on';
         end
         
+        function setActiveChannels(obj, activeChannels)
+            % Check they are unique
+            assert(numel(unique(activeChannels)) == numel(activeChannels), 'recorderPanel:setActiveChannels', 'The activeChannels vector mustn''t have repeated values');
+            
+            obj.activeChannels = activeChannels;
+            obj.list.Data = num2cell(activeChannels(:));
+        end
+        
     end
     
     methods(Access = private)
@@ -78,7 +86,7 @@ classdef recorderPanel < handle
                 else
                     candidate = obj.activeChannels;
                     candidate(row) = [];
-                    if ismember(chan, candidate)
+                    if ismember(chan, candidate) % The chosen channel is repeated
                         obj.list.Data(row, column) = eventData.PreviousData;
                     else
                         obj.activeChannels(row) = chan;
