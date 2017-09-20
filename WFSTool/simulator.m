@@ -97,6 +97,8 @@ classdef simulator < handle
             obj.setReceivers(recPos, 'orientation', recOrient,...
                 'radiationPattern', radPatFun);
             
+            obj.acPath = 1;
+                        
             obj.freq = 340;
             obj.XLim = [-2 2];
             obj.YLim = [-2 2];
