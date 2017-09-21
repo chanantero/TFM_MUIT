@@ -554,6 +554,8 @@ classdef WFSToolSimple < handle
             
             uniqueFreq = unique(obj.frequency);
             obj.noiseSourceAcPathStruct = struct('acousticPaths', zeros(obj.numReceivers, numNoiseSources, numel(uniqueFreq)), 'frequencies', uniqueFreq);
+            obj.noiseSourceAcousticPath = zeros(obj.numReceivers, numNoiseSources, numNoiseSources);
+
         end
         
         function setNumWFSarraySources(obj, numWFSsources)
@@ -567,7 +569,7 @@ classdef WFSToolSimple < handle
             obj.WFSarrayRadiationPattern = repmat({@ simulator.monopoleRadPat}, numWFSsources, 1);
             uniqueFreq = unique(obj.frequency);
             obj.WFSarrayAcPathStruct = struct('acousticPaths', zeros(obj.numReceivers, numWFSsources, numel(uniqueFreq)), 'frequencies', uniqueFreq);
-            
+            obj.WFSarrayAcousticPath = zeros(obj.numReceivers, numWFSsources, obj.numNoiseSources);
             
             obj.simulTheo.XLim = [s.roomPosition(1), s.roomPosition(1) + s.roomPosition(3)];
             obj.simulTheo.YLim = [s.roomPosition(2), s.roomPosition(2) + s.roomPosition(4)];
@@ -589,6 +591,9 @@ classdef WFSToolSimple < handle
             uniqueFreq = unique(obj.frequency);
             obj.noiseSourceAcPathStruct = struct('acousticPaths', zeros(obj.numReceivers, obj.numNoiseSources, numel(uniqueFreq)), 'frequencies', uniqueFreq);
             obj.WFSarrayAcPathStruct = struct('acousticPaths', zeros(obj.numReceivers, obj.numSourcesWFSarray, numel(uniqueFreq)), 'frequencies', uniqueFreq);
+            obj.simulTheo.acPath = zeros(numReceivers, obj.numSourcesTheo, obj.numNoiseSources);
+            obj.noiseSourceAcousticPath = zeros(numReceivers, obj.numNoiseSources, obj.numNoiseSources);
+            obj.WFSarrayAcousticPath = zeros(numReceivers, obj.numSourcesWFSarray, obj.numNoiseSources);
         end
         
         function setVirtual(obj, value)
@@ -678,25 +683,43 @@ classdef WFSToolSimple < handle
             
         end
                          
-        function WFScalculation(obj)
+        function WFScalculation(obj, type)
             
             % Calculate coefficients
                 % A) Set noise source coefficients
                 obj.noiseSourceCoefficient_complete = diag(obj.noiseSourceCoefficient);
 
-                % B) Set WFS array coefficients
-                obj.WFSarrayCoefficient = obj.getComplexCoeffWFS();
-
-                % C) Adjust WFS array coefficients
-                obj.tuneWFSField();
+                % B) Apply algorithm
+                if nargin == 1
+                    type = 'Standard';
+                end
+                
+                WFS_algorithm(type);
 
                 % D) Apply real and virtual flags
                 obj.noiseSourceCoefficient_complete(:, ~obj.real) = 0;
                 obj.WFSarrayCoefficient(:, ~obj.virtual) = 0;
             
             % Set acoustic paths
-            obj.WFSarrayAcousticPath = WFSToolSimple.tuneAcousticPaths(obj.WFSarrayAcPathStruct.acousticPaths, obj.WFSarrayAcPathStruct.frequencies, obj.frequency);
-            obj.noiseSourceAcousticPath = WFSToolSimple.tuneAcousticPaths(obj.noiseSourceAcPathStruct.acousticPaths, obj.noiseSourceAcPathStruct.frequencies, obj.frequency);
+            obj.setAcousticPaths();
+            
+            function WFS_algorithm(type)
+                switch type
+                    case 'Standard'
+                        % Set WFS array coefficients
+                        obj.WFSarrayCoefficient = obj.getComplexCoeffWFS();
+                        
+                        % Adjust WFS array coefficients
+                        obj.tuneWFSField();
+                    case 'LeastSquares'
+                         % Finds the least squares solution to the problem
+                         % of cancellation
+                         % It it calculated using the loudspeaker
+                         % coefficients, not all WFS array coefficients
+                         obj.loudspeakerCoefficient = WFSToolSimple.nullField(obj.loudspeakerCoefficient,...
+                             obj.loudspeakerMapping(2).destinationInd, obj.loudspeakerAcousticPath);
+                end
+            end
             
         end
         
@@ -933,18 +956,17 @@ classdef WFSToolSimple < handle
                   
             obj.WFSarrayCoefficient(:, obj.virtual) = obj.WFSarrayCoefficient(:, obj.virtual).*repmat(C, [obj.numSourcesWFSarray, 1]);
         end
-        
-        function cancellField_loudspeakers(obj)
-            % Use the loudspeaker coefficients to cancel the field of the noise sources.                      
-            
-            obj.loudspeakerCoefficient = WFSToolSimple.nullField(obj.loudspeakerCoefficient,...
-                obj.loudspeakerMapping(2).destinationInd, obj.loudspeakerAcousticPath);
-                        
-        end
-                   
+                           
     end    
     
     methods(Access = private)
+        
+        function setAcousticPaths(obj)
+            % Take the acoustic path structures to assign the acoustic path
+            % matrices
+            obj.WFSarrayAcousticPath = WFSToolSimple.tuneAcousticPaths(obj.WFSarrayAcPathStruct.acousticPaths, obj.WFSarrayAcPathStruct.frequencies, obj.frequency);
+            obj.noiseSourceAcousticPath = WFSToolSimple.tuneAcousticPaths(obj.noiseSourceAcPathStruct.acousticPaths, obj.noiseSourceAcPathStruct.frequencies, obj.frequency);
+        end
         
         function adjustSimulTheoSources(obj, numWFSSour, numNoiseSour, newType, numSour)
             switch newType
