@@ -685,6 +685,9 @@ classdef WFSToolSimple < handle
                          
         function WFScalculation(obj, type)
             
+            % Set acoustic paths
+            obj.setAcousticPaths();
+            
             % Calculate coefficients
                 % A) Set noise source coefficients
                 obj.noiseSourceCoefficient_complete = diag(obj.noiseSourceCoefficient);
@@ -699,9 +702,7 @@ classdef WFSToolSimple < handle
                 % D) Apply real and virtual flags
                 obj.noiseSourceCoefficient_complete(:, ~obj.real) = 0;
                 obj.WFSarrayCoefficient(:, ~obj.virtual) = 0;
-            
-            % Set acoustic paths
-            obj.setAcousticPaths();
+                        
             
             function WFS_algorithm(type)
                 switch type
@@ -715,9 +716,28 @@ classdef WFSToolSimple < handle
                          % Finds the least squares solution to the problem
                          % of cancellation
                          % It it calculated using the loudspeaker
-                         % coefficients, not all WFS array coefficients
-                         obj.loudspeakerCoefficient = WFSToolSimple.nullField(obj.loudspeakerCoefficient,...
-                             obj.loudspeakerMapping(2).destinationInd, obj.loudspeakerAcousticPath);
+                         % coefficients, not all WFS array coefficients.
+                         % However, all noise sources are included, not
+                         % only the real ones (the ones that are in the
+                         % loudspeaker array)
+                         
+                         % Array of loudspeakers corresponding to the WFS
+                         % array + noise source coefficients
+                         loudsCoeffWFS = obj.loudspeakerCoefficient(obj.loudspeakerMapping(1).destinationInd, :);
+                         coeff = [loudsCoeffWFS; obj.noiseSourceCoefficient_complete];
+                         
+                         % Indexes of the fixed coefficients, i.e., the
+                         % coefficients of the noise sources
+                         fixedInd = size(loudsCoeffWFS, 1) + (1:obj.numNoiseSources);
+                         
+                         % Adapted acoustic path
+                         acPath = zeros(obj.numReceivers, size(coeff, 1), obj.numNoiseSources);
+                         acPath(:, 1:size(loudsCoeffWFS, 1), :) = obj.WFSarrayAcousticPath(:, obj.loudspeakerMapping(1).originInd, :);
+                         acPath(:, fixedInd, :) = obj.noiseSourceAcousticPath;
+                         
+                         newCoeff = WFSToolSimple.nullField(coeff, fixedInd, acPath);
+                         
+                         obj.loudspeakerCoefficient(obj.loudspeakerMapping(1).destinationInd, :) = newCoeff(1:size(loudsCoeffWFS, 1), :);
                 end
             end
             

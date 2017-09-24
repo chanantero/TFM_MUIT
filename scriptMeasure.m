@@ -301,6 +301,61 @@ visualizeScript;
 
 % Simulate to see if, indeed, the field has been cancelled
 obj.simulate();
-obj.simulField
+sum(obj.simulField, 2) % Sum along noise source components
 
+%% Least squares for cancellation with the official impulse responses of the GTAC
+% acousticPath = importImpulseResponseGTAC(frequency);
+
+numMicroX = 15; numMicroY = 24;
+incrX = 0.2; incrY = -0.2;
+microRectXsize = abs((numMicroX - 1)*incrX);
+microRectYsize = abs((numMicroY - 1)*incrY);
+minWFSarrayX = min(obj.WFSarrayPosition(:, 1));
+maxWFSarrayX = max(obj.WFSarrayPosition(:, 1));
+WFSarrayXsize = maxWFSarrayX - minWFSarrayX;
+minWFSarrayY = min(obj.WFSarrayPosition(:, 2));
+maxWFSarrayY = max(obj.WFSarrayPosition(:, 2));
+WFSarrayYsize = maxWFSarrayY - minWFSarrayY;
+offsetX = minWFSarrayX + (WFSarrayXsize - microRectXsize)/2; 
+offsetY = maxWFSarrayY - (WFSarrayYsize - microRectYsize)/2;
+x = (0:numMicroX - 1) * incrX + offsetX;
+y = (0:numMicroY - 1) * incrY + offsetY;
+[Y, X] = ndgrid(y, x);
+Z = zeros(size(X));
+recPos = [X(:), Y(:), Z(:)];
+
+obj.setNumReceivers(360); % Doesn't matter the position, although we know them
+obj.receiverPosition = recPos;
+obj.updateRecordPanelBasedOnVariables();
+
+obj.theoricNoiseSourceAcousticPath();
+obj.WFSarrayAcPathStruct.acousticPaths = acousticPath;
+obj.WFScalculation('LeastSquares');
+
+obj.simulate();
+a = sum(obj.simulField, 2)./obj.simulField(:, 1); % Sum along noise source components
+a_cancel_dB = 20*log10(abs(a));
+
+% Standard algorithm: global correction coefficient
+obj.WFScalculation('Standard');
+
+obj.simulate();
+b = sum(obj.simulField, 2)./obj.simulField(:, 1); % Sum along noise source components
+b_cancel_dB = 20*log10(abs(b));
+
+% Theoric acoustic paths, least squares
+obj.theoricWFSacousticPath();
+obj.WFScalculation('LeastSquares');
+obj.simulate();
+c = sum(obj.simulField, 2)./obj.simulField(:, 1); % Sum along noise source components
+c_cancel_dB = 20*log10(abs(c));
+
+% Theoric acoustic paths, standard algorithm: global correction coefficient
+obj.WFScalculation('Standard');
+obj.simulate();
+d = sum(obj.simulField, 2)./obj.simulField(:, 1); % Sum along noise source components
+d_cancel_dB = 20*log10(abs(d));
+
+ax = axes(figure);
+plot(ax, [a_cancel_dB, b_cancel_dB, c_cancel_dB, d_cancel_dB])
 
