@@ -19,7 +19,7 @@ numLoudspeakers = 96;
 realPosition = [3.35 -0.2 0]; % Assumed real position
 amplitude = 0.5;
 phase = 0;
-frequency = 600;
+frequency = 440;
 
 minXPos = 3.35; maxXPos = 3.35; numXPoints = 1;
 minYPos = -0.2; maxYPos = -0.2; numYPoints = 1;
