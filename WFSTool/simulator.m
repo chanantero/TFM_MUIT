@@ -196,10 +196,8 @@ classdef simulator < handle
         end
         
         function updateTheoricAcousticPaths(obj)
-            obj.acPath = simulator.calculateTheoricAcousticPaths(...
-                obj.sourcePositions, obj.radPatFuns, obj.sourceOrientations,...
-                obj.recPositions, obj.recRadPatFuns, obj.recOrientations,...
-                obj.freq, obj.c);
+            obj.acPath = obj.calculateTheoricAcousticPath();
+            
         end
         
         function updateTheoricAcousticPathsImage(obj)
@@ -218,21 +216,33 @@ classdef simulator < handle
             if nargin < 3
                 separatedSources = false;
             end
-            
-            % The effect of receivers is null. This means that they are
-            % ideal: the radiation pattern is a monopole.
-            numRecPos = size(recPos, 1);
-            recRadPat = repmat({@simulator.monopoleRadPat}, [numRecPos, 1]);
-            recOrient = repmat([0 0 0 1], [numRecPos, 1]);
-                    
-            acousPath = simulator.calculateTheoricAcousticPaths(...
-                obj.sourcePositions, obj.radPatFuns, obj.sourceOrientations,...
-                recPos, recRadPat, recOrient,...
-                obj.freq, obj.c);
-            
-            
+                     
+            acousPath = obj.calculateTheoricAcousticPath(recPos);
+           
             U = simulator.calculateField(acousPath, obj.sourceCoefficients, separatedSources);
             
+        end
+        
+        function acPath = calculateTheoricAcousticPath(obj, receiverPositions)
+            if nargin < 1
+                acPath = simulator.calculateTheoricAcousticPaths(...
+                    obj.sourcePositions, obj.radPatFuns, obj.sourceOrientations,...
+                    obj.recPositions, obj.recRadPatFuns, obj.recOrientations,...
+                    obj.freq, obj.c);
+            else
+                % The effect of receivers is considered null. This means that they are
+                % ideal: the radiation pattern is a monopole. This is the
+                % same as saying that we are measuring directly the value
+                % of the field.
+                numRecPos = size(receiverPositions, 1);
+                recRadPat = repmat({@simulator.monopoleRadPat}, [numRecPos, 1]);
+                recOrient = repmat([0 0 0 1], [numRecPos, 1]);
+                
+                acPath = simulator.calculateTheoricAcousticPaths(...
+                    obj.sourcePositions, obj.radPatFuns, obj.sourceOrientations,...
+                    receiverPositions, recRadPat, recOrient,...
+                    obj.freq, obj.c);
+            end
         end
         
         function setSources(obj, varargin)

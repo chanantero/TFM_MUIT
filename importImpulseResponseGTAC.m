@@ -25,8 +25,6 @@ for m = 1:numMicrophones
     dft = DFT_slow(sampleRate*imp.', sampleRate, frequencies); % (numFrequencies x numLoudspeakers)
 
     acousticPath(m, :, :) = permute(dft, [3, 2 1]);
-end
-
-positions 
+end 
 
 end

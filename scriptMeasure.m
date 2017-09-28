@@ -297,7 +297,7 @@ visualizeScript;
     obj.setLoudspeakerAcousticPath(expAcPath);
 
     % Apply least squares method
-    obj.WFScalculation('LeastSquares');
+    obj.WFScalculation('LoudspeakersIndependent');
 
 % Simulate to see if, indeed, the field has been cancelled
 obj.simulate();
@@ -330,28 +330,26 @@ obj.updateRecordPanelBasedOnVariables();
 
 obj.theoricNoiseSourceAcousticPath();
 obj.WFSarrayAcPathStruct.acousticPaths = acousticPath;
-obj.WFScalculation('LeastSquares');
-
+obj.WFScalculation('LoudspeakersIndependent');
 obj.simulate();
 a = sum(obj.simulField, 2)./obj.simulField(:, 1); % Sum along noise source components
 a_cancel_dB = 20*log10(abs(a));
 
 % Standard algorithm: global correction coefficient
-obj.WFScalculation('Standard');
-
+obj.WFScalculation('LoudspeakersTogether');
 obj.simulate();
 b = sum(obj.simulField, 2)./obj.simulField(:, 1); % Sum along noise source components
 b_cancel_dB = 20*log10(abs(b));
 
 % Theoric acoustic paths, least squares
 obj.theoricWFSacousticPath();
-obj.WFScalculation('LeastSquares');
+obj.WFScalculation('LoudspeakersIndependent');
 obj.simulate();
 c = sum(obj.simulField, 2)./obj.simulField(:, 1); % Sum along noise source components
 c_cancel_dB = 20*log10(abs(c));
 
 % Theoric acoustic paths, standard algorithm: global correction coefficient
-obj.WFScalculation('Standard');
+obj.WFScalculation('LoudspeakersTogether');
 obj.simulate();
 d = sum(obj.simulField, 2)./obj.simulField(:, 1); % Sum along noise source components
 d_cancel_dB = 20*log10(abs(d));
