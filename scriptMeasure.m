@@ -5,10 +5,11 @@
 % in amplitude, phase and position.
 
 %% Preamble
-paths = genpath('C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Matlab');
+globalPath = 'C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Matlab\';
+paths = genpath(globalPath);
 addpath(paths);
 
-PathName = 'E:\Rubén TFM\Matlab_sesion_19-09-2017\Data\';
+dataPathName = [globalPath, 'Data\'];
 ID = datestr(now, 'yyyy-mm-dd_HH-MM-SS');
 
 %% Parameters.
@@ -153,7 +154,7 @@ obj.calculateExperimentalAcousticPaths();
 % Retrieve and save information
 sBase = obj.exportInformation();
 FileName = ['Session_', ID, 'calibration', '.mat'];
-save([PathName, FileName], 'sBase');
+save([dataPathName, FileName], 'sBase');
 
 % C.2 Only real noise source
 obj.setVirtual([false; false]); % No virtual sources
@@ -168,7 +169,7 @@ sExpOnlyNoise = obj.getExperimentalResultVariables();
 yPulseCoefMat_OnlyNoise = signal2pulseCoefficientMatrix(sExpOnlyNoise.pulseLimits, frequency, ones(1, 1), sExpOnlyNoise.recordedSignal, sExpOnlyNoise.sampleRate);
 
 FileName = ['Session_', ID, 'onlyNoise', '.mat'];
-save([PathName, FileName], 'sExpOnlyNoise', 'yPulseCoefMat_OnlyNoise');
+save([dataPathName, FileName], 'sExpOnlyNoise', 'yPulseCoefMat_OnlyNoise');
 
 % Go back to previous configuration
 obj.setVirtual([false; true]);
@@ -199,7 +200,7 @@ sExp = obj.getExperimentalResultVariables();
 yPulseCoefMat = signal2pulseCoefficientMatrix(sExp.pulseLimits, sExp.frequencies(1), sum(sExp.pulseCoefMat, 3), sExp.recordedSignal, sExp.sampleRate);
 
 FileName = ['Session_', ID, 'cases', '.mat'];
-save([PathName, FileName], 'sExp', 'yPulseCoefMat');
+save([dataPathName, FileName], 'sExp', 'yPulseCoefMat');
 
 %% Visualize
 visualizeScript;
@@ -305,6 +306,7 @@ sum(obj.simulField, 2) % Sum along noise source components
 
 %% Least squares for cancellation with the official impulse responses of the GTAC
 % acousticPath = importImpulseResponseGTAC(frequency);
+load([dataPathName, 'acousticPathsGTAC_440.mat'])
 
 numMicroX = 15; numMicroY = 24;
 incrX = 0.2; incrY = -0.2;
@@ -356,4 +358,8 @@ d_cancel_dB = 20*log10(abs(d));
 
 ax = axes(figure);
 plot(ax, [a_cancel_dB, b_cancel_dB, c_cancel_dB, d_cancel_dB])
+plot(ax, c_cancel_dB)
+
+
+% 
 

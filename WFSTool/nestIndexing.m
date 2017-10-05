@@ -13,8 +13,8 @@ function [originIndsAcum, destinationIndsAcum] = nestIndexing(varargin)
 % AN(destinationInds{N}) = AN-1(originInds{N});
 % We want to find the indexes that relate the last indices with the first
 % ones, this is:
-% AN(destinationIndsTotal) = A0(originIndsTotal);
-% destinationIndsTotal and originIndsTotal won't have a number of elements
+% AN(destinationIndsAcum) = A0(originIndsAcum);
+% destinationIndsAcum and originIndsAcum won't have a number of elements
 % bigger than any of the lengths of the individual index vectors.
 
 if rem(nargin, 2) ~= 0

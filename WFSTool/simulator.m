@@ -183,9 +183,15 @@ classdef simulator < handle
             end
         end
         
-        function updateField(obj)
+        function updateField(obj, sourceFlags)
             
-            obj.field = simulator.calculateField(obj.acPath, obj.sourceCoefficients);
+            if nargin == 1
+                sourceFlags = 1:obj.numSources;
+            end
+  
+            acPathFilt = obj.acPath(:, sourceFlags, :);
+            sourceCoeffFilt = obj.sourceCoefficients(sourceFlags, :);
+            obj.field = simulator.calculateField(acPathFilt, sourceCoeffFilt);
             
         end
         
@@ -196,8 +202,7 @@ classdef simulator < handle
         end
         
         function updateTheoricAcousticPaths(obj)
-            obj.acPath = obj.calculateTheoricAcousticPath();
-            
+            obj.acPath = obj.calculateTheoricAcousticPath();         
         end
         
         function updateTheoricAcousticPathsImage(obj)

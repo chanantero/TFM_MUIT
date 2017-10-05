@@ -644,6 +644,10 @@ classdef WFSToolSimple < handle
             [xChannelInds_WFS, WFSarrayInds] = nestIndexing(indLouds, find(flagLouds), obj.loudspeakerMapping(1).destinationInd, obj.loudspeakerMapping(1).originInd);
             [xChannelInds_noise, noiseSourceInds] = nestIndexing(indLouds, find(flagLouds), obj.loudspeakerMapping(2).destinationInd, obj.loudspeakerMapping(2).originInd);
             
+            % Reset acoustic paths
+            obj.WFSarrayAcousticPath(:) = 0;
+            obj.noiseSourceAcousticPath(:) = 0;
+            
             % Apply mapping
             obj.WFSarrayAcousticPath(flagRec, WFSarrayInds, :) = acPath(indRec, xChannelInds_WFS, :);
             obj.noiseSourceAcousticPath(flagRec, noiseSourceInds, :) = acPath(indRec, xChannelInds_noise, :);
@@ -823,8 +827,8 @@ classdef WFSToolSimple < handle
                             acPath = acPath_default;
                         case 'Loudspeakers'
                             acPath = zeros(obj.numReceivers, numSour, obj.numNoiseSources);
-                            acPath(:, varInd, :) = acPath(:, obj.WFSarrayIndSimulTheo(obj.loudspeakerMapping(1).originInd), :);
-                            acPath(:, fixedInd, :) = acPath(:, obj.noiseSourceIndSimulTheo, :);
+                            acPath(:, varInd, :) = acPath_default(:, obj.WFSarrayIndSimulTheo(obj.loudspeakerMapping(1).originInd), :);
+                            acPath(:, fixedInd, :) = acPath_default(:, obj.noiseSourceIndSimulTheo, :);
                     end            
             end
             numPoints = size(acPath, 1);
@@ -835,13 +839,13 @@ classdef WFSToolSimple < handle
             x_new = zeros(numSour, numVirtualSources);
             for v = 1:numVirtualSources
                 f = virtualInd(v);
-                x_new(:, v) = solveLinearSystem(acPath(:, :, f), zeros(numPoints, 1), groups, coeff(:, f));
+                x_new(:, v) = solveLinearSystem(acPath(:, :, f), zeros(numPoints, 1), groups, coeff(:, f), 'zerosFixed', false, 'maxAbsoluteValue', ones(numSour, 1));
             end
             
             % Assing variables
             switch sourceFilter
                 case 'NoFilter'
-                    obj.WFSarrayCoefficient(:, obj.virtual) = x_new;
+                    obj.WFSarrayCoefficient(:, obj.virtual) = x_new(varInd);
                 case 'Loudspeakers'
                     obj.loudspeakerCoefficient(obj.loudspeakerMapping(1).destinationInd, obj.virtual) = x_new(varInd, :);
             end
@@ -913,12 +917,27 @@ classdef WFSToolSimple < handle
             
         end
         
-        function simulate(obj)
-            % Simulate
-            obj.simulTheo.updateField();
+        function simulate(obj, loudspeakerFlag)
             
-            %             % Draw
-            %             obj.simulTheo.drawField();
+            if nargin == 1
+                loudspeakerFlag = false;
+            end
+            
+            % Simulate
+            if loudspeakerFlag
+                [WFSInds, ~] = nestIndexing(1:obj.numSourcesTheo, obj.WFSarrayIndSimulTheo,...
+                    obj.loudspeakerMapping(1).originInd, obj.loudspeakerMapping(1).destinationInd);
+                
+                [noiseInds, ~] = nestIndexing(1:obj.numSourcesTheo, obj.noiseSourceIndSimulTheo,...
+                    obj.loudspeakerMapping(2).originInd, obj.loudspeakerMapping(2).destinationInd);
+                
+                sourceFlags = [WFSInds, noiseInds];
+                
+                obj.simulTheo.updateField(sourceFlags);
+            else
+                obj.simulTheo.updateField();
+            end
+               
         end
         
         function reproduceAndRecordForAcousticPaths(obj)
