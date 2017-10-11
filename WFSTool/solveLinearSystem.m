@@ -46,7 +46,6 @@ function x_output = solveLinearSystem(A, y, varargin)
             x_output = x;
             numGroups = numel(groups);
             A_grouped = zeros(Ry, numGroups);
-            scalingFactor = zeros(numGroups, 1);
             fixed = true(Rx, 1); % Elements of x that don't belong to any group
             upperBound_grouped = zeros(numGroups, 1);
             for g = 1:numGroups
@@ -54,24 +53,16 @@ function x_output = solveLinearSystem(A, y, varargin)
                 xg = x_output(group);
                 upperBound_g = maxAbsoluteValue(group);
                 
-                % Scale for floating point precission reasons and to avoid
-                % NaN when all coefficients in the group are 0.
+                % Avoid NaN when all coefficients in the group are 0
                 abs_xg = abs(xg);
-                maxAbs = max(abs_xg);
-                if maxAbs == 0
-                    if ~zerosFixed
-                        % To enable the optimization when coefficients are 0. In other case, it's like they are fixed
+                if all(abs_xg == 0) && ~zerosFixed
+                    % To enable the optimization when coefficients are 0. In other case, it's like they are fixed
                         xg = ones(size(xg));
                         x_output(group) = 1;
                         abs_xg = xg;
-                    end
-                    scalingFactor(g) = 1;
-                else
-                    xg = xg/maxAbs;
-                    scalingFactor(g) = 1/maxAbs;
                 end
                 
-                upperBound_grouped(g) = min(upperBound_g./abs_xg)/scalingFactor(g);
+                upperBound_grouped(g) = min(upperBound_g./abs_xg);
                 
                 A_grouped(:, g) = A(:, group) * xg;
                 fixed(group) = false;
@@ -97,7 +88,7 @@ function x_output = solveLinearSystem(A, y, varargin)
             % Map onto the original x vector
             for g = 1:numGroups
                 group = groups{g};
-                x_output(group) = x_output(group)*x_grouped(g)*scalingFactor(g);
+                x_output(group) = x_output(group)*x_grouped(g);
             end
 
 end

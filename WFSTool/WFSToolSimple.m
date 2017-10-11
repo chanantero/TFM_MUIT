@@ -687,7 +687,7 @@ classdef WFSToolSimple < handle
             
         end
         
-        function WFScalculation(obj, type)
+        function WFScalculation(obj, varargin)
             
             % Set acoustic paths
             obj.setAcousticPaths();
@@ -699,53 +699,13 @@ classdef WFSToolSimple < handle
             % B) Set default WFS array coefficients
             obj.WFSarrayCoefficient = obj.getComplexCoeffWFS();
             
-            % C) Apply tuning algorithm
-            if nargin == 1
-                type = 'Theoric';
-            end
-            
-            WFS_algorithm(type);
+            % C) Apply optimization algorithm
+            obj.WFS_optimisation(varargin{:});
             
             % D) Apply real and virtual flags
             obj.noiseSourceCoefficient_complete(:, ~obj.real) = 0;
             obj.WFSarrayCoefficient(:, ~obj.virtual) = 0;
-            
-            
-            function WFS_algorithm(type)
-                switch type
-                    case 'Theoric'
-                        % Acoustic Path: theoric for a grid of points
-                        % Grouping: unify all
-                        
-                        % Description:
-                        % adjust WFS array coefficients multiplying all of
-                        % them by a scalar that minimizes the square error
-                        % using the theoric acoustic paths for a large grid
-                        % of points
-                        
-                        obj.WFS_optimisation('SourceFilter', 'NoFilter', 'AcousticPath', 'Theoric', 'Grouping', 'AllTogether');
-                       
-                    case 'LoudspeakersIndependent'
-                        % Acoustic Path: the current one
-                        % Grouping: independent
-                        % Filter: only loudspeakers
-                        
-                        % Description:
-                        % Finds the least squares solution to the problem
-                        % of cancellation.
-                        % It it calculated using the loudspeaker
-                        % coefficients, not all WFS array coefficients.
-                        % However, all noise sources are included, not
-                        % only the real ones (the ones that are in the
-                        % loudspeaker array)
-                        
-                        obj.WFS_optimisation('SourceFilter', 'Loudspeakers', 'AcousticPath', 'Current', 'Grouping', 'Independent');
-                        
-                    case 'LoudspeakersTogether'
-                        obj.WFS_optimisation('SourceFilter', 'Loudspeakers', 'AcousticPath', 'Current', 'Grouping', 'AllTogether');
-                end
-            end
-            
+                
         end
         
         function WFS_optimisation(obj, varargin)
@@ -756,6 +716,8 @@ classdef WFSToolSimple < handle
             addParameter(p, 'AcousticPath', 'Current')
             addParameter(p, 'Grouping', 'Independent')
             addParameter(p, 'TestPoints', [])
+            addParameter(p, 'maxAbsoluteValueConstraint', false)
+            addParameter(p, 'zerosFixed', false)
             
             parse(p, varargin{:});
             
@@ -763,6 +725,8 @@ classdef WFSToolSimple < handle
             acousticPath = p.Results.AcousticPath;
             grouping = p.Results.Grouping;
             defaultGrid = ismember('TestPoints', p.UsingDefaults);
+            zerosFixed = p.Results.zerosFixed;
+            constraintFlag = p.Results.maxAbsoluteValueConstraint;
             
             switch sourceFilter
                 case 'NoFilter'
@@ -836,18 +800,22 @@ classdef WFSToolSimple < handle
             % Calculate
             virtualInd = find(obj.virtual);
             numVirtualSources = sum(obj.virtual);
-            x_new = zeros(numSour, numVirtualSources);
+            x_new = zeros(numSour, obj.numNoiseSources);
             for v = 1:numVirtualSources
                 f = virtualInd(v);
-                x_new(:, v) = solveLinearSystem(acPath(:, :, f), zeros(numPoints, 1), groups, coeff(:, f), 'zerosFixed', false, 'maxAbsoluteValue', ones(numSour, 1));
+                if constraintFlag
+                    x_new(:, f) = solveLinearSystem(acPath(:, :, f), zeros(numPoints, 1), groups, coeff(:, f), 'zerosFixed', zerosFixed, 'maxAbsoluteValue', ones(numSour, 1));
+                else
+                    x_new(:, f) = solveLinearSystem(acPath(:, :, f), zeros(numPoints, 1), groups, coeff(:, f), 'zerosFixed', zerosFixed);
+                end
             end
             
-            % Assing variables
+            % Assign variables
             switch sourceFilter
                 case 'NoFilter'
-                    obj.WFSarrayCoefficient(:, obj.virtual) = x_new(varInd);
+                    obj.WFSarrayCoefficient = x_new(varInd, :);
                 case 'Loudspeakers'
-                    obj.loudspeakerCoefficient(obj.loudspeakerMapping(1).destinationInd, obj.virtual) = x_new(varInd, :);
+                    obj.loudspeakerCoefficient(obj.loudspeakerMapping(1).destinationInd, :) = x_new(varInd, :);
             end
             
         end

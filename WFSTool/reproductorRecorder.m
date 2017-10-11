@@ -845,6 +845,7 @@ classdef reproductorRecorder < matlab.System
                             % the setup and release
                             player_this = obj.player{index};
                             player_this.device = value;
+                            player_this.DefaultChannels = true;
                             setup(player_this, []);
                             release(player_this);
                             

@@ -298,7 +298,7 @@ visualizeScript;
     obj.setLoudspeakerAcousticPath(expAcPath);
 
     % Apply least squares method
-    obj.WFScalculation('LoudspeakersIndependent');
+    obj.WFScalculation('SourceFilter', 'Loudspeakers', 'AcousticPath', 'Current', 'Grouping', 'Independent');
 
 % Simulate to see if, indeed, the field has been cancelled
 obj.simulate();
@@ -330,31 +330,42 @@ obj.setNumReceivers(360); % Doesn't matter the position, although we know them
 obj.receiverPosition = recPos;
 obj.updateRecordPanelBasedOnVariables();
 
+% Set the official acoustic path
 obj.theoricNoiseSourceAcousticPath();
 obj.WFSarrayAcPathStruct.acousticPaths = acousticPath;
-obj.WFScalculation('LoudspeakersIndependent');
-obj.simulate();
-a = sum(obj.simulField, 2)./obj.simulField(:, 1); % Sum along noise source components
-a_cancel_dB = 20*log10(abs(a));
 
-% Standard algorithm: global correction coefficient
-obj.WFScalculation('LoudspeakersTogether');
+% 
+obj.WFScalculation('SourceFilter', 'Loudspeakers', 'AcousticPath', 'Current', 'Grouping', 'Independent', 'maxAbsoluteValueConstraint', false, 'zerosFixed', true);
 obj.simulate();
-b = sum(obj.simulField, 2)./obj.simulField(:, 1); % Sum along noise source components
-b_cancel_dB = 20*log10(abs(b));
+relField_a = sum(obj.simulField, 2)./obj.simulField(:, 1); % Sum along noise source components
+a_cancel_dB = 20*log10(abs(relField_a));
 
-% Theoric acoustic paths, least squares
+%
+obj.WFScalculation('SourceFilter', 'Loudspeakers', 'AcousticPath', 'Current', 'Grouping', 'AllTogether', 'maxAbsoluteValueConstraint', true, 'zerosFixed', true);
+obj.simulate();
+relField_b = sum(obj.simulField, 2)./obj.simulField(:, 1); % Sum along noise source components
+b_cancel_dB = 20*log10(abs(relField_b));
+
+%
+obj.WFScalculation('SourceFilter', 'Loudspeakers', 'AcousticPath', 'Current', 'Grouping', 'AllTogether', 'maxAbsoluteValueConstraint', false, 'zerosFixed', true);
+obj.simulate();
+relField_b = sum(obj.simulField, 2)./obj.simulField(:, 1); % Sum along noise source components
+c_cancel_dB = 20*log10(abs(relField_b));
+
+% Set the theoric acoustic path
 obj.theoricWFSacousticPath();
-obj.WFScalculation('LoudspeakersIndependent');
-obj.simulate();
-c = sum(obj.simulField, 2)./obj.simulField(:, 1); % Sum along noise source components
-c_cancel_dB = 20*log10(abs(c));
 
-% Theoric acoustic paths, standard algorithm: global correction coefficient
+%
+obj.WFScalculation('SourceFilter', 'Loudspeakers', 'AcousticPath', 'Current', 'Grouping', 'Independent', 'maxAbsoluteValueConstraint', true, 'zerosFixed', true);
+obj.simulate();
+relField_c = sum(obj.simulField, 2)./obj.simulField(:, 1); % Sum along noise source components
+c_cancel_dB = 20*log10(abs(relField_c));
+
+%
 obj.WFScalculation('LoudspeakersTogether');
 obj.simulate();
-d = sum(obj.simulField, 2)./obj.simulField(:, 1); % Sum along noise source components
-d_cancel_dB = 20*log10(abs(d));
+relField_d = sum(obj.simulField, 2)./obj.simulField(:, 1); % Sum along noise source components
+d_cancel_dB = 20*log10(abs(relField_d));
 
 ax = axes(figure);
 plot(ax, [a_cancel_dB, b_cancel_dB, c_cancel_dB, d_cancel_dB])
