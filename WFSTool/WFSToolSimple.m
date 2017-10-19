@@ -466,8 +466,8 @@ classdef WFSToolSimple < handle
             obj.changed.numNoiseSources = true;
             obj.updateEverything();
             
-            obj.simulTheo.XnumPoints = 200;
-            obj.simulTheo.YnumPoints = 200;
+            obj.simulTheo.XnumPoints = 20;
+            obj.simulTheo.YnumPoints = 20;
             obj.simulateOnAxis();
             
             uicontrol(fig, 'Style', 'pushbutton',...
@@ -622,16 +622,15 @@ classdef WFSToolSimple < handle
             % - xChannelMapping
             % - yChannelMapping
             % - frequencies
-            acPath = WFSToolSimple.tuneAcousticPaths(loudspeakerAcPathStruct.acousticPaths, loudspeakerAcPathStruct.frequencies, obj.frequency);
             
             if ~isfield(loudspeakerAcPathStruct, 'xChannelMapping') || isempty(loudspeakerAcPathStruct.xChannelMapping)
-                xChannelMapping = 1:size(acPath, 2);
+                xChannelMapping = 1:size(loudspeakerAcPathStruct.acousticPaths, 2);
             else
                 xChannelMapping = loudspeakerAcPathStruct.xChannelMapping;
             end
             
             if ~isfield(loudspeakerAcPathStruct, 'yChannelMapping') || isempty(loudspeakerAcPathStruct.yChannelMapping)
-                yChannelMapping = 1:size(acPath, 1);
+                yChannelMapping = 1:size(loudspeakerAcPathStruct.acousticPaths, 1);
             else
                 yChannelMapping = loudspeakerAcPathStruct.yChannelMapping;
             end
@@ -643,15 +642,20 @@ classdef WFSToolSimple < handle
             [flagLouds, indLouds] = ismember(obj.loudspeakerChannelMapping, xChannelMapping);
             [xChannelInds_WFS, WFSarrayInds] = nestIndexing(indLouds, find(flagLouds), obj.loudspeakerMapping(1).destinationInd, obj.loudspeakerMapping(1).originInd);
             [xChannelInds_noise, noiseSourceInds] = nestIndexing(indLouds, find(flagLouds), obj.loudspeakerMapping(2).destinationInd, obj.loudspeakerMapping(2).originInd);
-            
-            % Reset acoustic paths
-            obj.WFSarrayAcousticPath(:) = 0;
-            obj.noiseSourceAcousticPath(:) = 0;
-            
+                        
             % Apply mapping
-            obj.WFSarrayAcousticPath(flagRec, WFSarrayInds, :) = acPath(indRec, xChannelInds_WFS, :);
-            obj.noiseSourceAcousticPath(flagRec, noiseSourceInds, :) = acPath(indRec, xChannelInds_noise, :);
+            WFSarrayAcPath = zeros(obj.numReceivers, obj.numSourcesWFSarray, numel(loudspeakerAcPathStruct.frequencies));
+            WFSarrayAcPath(flagRec, WFSarrayInds, :) = loudspeakerAcPathStruct.acousticPaths(indRec, xChannelInds_WFS, :);
+            noiseSourceAcPath = zeros(obj.numReceivers, obj.numNoiseSources, numel(loudspeakerAcPathStruct.frequencies));
+            noiseSourceAcPath(flagRec, noiseSourceInds, :) = loudspeakerAcPathStruct.acousticPaths(indRec, xChannelInds_noise, :);
             
+            obj.WFSarrayAcPathStruct.frequencies = loudspeakerAcPathStruct.frequencies;
+            obj.WFSarrayAcPathStruct.acousticPaths = WFSarrayAcPath;
+            obj.noiseSourceAcPathStruct.frequencies = loudspeakerAcPathStruct.frequencies;
+            obj.noiseSourceAcPathStruct.acousticPaths = noiseSourceAcPath;
+            
+            obj.setAcousticPaths();
+
         end
         
         function setLoudspeakerCoefficient(obj, loudspeakerCoefficient, xChannelMapping)
@@ -790,7 +794,7 @@ classdef WFSToolSimple < handle
                         case 'NoFilter'
                             acPath = acPath_default;
                         case 'Loudspeakers'
-                            acPath = zeros(obj.numReceivers, numSour, obj.numNoiseSources);
+                            acPath = zeros(size(testPoints, 1), numSour, obj.numNoiseSources);
                             acPath(:, varInd, :) = acPath_default(:, obj.WFSarrayIndSimulTheo(obj.loudspeakerMapping(1).originInd), :);
                             acPath(:, fixedInd, :) = acPath_default(:, obj.noiseSourceIndSimulTheo, :);
                     end            
@@ -1451,7 +1455,7 @@ classdef WFSToolSimple < handle
                     obj.player.executeOrder('stop');
                     if obj.simplePerformance
                         %                         obj.WFScalculation();
-                        obj.reproduceAndRecord();
+                        obj.reproduceAndRecord('main');
                         %                         obj.simulate();
                     else
                         obj.player.executeOrder('play');
@@ -1477,7 +1481,7 @@ classdef WFSToolSimple < handle
         
         function simulateOnAxis(obj)
             % Configure simulator object
-            obj.WFScalculation();
+            obj.WFScalculation('Grouping', 'AllTogether', 'SourceFilter', 'NoFilter', 'AcousticPath', 'Theoric');
             
             % Simulate
             obj.simulTheo.generateMeasurePoints();

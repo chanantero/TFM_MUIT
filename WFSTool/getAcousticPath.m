@@ -26,7 +26,8 @@ numPulses = size(xPulseCoefMat, 1);
 numChannelsX = size(xPulseCoefMat, 2);
 numChannelsY = size(y, 2);
 
-% If there are repeated frequencies, combine them
+% If there are repeated frequencies, combine them in one pulse coefficient
+% matrix
 [freq, ~, ic] = unique(freq);
 numFrequencies = numel(freq);
 xPulseCoefMat_uniqueFreq = zeros(numPulses, numChannelsX, numFrequencies);

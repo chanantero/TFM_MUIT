@@ -12,7 +12,7 @@ addpath(paths);
 dataPathName = [globalPath, 'Data\'];
 ID = datestr(now, 'yyyy-mm-dd_HH-MM-SS');
 
-%% Parameters.
+%% System parameters
 
 % User can change this:
 numLoudspeakers = 96;
@@ -21,12 +21,6 @@ realPosition = [3.35 -0.2 0]; % Assumed real position
 amplitude = 0.5;
 phase = 0;
 frequency = 440;
-
-minXPos = 3.35; maxXPos = 3.35; numXPoints = 1;
-minYPos = -0.2; maxYPos = -0.2; numYPoints = 1;
-minZPos = 0; maxZPos = 0; numZPoints = 1;
-minAmplitude = 0; maxAmplitude = 1; numAmplitudePoints = 11;
-numPhasePoints = 1;
 
 % Receivers
 receiverPositions = [1.5 3 0; 1.5 1.5 0];
@@ -38,7 +32,7 @@ theoricNoiseSourceAcPath = true;
 % acPathWFSarray;
 % acPathNoiseSources;
 
-%% Set scenario
+%% Set Up System
 if exist('obj', 'var') == 0 || ~isvalid(obj) || ~isvalid(obj.ax)
     obj = WFSToolSimple;
 end
@@ -60,6 +54,7 @@ obj.setNumWFSarraySources(numLoudspeakers);
 obj.setNumReceivers(numReceivers);
 obj.receiverPosition = receiverPositions;
 
+% Set acoustic path variables
 if theoricWFSAcPath
     obj.theoricWFSacousticPath();
 else
@@ -75,79 +70,9 @@ end
 obj.updateReprodPanelBasedOnVariables();
 obj.updateRecordPanelBasedOnVariables();
 
-%% Calculate useful variables for the different cases
-% Calculate the multiple cases
-xVec = linspace(minXPos, maxXPos, numXPoints);
-yVec = linspace(minYPos, maxYPos, numYPoints);
-zVec = linspace(minZPos, maxZPos, numZPoints);
-amplitudeVec = linspace(minAmplitude, maxAmplitude, numAmplitudePoints);
-phaseVec = 2*pi/numPhasePoints*(0:numPhasePoints - 1);
+%% Experimental acoustic path calculation
 
-[X, Y, Z, A, P] = ndgrid(xVec, yVec, zVec, amplitudeVec, phaseVec);
-numPointsMat = numel(X);
-
-% For the visualization we want to transform the results into an array with
-% each dimension separated. Specifically, we want to rearrange data into
-% a multidimensional array:
-% 1st dimension: x position of the virtual noise source
-% 2nd dimension: y position of the virtual noise source
-% 3rd dimension: z position of the virtual noise source
-% 4th dimension: amplitude vector
-% 5th dimension: phase vector
-% 6th dimension: channels
-
-% Use the function mergeAndPermute in inverse mode (third argument to true)
-% The operation that we would have to do to transform that array into what
-% we have is described by modVec:
-modVec = {[1, 2, 3, 4, 5], 6};
-% Size of the array
-sizeObjective = [numXPoints, numYPoints, numZPoints, numAmplitudePoints, numPhasePoints, numReceivers];
-% Label of each dimension
-labels = {'x', 'y', 'z', 'Amplitude', 'Phase', 'Microphone'};
-
-%% Simulation of cases
-% Calculate the received field only with the real source, without
-% cancellation
-obj.setVirtual([false; false]); % No virtual sources
-obj.WFScalculation();
-obj.simulate();
-onlySourceSimulField = obj.simulField(:, 1);
-obj.setVirtual([false; true]); % No virtual sources
-
-
-pulseCoefMat = zeros(numPointsMat, obj.numLoudspeakers, 2);
-simulatedField = zeros(obj.numReceivers, obj.numNoiseSources, numPointsMat);
-for p = 1:numPointsMat
-    fprintf('Point %d\n', p);
-    
-    % Set properties
-        % Set virtual position
-        virtPos = [X(p), Y(p), Z(p)];
-        obj.noiseSourcePosition = [realPosition; virtPos];
-        obj.theoricNoiseSourceAcousticPath();
-
-        % Set amplitude and phase
-        obj.amplitude(2) = A(p);
-        obj.phase(2) = P(p);
-
-        % Apply WFS calculation
-        obj.WFScalculation();
-
-    % Simulate the received signals
-    obj.simulate();
-    simulatedField(:, :, p) = obj.simulField;
-
-    % Get the coefficients and save them in the pulse coefficient matrix
-    pulseCoefMat(p, :, :) = permute(obj.loudspeakerCoefficient, [3, 1, 2]);
-    
-end
-simulatedField = sum(permute(simulatedField, [3, 1, 2]), 3);
-simulatedFieldRelative = simulatedField./repmat(onlySourceSimulField.', [numPointsMat, 1]);
-simulatedFieldRelative_DB = 20*log10(abs(simulatedFieldRelative));
-
-%% Experiment
-
-% C.1 Experimental acoustic path
+% Calculate experimental acoustic path
 obj.reproduceAndRecordForAcousticPaths();
 obj.calculateExperimentalAcousticPaths();
 
@@ -156,13 +81,55 @@ sBase = obj.exportInformation();
 FileName = ['Session_', ID, 'calibration', '.mat'];
 save([dataPathName, FileName], 'sBase');
 
-% C.2 Only real noise source
+%% Set experimental acoustic path
+ID = '2017-09-19_18-18-47';
+fileName = ['Session_', ID, 'calibration', '.mat'];
+s = load([dataPathName, fileName], '-mat' , 'sBase');
+sBase = s.sBase;
+expAcPath = sBase.Experiment.acPathStruct;
+obj.setLoudspeakerAcousticPath(expAcPath);
+
+%% WFS cancellation
+
+% Optimization options
+sourceFilter = {'Loudspeakers', 'Loudspeakers'}; % It makes no sense to optimize a less real scenario, so use loudspeakers filter
+maxAbsValCons = [true, true]; % We always want to be realistic about real constraints
+acousticPathType = {'Current', 'Current'}; % It makes no sense to optimize with a theoric acoustic path because it depends on the parameters of the noise source, and those parameters are actually unknown. Besides, the acousic path of the loudspeakers is only known in the places where microphones have been placed.
+grouping = {'Independent', 'Independent'}; 
+zerosFixed = [true, false];
+N = numel(sourceFilter);
+
+loudsCoeff = zeros(obj.numLoudspeakers, obj.numNoiseSources, N);
+simulField = zeros(obj.numReceivers, obj.numNoiseSources, N);
+for k = 1:N
+% WFS cancellation
+obj.WFScalculation('SourceFilter', sourceFilter{k}, 'AcousticPath', acousticPathType{k}, 'Grouping', grouping{k}, 'maxAbsoluteValueConstraint', maxAbsValCons(k), 'zerosFixed', zerosFixed(k));
+
+% WFS array coefficients
+loudsCoeff(:, :, k) = obj.loudspeakerCoefficient;
+
+% Simulate
+obj.simulate();
+
+% Cancellation level (noise source 1 is real, noise source 2 is virtual)
+simulField(:, :, k) = obj.simulField;
+end
+
+noiseSourceSimulField = permute(simulField(:, 1, :), [1 3 2]); % (numReceivers x N)
+totalSimulField = permute(sum(simulField, 2), [1 3 2]); % (numReceivers x N)
+simulRelField = totalSimulField./noiseSourceSimulField;
+simulCancel = 20*log10(abs(simulRelField));
+
+%% Experimental checking of correspondence
+
+% A) Reproduce
+% A.1) Only noise
 obj.setVirtual([false; false]); % No virtual sources
 obj.setReal([true; false]); % Only real source
 obj.updateReprodPanelBasedOnVariables();
 
 obj.WFScalculation(); % Update coefficents of loudspeakers. Only the channel of the real loudspeaker should have coefficient different than 0
-obj.reproduceAndRecord('main', 'soundTime', 2); % Simple reproduction of one pulse of 1 second
+obj.reproduceAndRecord('main', 'soundTime', 2); % Simple reproduction of one pulse of 2 seconds
 
 % Retrieve and save information
 sExpOnlyNoise = obj.getExperimentalResultVariables();
@@ -177,14 +144,14 @@ obj.setReal([true; false]);
 obj.updateReprodPanelBasedOnVariables();
 obj.WFScalculation();
 
-% C.3 Reproduce signal for the multiple cases
-
+% A.2) Noise + WFS array
 % Create signal
 pulseDuration = 1;
 silenceDuration = 1;
-startPulse = (0:numPointsMat - 1)'*(pulseDuration + silenceDuration);
+startPulse = (0:N - 1)'*(pulseDuration + silenceDuration);
 endPulse = startPulse + pulseDuration;
 pulseLim = [startPulse, endPulse];
+pulseCoefMat = permute(loudsCoeff, [3 1 2]);
 SampleRate = 44100;
 signalFunc = @(startSample, endSample) pulseCoefMat2signal(pulseCoefMat, pulseLim, obj.frequency, SampleRate, startSample, endSample, 'type_pulseLimits', 'time');
 
@@ -199,178 +166,36 @@ obj.reprodFrequencies = obj.frequency;
 sExp = obj.getExperimentalResultVariables();
 yPulseCoefMat = signal2pulseCoefficientMatrix(sExp.pulseLimits, sExp.frequencies(1), sum(sExp.pulseCoefMat, 3), sExp.recordedSignal, sExp.sampleRate);
 
-FileName = ['Session_', ID, 'cases', '.mat'];
+FileName = ['Session_', ID, 'cancellation', '.mat'];
 save([dataPathName, FileName], 'sExp', 'yPulseCoefMat');
 
-%% Visualize
-visualizeScript;
+% B) Check how similar the results are with the simulation
+% yPulseCoefMat % (N x numReceivers)
+% simulField % (numReceivers x numNoiseSources x N)
+noiseSourceExpField = repmat(yPulseCoefMat_OnlyNoise.', [1, N]);
+totalExpField = permute(yPulseCoefMat, [2 1]); % (numReivers x N)
 
-%% Analyse
-% Get data
-% General information structure after calibration
-s = load('C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Matlab\Data\Session_2017-09-19_18-18-47calibration.mat', '-mat' , 'sBase');
-sBase = s.sBase;
-% Get experimental acoustic path
-expAcPath = sBase.Experiment.acPathStruct;
-% Experimental structure and pulse coefficients with only the noise source
-s = load('C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Matlab\Data\Session_2017-09-19_18-18-47onlyNoise.mat', '-mat' , 'sExpOnlyNoise', 'yPulseCoefMat_OnlyNoise');
-sExpOnlyNoise = s.sExpOnlyNoise;
-yPulseCoefMat_OnlyNoise = s.yPulseCoefMat_OnlyNoise;
-% Experimental structure for all the cases
-s = load('C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Matlab\Data\Session_2017-09-19_18-18-47cases.mat', '-mat' , 'sExp', 'yPulseCoefMat');
-sExpCases = s.sExp;
-yPulseCoefMat_Cases= s.yPulseCoefMat;
+ratio = totalExpField./totalSimulField;
+maxAbsRat = max(abs(ratio));
+maxAngleRat = max(angle(ratio)) - min(angle(ratio));
 
-clear('s')
-
-% Visualize 
-% [expAcPath, freq, yPulseCoefMat] = getAcousticPath( sExp.pulseLimits, sExp.frequencies, sExp.pulseCoefMat, sExp.recordedSignal, sExp.sampleRate); 
-% aux = yPulseCoefMat((1:96) + 96, :)./yPulseCoefMat((1:96), :);
-% ax = axes(figure);
-% ax1 = subplot(3, 1, 1);
-% ax2 = subplot(3, 1, 2);
-% ax3 = subplot(3, 1, 3);
-% bar(ax1, abs(yPulseCoefMat(1:end-2, :)));
-% plot(ax2, rad2deg(angle(aux)));
-% plot(ax3, abs(aux)); ax3.YLim = [0, 1.5];
-% bar(abs(expAcPath)')
-% bar(rad2deg(angle(expAcPath))')
-
-% Check that the experimental results are the same (approximatelly) than
-% the ones simulated with the experimental acoustic path.
-
-% Set the experimental acoustic paths
-obj.setLoudspeakerAcousticPath(expAcPath);
-obj.WFSarrayCoefficient = 0; % Just in case
-obj.noiseSourceCoefficient_complete = 0; % Just in case
-
-% Simulate the field for only the noise source
-pulseCoefMat = sExpOnlyNoise.pulseCoefMat;
-loudsChanMap = sExpOnlyNoise.channelMapping;
-
-numPointsMat = size(pulseCoefMat, 1);
-simulatedField = zeros(obj.numReceivers, obj.numNoiseSources, numPointsMat);
-for p = 1:numPointsMat
-    loudsCoef = permute(pulseCoefMat(p, :, :), [2, 3, 1]);
-    obj.setLoudspeakerCoefficient(loudsCoef, loudsChanMap);
-    obj.simulate();
-    simulatedField(:, :, p) = obj.simulField;
-end
-
-yPulseCoefMat_OnlyNoise_Simulated = sum(permute(simulatedField, [3, 1, 2]), 3);
-
-% Simulate the field for every case of the ones explained before
-pulseCoefMat = sExpCases.pulseCoefMat;
-loudsChanMap = sExpCases.channelMapping;
-
-numPointsMat = size(pulseCoefMat, 1);
-simulatedField = zeros(obj.numReceivers, obj.numNoiseSources, numPointsMat);
-for p = 1:numPointsMat
-    loudsCoef = permute(pulseCoefMat(p, :, :), [2, 3, 1]);
-    obj.setLoudspeakerCoefficient(loudsCoef, loudsChanMap);
-    obj.simulate();
-    simulatedField(:, :, p) = obj.simulField;
-end
-
-yPulseCoefMat_Cases_Simulated = sum(permute(simulatedField, [3, 1, 2]), 3);
-
-% Compare the simulated fields with the real ones
-rat_OnlyNoise = yPulseCoefMat_OnlyNoise_Simulated./yPulseCoefMat_OnlyNoise;
-rat_Cases = yPulseCoefMat_Cases_Simulated./yPulseCoefMat_Cases;
-
-% It seems it's approximatelly the same. HURRA!!
-
-% Visualize cancellation in dB of the experimental field
-relativeField = yPulseCoefMat_Cases./repmat(yPulseCoefMat_OnlyNoise(1, :), [numPointsMat, 1]);
-relativeField_dB = 20*log10(abs(relativeField));
-data = relativeField_dB;
-visualizeScript;
-
-%% Least squares for cancellation
-% Cancel the field using the experimental acoustic path and the least
-% squares method
-    % Set the virtual noise coefficient to the same value as the real one, as
-    % the cancellation happens with each component/source/frequency
-    % independently
-    obj.noiseSourceCoefficient(2) = obj.noiseSourceCoefficient(1);
-    
-    % Make sure the current acoustic path is the experimental one
-    obj.setLoudspeakerAcousticPath(expAcPath);
-
-    % Apply least squares method
-    obj.WFScalculation('SourceFilter', 'Loudspeakers', 'AcousticPath', 'Current', 'Grouping', 'Independent');
-
-% Simulate to see if, indeed, the field has been cancelled
-obj.simulate();
-sum(obj.simulField, 2) % Sum along noise source components
-
-%% Least squares for cancellation with the official impulse responses of the GTAC
-% acousticPath = importImpulseResponseGTAC(frequency);
-load([dataPathName, 'acousticPathsGTAC_440.mat'])
-
-numMicroX = 15; numMicroY = 24;
-incrX = 0.2; incrY = -0.2;
-microRectXsize = abs((numMicroX - 1)*incrX);
-microRectYsize = abs((numMicroY - 1)*incrY);
-minWFSarrayX = min(obj.WFSarrayPosition(:, 1));
-maxWFSarrayX = max(obj.WFSarrayPosition(:, 1));
-WFSarrayXsize = maxWFSarrayX - minWFSarrayX;
-minWFSarrayY = min(obj.WFSarrayPosition(:, 2));
-maxWFSarrayY = max(obj.WFSarrayPosition(:, 2));
-WFSarrayYsize = maxWFSarrayY - minWFSarrayY;
-offsetX = minWFSarrayX + (WFSarrayXsize - microRectXsize)/2; 
-offsetY = maxWFSarrayY - (WFSarrayYsize - microRectYsize)/2;
-x = (0:numMicroX - 1) * incrX + offsetX;
-y = (0:numMicroY - 1) * incrY + offsetY;
-[Y, X] = ndgrid(y, x);
-Z = zeros(size(X));
-recPos = [X(:), Y(:), Z(:)];
-
-obj.setNumReceivers(360); % Doesn't matter the position, although we know them
-obj.receiverPosition = recPos;
-obj.updateRecordPanelBasedOnVariables();
-
-% Set the official acoustic path
-obj.theoricNoiseSourceAcousticPath();
-obj.WFSarrayAcPathStruct.acousticPaths = acousticPath;
-
-% 
-obj.WFScalculation('SourceFilter', 'Loudspeakers', 'AcousticPath', 'Current', 'Grouping', 'Independent', 'maxAbsoluteValueConstraint', false, 'zerosFixed', true);
-obj.simulate();
-relField_a = sum(obj.simulField, 2)./obj.simulField(:, 1); % Sum along noise source components
-a_cancel_dB = 20*log10(abs(relField_a));
-
-%
-obj.WFScalculation('SourceFilter', 'Loudspeakers', 'AcousticPath', 'Current', 'Grouping', 'AllTogether', 'maxAbsoluteValueConstraint', true, 'zerosFixed', true);
-obj.simulate();
-relField_b = sum(obj.simulField, 2)./obj.simulField(:, 1); % Sum along noise source components
-b_cancel_dB = 20*log10(abs(relField_b));
-
-%
-obj.WFScalculation('SourceFilter', 'Loudspeakers', 'AcousticPath', 'Current', 'Grouping', 'AllTogether', 'maxAbsoluteValueConstraint', false, 'zerosFixed', true);
-obj.simulate();
-relField_b = sum(obj.simulField, 2)./obj.simulField(:, 1); % Sum along noise source components
-c_cancel_dB = 20*log10(abs(relField_b));
-
-% Set the theoric acoustic path
-obj.theoricWFSacousticPath();
-
-%
-obj.WFScalculation('SourceFilter', 'Loudspeakers', 'AcousticPath', 'Current', 'Grouping', 'Independent', 'maxAbsoluteValueConstraint', true, 'zerosFixed', true);
-obj.simulate();
-relField_c = sum(obj.simulField, 2)./obj.simulField(:, 1); % Sum along noise source components
-c_cancel_dB = 20*log10(abs(relField_c));
-
-%
-obj.WFScalculation('LoudspeakersTogether');
-obj.simulate();
-relField_d = sum(obj.simulField, 2)./obj.simulField(:, 1); % Sum along noise source components
-d_cancel_dB = 20*log10(abs(relField_d));
-
-ax = axes(figure);
-plot(ax, [a_cancel_dB, b_cancel_dB, c_cancel_dB, d_cancel_dB])
-plot(ax, c_cancel_dB)
+expRelField = totalExpField./noiseSourceExpField;
+expCancel = 20*log10(abs(expRelField));
 
 
-% 
+%% Optimization of noise source theoric parameters
+% Find the theoric parameters for the virtual noise source that, applying
+% WFS cancellation with theoric acoustic path and unified optimization of loudspeakers, minimize the
+% magnitude of the resulting field using the experimental acoustic path
+
+% The objective function accepts parameters as input arguments. It
+% returns the absolute value of the resulting field
+objectiveFunction = @(parameters) sum(abs(sum(noiseSourceParam2Field(obj, parameters), 2)).^2);
+
+x0 = [realPosition, amplitude, phase];
+[xOpt, fVal] = fminunc(objectiveFunction, x0);
+
+objectiveFunction(xOpt)
+
+
 
