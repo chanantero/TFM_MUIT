@@ -88,6 +88,7 @@ s = load([dataPathName, fileName], '-mat' , 'sBase');
 sBase = s.sBase;
 expAcPath = sBase.Experiment.acPathStruct;
 obj.setLoudspeakerAcousticPath(expAcPath);
+obj.noiseSourceAcPathStruct.acousticPaths(:, 2) = obj.noiseSourceAcPathStruct.acousticPaths(:, 1); % The acoustic path of the virtual noise source is equal to the real one, for optimization purposes
 
 %% WFS cancellation
 
@@ -188,14 +189,88 @@ expCancel = 20*log10(abs(expRelField));
 % WFS cancellation with theoric acoustic path and unified optimization of loudspeakers, minimize the
 % magnitude of the resulting field using the experimental acoustic path
 
+% Optimize
 % The objective function accepts parameters as input arguments. It
 % returns the absolute value of the resulting field
 objectiveFunction = @(parameters) sum(abs(sum(noiseSourceParam2Field(obj, parameters), 2)).^2);
+x0 = [realPosition, amplitude, phase]; % Initial value of parameters
+[xOpt, fVal] = fminunc(objectiveFunction, x0); % Optimize
 
-x0 = [realPosition, amplitude, phase];
-[xOpt, fVal] = fminunc(objectiveFunction, x0);
+% Set the parameters
+optPosition = xOpt(1:3);
+optAmplitude = xOpt(4);
+optPhase = xOpt(5);
+% optPosition = x0(1:3);
+% optAmplitude = x0(4);
+% optPhase = x0(5);
+obj.amplitude(2) = optAmplitude;
+obj.phase(2) = optPhase;
+obj.noiseSourcePosition(2, :) = optPosition;
+obj.updateReprodPanelBasedOnVariables();
 
-objectiveFunction(xOpt)
+% Set WFS array coefficients according to the optimized parameters. Respect
+% the generated theoric coefficients, don't ajust them independently or
+% something, just scale them to fit the theoric acoustic paths.
+obj.WFScalculation(...
+    'SourceFilter', 'Loudspeakers',...
+    'AcousticPath', 'Theoric',...
+    'Grouping', 'AllTogether',...
+    'maxAbsoluteValueConstraint', true);
 
+% Simulate with the experimental acoustic path to see what is the resulting
+% field with these optimized theoric parameters of the virtual source
+obj.simulate();
+
+% Calculate cancellation
+noiseSourceField = obj.simulField(:, 1); % (numReceivers x 1)
+totalField = sum(obj.simulField, 2); % (numReceivers x 1)
+relField = totalField./noiseSourceField;
+cancel = 20*log10(abs(relField));
+
+%% Experimental checking of correspondence
+% Reproduction of the opmized virtual noise source theoric parameters
+% Variables that should be ready at the beginning of this section
+% pulseCoefMat. (N x obj.numLoudspeakers x obj.numNoiseSources)
+pulseCoefMat = permute(obj.loudspeakerCoefficient, [3 1 2]);
+
+
+% A) Reproduction
+% A.2) Noise + WFS array
+% Create signal
+pulseDuration = 1;
+silenceDuration = 1;
+numPulses = size(pulseCoefMat, 1);
+startPulse = (0:numPulses - 1)'*(pulseDuration + silenceDuration);
+endPulse = startPulse + pulseDuration;
+pulseLim = [startPulse, endPulse];
+SampleRate = 44100;
+signalFunc = @(startSample, endSample) pulseCoefMat2signal(pulseCoefMat, pulseLim, obj.frequency, SampleRate, startSample, endSample, 'type_pulseLimits', 'time');
+
+% Reproduce
+obj.reproduceSignalFunction(signalFunc, SampleRate, obj.loudspeakerChannelMapping);
+
+obj.pulseCoeffMat = pulseCoefMat;
+obj.pulseLimits = pulseLim;
+obj.reprodFrequencies = obj.frequency;
+
+% Retrieve and save information
+sExp = obj.getExperimentalResultVariables();
+yPulseCoefMat = signal2pulseCoefficientMatrix(sExp.pulseLimits, sExp.frequencies(1), sum(sExp.pulseCoefMat, 3), sExp.recordedSignal, sExp.sampleRate);
+
+FileName = ['Session_', ID, 'optimizedParam', '.mat'];
+save([dataPathName, FileName], 'sExp', 'yPulseCoefMat');
+
+% B) Check how similar the results are with the simulation
+% yPulseCoefMat % (numPulses x numReceivers)
+% simulField % (numReceivers x numNoiseSources x numPulses)
+noiseSourceExpField = repmat(yPulseCoefMat_OnlyNoise.', [1, numPulses]);
+totalExpField = permute(yPulseCoefMat, [2 1]); % (numReivers x numPulses)
+
+ratio = totalExpField./totalSimulField;
+maxAbsRat = max(abs(ratio));
+maxAngleRat = max(angle(ratio)) - min(angle(ratio));
+
+expRelField = totalExpField./noiseSourceExpField;
+expCancel = 20*log10(abs(expRelField));
 
 

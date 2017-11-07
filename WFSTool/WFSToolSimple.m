@@ -275,8 +275,8 @@ classdef WFSToolSimple < handle
             obj.simulTheo.acPath(:, obj.WFSarrayIndSimulTheo, :) = value;
         end
         
-        function WFSarrayAcousticPath = get.noiseSourceAcousticPath(obj)
-            WFSarrayAcousticPath = obj.simulTheo.acPath(:, obj.noiseSourceIndSimulTheo, :);
+        function noiseSourceAcousticPath = get.noiseSourceAcousticPath(obj)
+            noiseSourceAcousticPath = obj.simulTheo.acPath(:, obj.noiseSourceIndSimulTheo, :);
         end
         
         function set.noiseSourceAcousticPath(obj, value)
@@ -382,7 +382,7 @@ classdef WFSToolSimple < handle
             s.recordedChannelMapping = obj.recordedChannelMapping;
             s.pulseCoefMat = obj.pulseCoeffMat;
             s.pulseLimits = obj.pulseLimits;
-            s.channelMapping = obj.reprodChannelMapping;
+            s.reprodChannelMapping = obj.reprodChannelMapping;
             s.frequencies = obj.reprodFrequencies;
             s.acPathStruct = obj.expAcPathStruct; % Sometimes it won't have been calculated
             
@@ -466,8 +466,8 @@ classdef WFSToolSimple < handle
             obj.changed.numNoiseSources = true;
             obj.updateEverything();
             
-            obj.simulTheo.XnumPoints = 20;
-            obj.simulTheo.YnumPoints = 20;
+            obj.simulTheo.XnumPoints = 60;
+            obj.simulTheo.YnumPoints = 60;
             obj.simulateOnAxis();
             
             uicontrol(fig, 'Style', 'pushbutton',...
