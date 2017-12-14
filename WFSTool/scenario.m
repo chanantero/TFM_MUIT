@@ -143,7 +143,6 @@ classdef scenario < handle
                 if obj.enabledGUI
                     source.XData(index) = sourcesPosition(k, 1);
                     source.YData(index) = sourcesPosition(k, 2);
-                    source.ZData(index) = sourcesPosition(k, 3);
                 end
                 
                 % Other variables
@@ -160,7 +159,6 @@ classdef scenario < handle
                 receiver = findobj(obj.ax, 'Tag', 'receiver');
                 receiver.XData(indices) = receiverPosition(:, 1);
                 receiver.YData(indices) = receiverPosition(:, 2);
-                receiver.ZData(indices) = receiverPosition(:, 3);
                 receiver.CData(indices, :) = repmat(obj.receiverColor, [numel(indices), 1]);
             end
             

@@ -1,6 +1,6 @@
 %% Draw WFS array in SVG
 
-% Generate positions and orientations of loudspeakers
+% Generate positions and orientations of WFS array loudspeakers
 d = 0.18; % Separation between two contiguous loudspeakers. Size of one loudspeaker
 nb = 8; % Bottom and upper sides of the octogon (2 sides)
 nd = 8; % Diagonal sides of the octogon (4 sides)

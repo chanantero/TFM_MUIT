@@ -229,13 +229,12 @@ cancel = 20*log10(abs(relField));
 
 %% Experimental checking of correspondence
 % Reproduction of the opmized virtual noise source theoric parameters
-% Variables that should be ready at the beginning of this section
-% pulseCoefMat. (N x obj.numLoudspeakers x obj.numNoiseSources)
-pulseCoefMat = permute(obj.loudspeakerCoefficient, [3 1 2]);
-
+pulseCoefMat = permute(obj.loudspeakerCoefficient, [3 1 2]); % (numPulses x obj.numLoudspeakers x obj.numNoiseSources)
+onlyRealNoiseSourcePulse = zeros(1, obj.numLoudspeakers, obj.numNoiseSources);
+onlyRealNoiseSourcePulse(1) = obj.noiseSourceCoefficient(1);
+pulseCoefMat = [onlyRealNoiseSourcePulse; pulseCoefMat];
 
 % A) Reproduction
-% A.2) Noise + WFS array
 % Create signal
 pulseDuration = 1;
 silenceDuration = 1;
@@ -256,6 +255,7 @@ obj.reprodFrequencies = obj.frequency;
 % Retrieve and save information
 sExp = obj.getExperimentalResultVariables();
 yPulseCoefMat = signal2pulseCoefficientMatrix(sExp.pulseLimits, sExp.frequencies(1), sum(sExp.pulseCoefMat, 3), sExp.recordedSignal, sExp.sampleRate);
+yPulseCoefMat_OnlyNoise = yPulseCoefMat(1, :);
 
 FileName = ['Session_', ID, 'optimizedParam', '.mat'];
 save([dataPathName, FileName], 'sExp', 'yPulseCoefMat');
@@ -263,7 +263,7 @@ save([dataPathName, FileName], 'sExp', 'yPulseCoefMat');
 % B) Check how similar the results are with the simulation
 % yPulseCoefMat % (numPulses x numReceivers)
 % simulField % (numReceivers x numNoiseSources x numPulses)
-noiseSourceExpField = repmat(yPulseCoefMat_OnlyNoise.', [1, numPulses]);
+noiseSourceExpField = repmat(yPulseCoefMat_OnlyNoise.', [1, numPulses]); % (numReivers x numPulses)
 totalExpField = permute(yPulseCoefMat, [2 1]); % (numReivers x numPulses)
 
 ratio = totalExpField./totalSimulField;
