@@ -32,7 +32,7 @@ rangeY = max(yLoud) - min(yLoud);
 marginX = (viewBoxWidth - rangeX)/2;
 marginY = (viewBoxHeight - rangeY)/2;
 
-viewBox = [min(xLoud) - marginX, min(yLoud) - marginY, width/viewPort2viewBoxRatio, height/viewPort2viewBoxRatio];
+viewBox = [min(xLoud) - marginX, min(yLoud) - marginY, viewBoxWidth, viewBoxHeight];
 
 % Create string that will draw them in SVG
 drawLoudspeakerStr = '<use xlink:href="symbolLibrary.svg#%s" x="%g" y="%g" transform="rotate(%g %g %g)"/>\n';

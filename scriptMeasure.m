@@ -5,9 +5,7 @@
 % in amplitude, phase and position.
 
 %% Preamble
-globalPath = 'C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Matlab\';
-paths = genpath(globalPath);
-addpath(paths);
+pathSetUp;
 
 dataPathName = [globalPath, 'Data\'];
 ID = datestr(now, 'yyyy-mm-dd_HH-MM-SS');
