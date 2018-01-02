@@ -52,11 +52,20 @@ switch shape
         refPosX = refPos(1);
         refPosY = refPos(2);
         
-        rStep = 2/numPoints;
-        r = (1:-rStep:-(1-rStep))';
-        r(r<0) = -r(r<0);
-        r = r*radius;
-        theta = linspace(0, numRounds*2*pi*2, numPoints)';
+%         % Back and forth
+%         rStep = 2/numPoints;
+%         r = (1:-rStep:-(1-rStep))';
+%         r(r<0) = -r(r<0);
+%         r = r*radius;
+%         theta = linspace(0, numRounds*2*pi*2, numPoints)';
+
+%         % Ida
+%         r = linspace(radius, 0, numPoints)';
+%         theta = linspace(0, numRounds*2*pi, numPoints)';
+        
+        % Radio parabólico
+        r = radius*linspace(1, 0, numPoints)'.^2;
+        theta = linspace(0, numRounds*2*pi, numPoints)';
         
         [x, y] = pol2cart(theta, r);
         

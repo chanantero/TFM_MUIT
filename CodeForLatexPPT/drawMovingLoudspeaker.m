@@ -21,8 +21,8 @@
     viewPort2viewBoxRatio = 100;
     
     % GIF file
-    gifDuration = 2; % seconds
-    numFrames = 60;
+    gifDuration = 4; % seconds
+    numFrames = 120;
     
     % Folder
     pathFold = 'C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Documentos\Img\';
@@ -46,7 +46,7 @@
     [ xLoud, yLoud, angleLoud ] = octogon(d, nb, nd, nl, betabd);
 
     % Position and orientation of noise loudspeaker
-    noiseVirtPos = movingLoudspeakerPos( 'spiral', 'radius', radius, 'numRounds', 1, 'numPoints', numFrames, 'refPos', [realPosition(1), realPosition(2)] );
+    noiseVirtPos = movingLoudspeakerPos( 'spiral', 'radius', radius, 'numRounds', 2, 'numPoints', numFrames, 'refPos', [realPosition(1), realPosition(2)] );
     xNoise = noiseVirtPos(:, 1); yNoise = noiseVirtPos(:, 2);
 
     % Position and orientation of radiation diagrams

@@ -24,11 +24,22 @@ frequency = 440;
 receiverPositions = [1.5 3 0; 1.5 1.5 0];
 numReceivers = size(receiverPositions, 1);
 
-% Predefined acoustic paths.
+% Acoustic paths.
+loudspeakerAcPathFlag = false;
+% loudsAcPath. Structure that will be passed to the function setLoudspeakerAcousticPath. Only useful when loudspeakerAcPathFlag == true.
+% % GTAC's official acoustic paths
+% % acousticPath = importImpulseResponseGTAC(frequency);
+% load([dataPathName, 'acousticPathsGTAC_440.mat'])
+% loudsAcPath = struct;
+% loudsAcPath.acousticPaths = acousticPath;
+
 theoricWFSAcPath = true;
+% acPathWFSarrayStruct. Structure that will represent the WFS acoustic paths. Only useful when theoricWFSAcPath == true.
+
 theoricNoiseSourceAcPath = true;
-% acPathWFSarray;
-% acPathNoiseSources;
+% acPathNoiseSourcesStruct. Structure that will represent the noise source acoustic paths. Only useful when theoricNoiseSourceAcPath == true.
+
+experimentalAcPathInSitu = false;
 
 %% Set Up System
 if exist('obj', 'var') == 0 || ~isvalid(obj) || ~isvalid(obj.ax)
@@ -53,40 +64,47 @@ obj.setNumReceivers(numReceivers);
 obj.receiverPosition = receiverPositions;
 
 % Set acoustic path variables
-if theoricWFSAcPath
-    obj.theoricWFSacousticPath();
-else
-    obj.WFSarrayAcPathStruct.acousticPaths = acPathWFSarray;
-end
+if experimentalAcPathInSitu
+    % Calculate experimental acoustic path
+    obj.reproduceAndRecordForAcousticPaths();
+    obj.calculateExperimentalAcousticPaths();
+    
+    obj.setLoudspeakerAcousticPath(obj.expAcPathStruct);
+    % The next step is necessary because the virtual source doesn't map onto
+    % any loudspeaker, so setLoudspeakerAcousticPaths leaves the acoustic paths
+    % of the virtual source with a value of 0.
+    obj.noiseSourceAcPathStruct.acousticPaths(:, 2) = obj.noiseSourceAcPathStruct.acousticPaths(:, 1); % The acoustic path of the virtual noise source is equal to the real one, for optimization purposes
+    
+%     % Retrieve and save information
+%     sBase = obj.exportInformation();
+%     FileName = ['Session_', ID, 'calibration', '.mat'];
+%     save([dataPathName, FileName], 'sBase');
+      % Set experimental acoustic path from saved file
+%     ID = '2017-09-19_18-18-47';
+%     fileName = ['Session_', ID, 'calibration', '.mat'];
+%     s = load([dataPathName, fileName], '-mat' , 'sBase');
+%     sBase = s.sBase;
+%     expAcPath = sBase.Experiment.acPathStruct;
+%     obj.setLoudspeakerAcousticPath(expAcPath);
 
-if theoricNoiseSourceAcPath
-    obj.theoricNoiseSourceAcousticPath();
+elseif loudspeakerAcPathFlag
+    obj.setLoudspeakerAcousticPath(loudsAcPath);
 else
-    obj.noiseSourceAcPathStruct.acousticPaths = acPathNoiseSources;
+    if theoricWFSAcPath
+        obj.theoricWFSacousticPath();
+    else
+        obj.WFSarrayAcPathStruct = acPathWFSarrayStruct;
+    end
+    
+    if theoricNoiseSourceAcPath
+        obj.theoricNoiseSourceAcousticPath();
+    else
+        obj.noiseSourceAcPathStruct = acPathNoiseSourcesStruct;
+    end
 end
 
 obj.updateReprodPanelBasedOnVariables();
 obj.updateRecordPanelBasedOnVariables();
-
-%% Experimental acoustic path calculation
-
-% Calculate experimental acoustic path
-obj.reproduceAndRecordForAcousticPaths();
-obj.calculateExperimentalAcousticPaths();
-
-% Retrieve and save information
-sBase = obj.exportInformation();
-FileName = ['Session_', ID, 'calibration', '.mat'];
-save([dataPathName, FileName], 'sBase');
-
-%% Set experimental acoustic path
-ID = '2017-09-19_18-18-47';
-fileName = ['Session_', ID, 'calibration', '.mat'];
-s = load([dataPathName, fileName], '-mat' , 'sBase');
-sBase = s.sBase;
-expAcPath = sBase.Experiment.acPathStruct;
-obj.setLoudspeakerAcousticPath(expAcPath);
-obj.noiseSourceAcPathStruct.acousticPaths(:, 2) = obj.noiseSourceAcPathStruct.acousticPaths(:, 1); % The acoustic path of the virtual noise source is equal to the real one, for optimization purposes
 
 %% WFS cancellation
 
@@ -94,24 +112,24 @@ obj.noiseSourceAcPathStruct.acousticPaths(:, 2) = obj.noiseSourceAcPathStruct.ac
 sourceFilter = {'Loudspeakers', 'Loudspeakers'}; % It makes no sense to optimize a less real scenario, so use loudspeakers filter
 maxAbsValCons = [true, true]; % We always want to be realistic about real constraints
 acousticPathType = {'Current', 'Current'}; % It makes no sense to optimize with a theoric acoustic path because it depends on the parameters of the noise source, and those parameters are actually unknown. Besides, the acousic path of the loudspeakers is only known in the places where microphones have been placed.
-grouping = {'Independent', 'Independent'}; 
+grouping = {'Independent', 'Independent'};
 zerosFixed = [true, false];
 N = numel(sourceFilter);
 
 loudsCoeff = zeros(obj.numLoudspeakers, obj.numNoiseSources, N);
 simulField = zeros(obj.numReceivers, obj.numNoiseSources, N);
 for k = 1:N
-% WFS cancellation
-obj.WFScalculation('SourceFilter', sourceFilter{k}, 'AcousticPath', acousticPathType{k}, 'Grouping', grouping{k}, 'maxAbsoluteValueConstraint', maxAbsValCons(k), 'zerosFixed', zerosFixed(k));
-
-% WFS array coefficients
-loudsCoeff(:, :, k) = obj.loudspeakerCoefficient;
-
-% Simulate
-obj.simulate();
-
-% Cancellation level (noise source 1 is real, noise source 2 is virtual)
-simulField(:, :, k) = obj.simulField;
+    % WFS cancellation
+    obj.WFScalculation('SourceFilter', sourceFilter{k}, 'AcousticPath', acousticPathType{k}, 'Grouping', grouping{k}, 'maxAbsoluteValueConstraint', maxAbsValCons(k), 'zerosFixed', zerosFixed(k));
+    
+    % WFS array coefficients
+    loudsCoeff(:, :, k) = obj.loudspeakerCoefficient;
+    
+    % Simulate
+    obj.simulate();
+    
+    % Cancellation level (noise source 1 is real, noise source 2 is virtual)
+    simulField(:, :, k) = obj.simulField;
 end
 
 noiseSourceSimulField = permute(simulField(:, 1, :), [1 3 2]); % (numReceivers x N)
