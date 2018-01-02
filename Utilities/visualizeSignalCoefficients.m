@@ -1,10 +1,6 @@
-function f = visualizeSignalCoefficients(coefRef, coef, plotType)
+function f = visualizeSignalCoefficients(coefRef, coef)
 % coefRef. P-element vector. Coefficients when there is only the effect of the noise source.
 % coef. (P x N) matrix. Coefficients after cancellation
-
-if nargin == 1
-    plotType = 'linear';
-end
 
 [P, N] = size(coef);
 
@@ -13,9 +9,9 @@ pow = (abs(coef).^2)/2;
 cancel = pow./repmat(powRef, 1, N);
 
 coefMean = mean(pow, 1);
-coefMax = max(pow, 1);
-coefMin = min(pow, 1);
-coefStd = std(pow, 1);
+coefMax = max(pow, [], 1);
+coefMin = min(pow, [], 1);
+coefStd = std(pow, [], 1);
 
 cancelMean = mean(cancel, 1);
 cancelMax = max(cancel, 1);
@@ -30,73 +26,43 @@ cancelLog = 10*log10(cancel);
 strParamCoef = cell(1, N);
 strParamCancel = cell(1, N);
 for n = 1:N
-    strParamCoef{n} = ['$\bar{c} = ', num2str(coefMean(n), 2), '$, $\max{c} = ', num2str(coefMax(n), 2), '$, $\min{c} = ', num2str(coefMin(n), 2), '$, $\sigma_c = ', num2str(coefStd(n), 2), '$'];
-    strParamCancel{n} = ['$\bar{c} = ', num2str(cancelMean(n), 2), '$, $\max{c} = ', num2str(cancelMax(n), 2), '$, $\min{c} = ', num2str(cancelMin(n), 2), '$, $\sigma_c = ', num2str(cancelStd(n), 2), '$'];
+    strParamCoef{n} = ['$\bar{p} = ', num2str(coefMean(n), 2), '$, $\max{p} = ', num2str(coefMax(n), 2), '$, $\min{p} = ', num2str(coefMin(n), 2), '$, $\sigma_p = ', num2str(coefStd(n), 2), '$'];
+    strParamCancel{n} = ['$\bar{C} = ', num2str(cancelMean(n), 2), '$, $\max{C} = ', num2str(cancelMax(n), 2), '$, $\min{C} = ', num2str(cancelMin(n), 2), '$, $\sigma_C = ', num2str(cancelStd(n), 2), '$, $C_{\mathit{global}} = ', num2str(cancelGlobal(n), 2), '$'];
 end
+
 
 f = figure;
 axCoefHist = axes(f);
 axCoefHist.NextPlot = 'Add';
+axCoefHist.OuterPosition = [0 0 0.5 1];
+axCancelHist = axes(f);
+axCancelHist.NextPlot = 'Add';
+axCancelHist.OuterPosition = [0.5 0 0.5 1];
 
-coef = mat2cell(coef, P, ones(1, N));
+% B) Logaritmic Histogram
+edgesCoef = -110:10:0; % Edges for the coefficients histogram
+edgesCancel = -110:10:20; % Edges for the cancellation histogram
 
-axHist = axes(f);
-axHist.NextPlot = 'Add';
+powLog(powLog < edgesCoef(1)) = edgesCoef(1);
+powLog(powLog > edgesCoef(end)) = edgesCoef(end);
+cancelLog(cancelLog < edgesCancel(1)) = edgesCancel(1);
+cancelLog(cancelLog > edgesCancel(end)) = edgesCancel(end);
 
-switch plotType
-    case 'linear'
-        
-        % A) Histogram
-        edges = 0:0.1:1; % Edges for the histogram: divide the 0 to 1 interval into equal intervals.
-        
-        strParam = cell(N, 1);
-        
-        for n = 1:N
-            powRef = (abs(coefRef{n}).^2)/2;
-            
-            histogram(axHist, powRef, edges, 'DisplayStyle', 'stairs');
-            
-            meanVal = mean(powRef);
-            maxVal = max(powRef);
-            minVal = min(powRef);
-            stdVal = std(powRef);
-            strParam{n} = ['$\bar{c} = ', num2str(meanVal), '$, $\max{c} = ', num2str(maxVal), '$, $\min{c} = ', num2str(minVal), '$, $\sigma_c = ', num2str(stdVal), '$'];
-        end
-        
-        legend(strParam, 'Interpreter', 'Latex');
-        
-    case 'logarithmic'
-        % B) Logaritmic Histogram
-        edges = -110:10:0; % Edges for the histogram
-        
-        strParam = cell(N, 1);
-        
-        powRef = (abs(coefRef).^2)/2;
-        
-        for n = 1:N           
-            pow = (abs(coef{n}).^2)/2;
-            cancel = pow./powRef;
-            
-            powLog = 10*log10(pow);
-            cancelLog = 10*log10(cancel);
-            
-            powLog(powLog < edges(1)) = edges(1);
-            
-            histogram(axHist, powLog, edges, 'Normalization', 'Probability', 'DisplayStyle', 'stairs');
-            
-            meanVal = mean(powRef);
-            maxVal = max(powRef);
-            minVal = min(powRef);
-            stdVal = std(powRef);
-            cancelGlobal = sum(pow)/sum(powRef);
-            strParam{n} = ['$\bar{c} = ', num2str(meanVal), '$, $\max{c} = ', num2str(maxVal), '$, $\min{c} = ', num2str(minVal), '$, $\sigma_c = ', num2str(stdVal), '$'];
-        end
-                
-        axHist.XTick = edges;
-        axHist.XTickLabels{1} = '-Inf';
-        axHist.XLim = [edges(1), edges(end)];
-        axHist.XLabel.String = 'Normalized Power (dB)';
-        legend(strParam, 'Interpreter', 'Latex');
+for n = 1:N
+    histogram(axCoefHist, powLog(:, n), edgesCoef, 'Normalization', 'Probability', 'DisplayStyle', 'stairs');
+    histogram(axCancelHist, cancelLog(:, n), edgesCancel, 'Normalization', 'Probability', 'DisplayStyle', 'stairs');
 end
+
+axCoefHist.XTick = edgesCoef;
+axCoefHist.XTickLabels{1} = '-Inf';
+axCoefHist.XLim = [edgesCoef(1), edgesCoef(end)];
+axCoefHist.XLabel.String = 'Normalized Power (dB)';
+legend(axCoefHist, strParamCoef, 'Interpreter', 'Latex');
+
+axCancelHist.XTick = edgesCancel;
+axCancelHist.XTickLabels{1} = '-Inf';
+axCancelHist.XLim = [edgesCancel(1), edgesCancel(end)];
+axCancelHist.XLabel.String = 'Cancellation (dB)';
+legend(axCancelHist, strParamCancel, 'Interpreter', 'Latex');
 
 end
