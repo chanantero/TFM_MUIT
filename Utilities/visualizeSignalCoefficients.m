@@ -11,12 +11,12 @@ cancel = pow./repmat(powRef, 1, N);
 coefMean = mean(pow, 1);
 coefMax = max(pow, [], 1);
 coefMin = min(pow, [], 1);
-coefStd = std(pow, [], 1);
+coefStd = std(pow, 0, 1);
 
 cancelMean = mean(cancel, 1);
-cancelMax = max(cancel, 1);
-cancelMin = min(cancel, 1);
-cancelStd = std(cancel, 1);
+cancelMax = max(cancel, [], 1);
+cancelMin = min(cancel, [], 1);
+cancelStd = std(cancel, 0, 1);
 
 cancelGlobal = sum(pow, 1)./sum(powRef);
 

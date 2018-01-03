@@ -21,25 +21,29 @@ phase = 0;
 frequency = 440;
 
 % Receivers
-receiverPositions = [1.5 3 0; 1.5 1.5 0];
+% receiverPositions = [1.5 3 0; 1.5 1.5 0];
+load([dataPathName, 'acousticPathsGTAC_440.mat'])
+receiverPositions = microphonePositions;
 numReceivers = size(receiverPositions, 1);
 
 % Acoustic paths.
+experimentalAcPathInSitu = false;
+
 loudspeakerAcPathFlag = false;
 % loudsAcPath. Structure that will be passed to the function setLoudspeakerAcousticPath. Only useful when loudspeakerAcPathFlag == true.
-% % GTAC's official acoustic paths
-% % acousticPath = importImpulseResponseGTAC(frequency);
-% load([dataPathName, 'acousticPathsGTAC_440.mat'])
-% loudsAcPath = struct;
-% loudsAcPath.acousticPaths = acousticPath;
 
-theoricWFSAcPath = true;
+theoricWFSAcPath = false;
 % acPathWFSarrayStruct. Structure that will represent the WFS acoustic paths. Only useful when theoricWFSAcPath == true.
+% GTAC's official acoustic paths
+% acousticPath = importImpulseResponseGTAC(frequency);
+% load([dataPathName, 'acousticPathsGTAC_440.mat'])
+acPathWFSarrayStruct.acousticPaths = acousticPath;
+acPathWFSarrayStruct.frequencies = 440;
 
 theoricNoiseSourceAcPath = true;
 % acPathNoiseSourcesStruct. Structure that will represent the noise source acoustic paths. Only useful when theoricNoiseSourceAcPath == true.
 
-experimentalAcPathInSitu = false;
+
 
 %% Set Up System
 if exist('obj', 'var') == 0 || ~isvalid(obj) || ~isvalid(obj.ax)
@@ -109,21 +113,25 @@ obj.updateRecordPanelBasedOnVariables();
 %% WFS cancellation
 
 % Optimization options
-sourceFilter = {'Loudspeakers', 'Loudspeakers'}; % It makes no sense to optimize a less real scenario, so use loudspeakers filter
-maxAbsValCons = [true, true]; % We always want to be realistic about real constraints
-acousticPathType = {'Current', 'Current'}; % It makes no sense to optimize with a theoric acoustic path because it depends on the parameters of the noise source, and those parameters are actually unknown. Besides, the acousic path of the loudspeakers is only known in the places where microphones have been placed.
-grouping = {'Independent', 'Independent'};
-zerosFixed = [true, false];
+sourceFilter = {'Loudspeakers', 'Loudspeakers', 'Loudspeakers'}; % It makes no sense to optimize a less real scenario, so use loudspeakers filter
+maxAbsValCons = [true, true, false]; % We always want to be realistic about real constraints
+acousticPathType = {'Current', 'Current', 'Current'}; % It makes no sense to optimize with a theoric acoustic path because it depends on the parameters of the noise source, and those parameters are actually unknown. Besides, the acousic path of the loudspeakers is only known in the places where microphones have been placed.
+grouping = {'Independent', 'Independent', 'Independent'};
+zerosFixed = [true, false, false];
 N = numel(sourceFilter);
 
-loudsCoeff = zeros(obj.numLoudspeakers, obj.numNoiseSources, N);
+WFScoeff = zeros(obj.numSourcesWFSarray, obj.numNoiseSources, N);
+NScoeff = zeros(obj.numNoiseSources, obj.numNoiseSources, N);
 simulField = zeros(obj.numReceivers, obj.numNoiseSources, N);
 for k = 1:N
     % WFS cancellation
     obj.WFScalculation('SourceFilter', sourceFilter{k}, 'AcousticPath', acousticPathType{k}, 'Grouping', grouping{k}, 'maxAbsoluteValueConstraint', maxAbsValCons(k), 'zerosFixed', zerosFixed(k));
     
     % WFS array coefficients
-    loudsCoeff(:, :, k) = obj.loudspeakerCoefficient;
+    WFScoeff(:, :, k) = obj.WFSarrayCoefficient;
+    
+    % NS coefficients
+    NScoeff(:, :, k) = obj.noiseSourceCoefficient_complete;
     
     % Simulate
     obj.simulate();
@@ -132,10 +140,16 @@ for k = 1:N
     simulField(:, :, k) = obj.simulField;
 end
 
-noiseSourceSimulField = permute(simulField(:, 1, :), [1 3 2]); % (numReceivers x N)
+WFScoeff = permute(WFScoeff(:, 2, :), [1, 3, 2]); % (numSourcesWFSarray x N). The WFS coefficients of the first frequency are all 0. It is reserved for the real noise source.
+NScoeff = NScoeff(1); % It doesn't change
+noiseSourceSimulField = simulField(:, 1, 1); % (numReceivers x 1). The real noise source coefficient doesn't change between optimizations, so we just select the first one
 totalSimulField = permute(sum(simulField, 2), [1 3 2]); % (numReceivers x N)
-simulRelField = totalSimulField./noiseSourceSimulField;
-simulCancel = 20*log10(abs(simulRelField));
+
+fMap = figure;
+ax = copyobj(obj.ax, fMap);
+visualizeSignalCoefficients2Dmap(ax, noiseSourceSimulField, totalSimulField(:,1), WFScoeff(:, 2, 1), NScoeff);
+
+f = visualizeSignalCoefficients(noiseSourceSimulField(:, 1), [noiseSourceSimulField(:, 1), totalSimulField]);
 
 %% Experimental checking of correspondence
 
