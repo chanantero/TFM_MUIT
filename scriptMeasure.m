@@ -43,8 +43,6 @@ acPathWFSarrayStruct.frequencies = 440;
 theoricNoiseSourceAcPath = true;
 % acPathNoiseSourcesStruct. Structure that will represent the noise source acoustic paths. Only useful when theoricNoiseSourceAcPath == true.
 
-
-
 %% Set Up System
 if exist('obj', 'var') == 0 || ~isvalid(obj) || ~isvalid(obj.ax)
     obj = WFSToolSimple;
@@ -140,16 +138,32 @@ for k = 1:N
     simulField(:, :, k) = obj.simulField;
 end
 
-WFScoeff = permute(WFScoeff(:, 2, :), [1, 3, 2]); % (numSourcesWFSarray x N). The WFS coefficients of the first frequency are all 0. It is reserved for the real noise source.
-NScoeff = NScoeff(1); % It doesn't change
+WFScoeff_ = permute(WFScoeff(:, 2, :), [1, 3, 2]); % (numSourcesWFSarray x N). The WFS coefficients of the first frequency are all 0. It is reserved for the real noise source.
+NScoeff_ = repmat(NScoeff(1), 2, 1); % It doesn't change
 noiseSourceSimulField = simulField(:, 1, 1); % (numReceivers x 1). The real noise source coefficient doesn't change between optimizations, so we just select the first one
 totalSimulField = permute(sum(simulField, 2), [1 3 2]); % (numReceivers x N)
 
 fMap = figure;
 ax = copyobj(obj.ax, fMap);
-visualizeSignalCoefficients2Dmap(ax, noiseSourceSimulField, totalSimulField(:,1), WFScoeff(:, 2, 1), NScoeff);
+colormap(ax, 'jet')
+colorbar(ax);
+visualizeSignalCoefficients2Dmap(ax, totalSimulField(:, 3), WFScoeff_(:, 3), NScoeff_);
+visualizeSignalCoefficients2Dmap(ax, noiseSourceSimulField, WFScoeff_(:, 3), NScoeff_);
 
-f = visualizeSignalCoefficients(noiseSourceSimulField(:, 1), [noiseSourceSimulField(:, 1), totalSimulField]);
+% Idea: implementa en WFSTool el poder mostrar la intensidad de las señales
+% transmitidas y recibidas con colores, igual que visualizeSignalCoefficients2Dmap
+
+% En visualizeSignalCoefficients unificar todo. Mostrar ambos tipos de
+% gráfica.
+
+% ¿Y si creo una clase para realizar las tareas que realizo en este script?
+f = visualizeSignalCoefficients(noiseSourceSimulField, totalSimulField, WFScoeff_, NScoeff_);
+
+s.WFScoef = WFScoeff_;
+s.NScoef = NScoeff_;
+s.recOnlyNoiseCoef = noiseSourceSimulField;
+s.recCoef = totalSimulField;
+objVis = simulationViewer(ax, s);
 
 %% Experimental checking of correspondence
 
