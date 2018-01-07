@@ -11,7 +11,6 @@ powNS = (abs(NScoef).^2)/2;
 cancel = pow./repmat(powOnlyNoise, 1, N);
 cancelGlobal = sum(pow, 1)./sum(powOnlyNoise);
 
-% Terminar
 powOnlyNoiseLog = 10*log10(powOnlyNoise);
 powWFSLog = 10*log10(powWFS);
 powNSLog = 10*log10(powNS);
@@ -72,12 +71,10 @@ axCancelHist.XLim = [edgesCancel(1), edgesCancel(end)];
 axCancelHist.XLabel.String = 'Cancellation (dB)';
 legend(axCancelHist, strCancel, 'Interpreter', 'Latex');
 
-% 2D map
-axMapOnlyNoise = 
-visualizeSignalCoefficients2Dmap(ax, recCoef, WFScoef, NScoef);
+
+
 
 end
-
 
 function strs = getStatsInfoStr( coefMat )
 
