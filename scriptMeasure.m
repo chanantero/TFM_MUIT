@@ -111,11 +111,11 @@ obj.updateRecordPanelBasedOnVariables();
 %% WFS cancellation
 
 % Optimization options
-sourceFilter = {'Loudspeakers', 'Loudspeakers', 'Loudspeakers'}; % It makes no sense to optimize a less real scenario, so use loudspeakers filter
-maxAbsValCons = [true, true, false]; % We always want to be realistic about real constraints
-acousticPathType = {'Current', 'Current', 'Current'}; % It makes no sense to optimize with a theoric acoustic path because it depends on the parameters of the noise source, and those parameters are actually unknown. Besides, the acousic path of the loudspeakers is only known in the places where microphones have been placed.
-grouping = {'Independent', 'Independent', 'Independent'};
-zerosFixed = [true, false, false];
+sourceFilter = {'Loudspeakers', 'Loudspeakers'}; % It makes no sense to optimize a less real scenario, so use loudspeakers filter
+maxAbsValCons = [false, false]; % We always want to be realistic about real constraints
+acousticPathType = {'Current', 'Current'}; % It makes no sense to optimize with a theoric acoustic path because it depends on the parameters of the noise source, and those parameters are actually unknown. Besides, the acousic path of the loudspeakers is only known in the places where microphones have been placed.
+grouping = {'Independent', 'AllTogether'};
+zerosFixed = [false, false];
 N = numel(sourceFilter);
 
 WFScoeff = zeros(obj.numSourcesWFSarray, obj.numNoiseSources, N);
@@ -143,26 +143,18 @@ NScoeff_ = repmat(NScoeff(1), 2, 1); % It doesn't change
 noiseSourceSimulField = simulField(:, 1, 1); % (numReceivers x 1). The real noise source coefficient doesn't change between optimizations, so we just select the first one
 totalSimulField = permute(sum(simulField, 2), [1 3 2]); % (numReceivers x N)
 
+% Visualization
+    % Extract 2D map
 fMap = figure;
 ax = copyobj(obj.ax, fMap);
 colormap(ax, 'jet')
-colorbar(ax);
-visualizeSignalCoefficients2Dmap(ax, totalSimulField(:, 3), WFScoeff_(:, 3), NScoeff_);
-visualizeSignalCoefficients2Dmap(ax, noiseSourceSimulField, WFScoeff_(:, 3), NScoeff_);
-
-% Idea: implementa en WFSTool el poder mostrar la intensidad de las señales
-% transmitidas y recibidas con colores, igual que visualizeSignalCoefficients2Dmap
-
-% En visualizeSignalCoefficients unificar todo. Mostrar ambos tipos de
-% gráfica.
-
-% ¿Y si creo una clase para realizar las tareas que realizo en este script?
-f = visualizeSignalCoefficients(noiseSourceSimulField, totalSimulField, WFScoeff_, NScoeff_);
-
+colorbar(ax)
+    % Create structure of coefficients
 s.WFScoef = WFScoeff_;
 s.NScoef = NScoeff_;
 s.recOnlyNoiseCoef = noiseSourceSimulField;
 s.recCoef = totalSimulField;
+    % Use viewer object
 objVis = simulationViewer(ax, s);
 
 %% Experimental checking of correspondence

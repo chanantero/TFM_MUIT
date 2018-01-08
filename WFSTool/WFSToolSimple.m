@@ -775,7 +775,7 @@ classdef WFSToolSimple < handle
                             acPath(:, fixedInd, :) = obj.noiseSourceAcousticPath;
                     end
                     
-                case 'Theoric'
+                case 'Theoretical'
                     if defaultGrid
                         % Grid of points:
                         % define a set of points where the theoric field should be

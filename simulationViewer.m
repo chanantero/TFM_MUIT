@@ -12,17 +12,19 @@ classdef simulationViewer < handle
         
         % 2D map
         ax2Dmap
+        representationType = 'Field' % Show real field, cancellation or only WFS field
         
         % Histogram
         visibleConfHistInd % Indices of cancellation configurations that are visible in the histogram graphs
     end
-        
+    
     % Public properties
     properties(Dependent)
         numExpScenarios
         numCancellations
+        numWFS
         scenInd % Experimental scenario index
-        confInd % Cancellation (WFS configuration) index      
+        confInd % Cancellation (WFS configuration) index
     end
     
     % Private properties
@@ -32,7 +34,7 @@ classdef simulationViewer < handle
         scatWFS
         scatRec
         expScenInd % Experimental scenario index
-        cancelInd % Cancellation (WFS configuration) index      
+        cancelInd % Cancellation (WFS configuration) index
         
         % Histogram
         f
@@ -50,16 +52,6 @@ classdef simulationViewer < handle
         
         function numExpScen = get.numCancellations(obj)
             numExpScen = size(obj.expInfStruct.WFScoef, 2);
-        end
-        
-        function set.expScenInd(obj, value)
-            obj.expScenInd = value;
-            obj.updateVisualization2D();
-        end
-        
-        function set.cancelInd(obj, value)
-            obj.cancelInd = value;
-            obj.updateVisualization2D();
         end
         
         function set.ax2Dmap(obj, value)
@@ -90,11 +82,13 @@ classdef simulationViewer < handle
         end
         
         function set.confInd(obj, value)
+            
             if value > 0 && value <= obj.numCancellations
                 obj.setIndices(obj.expScenInd, value);
             else
                 warning('simulationViewer:wrongIndex', 'The confInd propertie must be an integer bigger than 0 and less or equal than numCancellations');
             end
+            
         end
         
         function set.visibleConfHistInd(obj, value)
@@ -102,10 +96,29 @@ classdef simulationViewer < handle
             obj.updateVisibilityHistogram();
         end
         
+        function numWFS = get.numWFS(obj)
+            CData = obj.scatWFS.CData;
+            
+            if isvector(CData)
+                numWFS = numel(obj.scatWFS.CData);
+            else
+                numWFS = size(CData, 1);
+            end
+        end
+        
+        function set.representationType(obj, value)
+            if ismember(value, {'NS', 'WFS', 'Cancellation', 'Field'})
+                obj.representationType = value;
+                obj.updateVisualization2D();
+            end
+        end
+        
     end
     
+    % Public methods
     methods
         function obj = simulationViewer(ax, expInfStruct)
+       
             obj.f = figure;
             obj.axHistCoef = axes(obj.f);
             obj.axHistCancel = axes(obj.f);
@@ -115,12 +128,24 @@ classdef simulationViewer < handle
             obj.axHistCancel.OuterPosition = [0.5 0 0.5 1];
             
             obj.ax2Dmap = ax;
-            obj.expInfStruct = expInfStruct;  
+            obj.ax2Dmap.CLim = [-100, 20];
+            obj.expInfStruct = expInfStruct;
+            
         end
         
+        function adjustColorbar(obj)
+            minCLim = min(obj.scatRec.CData);
+            maxCLim = max(obj.scatRec.CData);
+            obj.ax2Dmap.CLim = [minCLim, maxCLim];
+        end
+    end
+    
+    % Private methods
+    methods(Access = private)
         function setIndices(obj, expScenInd, cancelInd)
             obj.expScenInd = expScenInd;
             obj.cancelInd = cancelInd;
+            obj.updateVisualization2D();
         end
         
         function findScatObjects(obj)
@@ -152,14 +177,35 @@ classdef simulationViewer < handle
             % indices = scaled2indexedColors(size(WFSColorMap, 1), [-100 20], powWFSDB);
             % scatWFS.CData = WFSColorMap(indices, :);
             
-            % Set color and
-            obj.ax2Dmap.CLim = [-100, 20];
-            obj.scatRec.CData = powRecDB;
+            % Set color
             obj.scatWFS.CData = powWFSDB;
             obj.scatNS.CData = powNSDB;
             
+            switch obj.representationType
+                case 'WFS'
+                    recOnlyNoiseCoef = obj.expInfStruct(obj.expScenInd).recOnlyNoiseCoef;
+                    recOnlyWFSCoef = recCoef - recOnlyNoiseCoef;
+                    powOnlyWFS = (abs(recOnlyWFSCoef).^2)/2;
+                    powOnlyWFSDB = 10*log10(powOnlyWFS);
+                    obj.scatRec.CData = powOnlyWFSDB;
+                case 'NS'
+                    recOnlyNoiseCoef = obj.expInfStruct(obj.expScenInd).recOnlyNoiseCoef;
+                    powOnlyNoise = (abs(recOnlyNoiseCoef).^2)/2;
+                    powOnlyNoiseDB = 10*log10(powOnlyNoise);
+                    obj.scatRec.CData = powOnlyNoiseDB;
+                case 'Cancellation'
+                    % Get Cancellation
+                    recOnlyNoiseCoef = obj.expInfStruct(obj.expScenInd).recOnlyNoiseCoef;
+                    powOnlyNoise = (abs(recOnlyNoiseCoef).^2)/2;
+                    powOnlyNoiseDB = 10*log10(powOnlyNoise);
+                    cancel = powRecDB - powOnlyNoiseDB;
+                    obj.scatRec.CData = cancel;
+                case 'Field'
+                    obj.scatRec.CData = powRecDB;
+            end
+
         end
-        
+      
         function generateVisualizationHistogram(obj)
             simulationViewer.visualizeSignalCoefficients(obj.expInfStruct.NScoef, obj.expInfStruct.WFScoef, obj.expInfStruct.recOnlyNoiseCoef, obj.expInfStruct.recCoef, obj.axHistCoef, obj.axHistCancel);
             
@@ -177,7 +223,7 @@ classdef simulationViewer < handle
             visibleCoefHist = false(obj.numCancellations*2+1, 1);
             visibleCoefHist(end) = true;
             visibleCoefHist(obj.mapVisibleConfToCoefHist.destinationInd) = obj.visibleConfHistInd(obj.mapVisibleConfToCoefHist.originInd);
-                      
+            
             for k = 1:numel(visibleCoefHist)
                 if visibleCoefHist(k)
                     obj.axHistCoef.Children(k).Visible = 'on';
@@ -188,7 +234,7 @@ classdef simulationViewer < handle
             
             visibleCancelHist = false(obj.numCancellations, 1);
             visibleCancelHist(obj.mapVisibleConfToCancelHist.destinationInd) = obj.visibleConfHistInd(obj.mapVisibleConfToCancelHist.originInd);
-                           
+            
             for k = 1:numel(visibleCancelHist)
                 if visibleCancelHist(k)
                     obj.axHistCancel.Children(k).Visible = 'on';
@@ -197,8 +243,10 @@ classdef simulationViewer < handle
                 end
             end
         end
+        
     end
-   
+    
+    % Static methods
     methods(Static)
         function visualizeSignalCoefficients(NScoef, WFScoef, recOnlyNoiseCoef, recCoef, axHistCoef, axHistCancel)
             % recOnlyNoiseCoef. P-element vector. Coefficients when there is only the effect of the noise source.
@@ -228,8 +276,8 @@ classdef simulationViewer < handle
             strWFS = simulationViewer.getStatsInfoStr( powWFS );
             strRec = simulationViewer.getStatsInfoStr( powRec );
             strCancel = simulationViewer.getStatsInfoStr( cancel );
-                % Add the global cancellation information to the end of
-                % each cancellation information string
+            % Add the global cancellation information to the end of
+            % each cancellation information string
             for n = 1:N
                 strCancel{n} = [strCancel{n}, ', $C_{\mathit{global}} = ', num2str(cancelGlobal(n), 2), '$'];
             end
@@ -241,7 +289,7 @@ classdef simulationViewer < handle
             % Delete legends
             legend(axHistCoef, 'off');
             legend(axHistCancel, 'off');
-              
+            
             % Logaritmic Histogram
             edgesCoef = -110:10:40; % Edges for the coefficients histogram
             edgesCancel = -110:10:20; % Edges for the cancellation histogram
@@ -278,7 +326,7 @@ classdef simulationViewer < handle
             axHistCancel.XLim = [edgesCancel(1), edgesCancel(end)];
             axHistCancel.XLabel.String = 'Cancellation (dB)';
             legend(axHistCancel, strCancel, 'Interpreter', 'Latex');
-
+            
         end
         
         function strs = getStatsInfoStr( coefMat )
