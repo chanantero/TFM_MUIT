@@ -9,6 +9,7 @@ classdef simulationViewer < handle
         % - recOnlyNoiseCoef.
         % - WFScoef.
         % - recCoef.
+        % - recOnlyWFSCoef.
         
         % 2D map
         ax2Dmap
@@ -156,15 +157,12 @@ classdef simulationViewer < handle
         
         function updateVisualization2D(obj)
             
-            recCoef = obj.expInfStruct(obj.expScenInd).recCoef(:, obj.cancelInd);
             WFScoef = obj.expInfStruct(obj.expScenInd).WFScoef(:, obj.cancelInd);
             NScoef = obj.expInfStruct(obj.expScenInd).NScoef;
             
-            powRec = (abs(recCoef).^2)/2;
             powWFS = (abs(WFScoef).^2)/2;
             powNS = (abs(NScoef).^2)/2;
             
-            powRecDB = 10*log10(powRec);
             powWFSDB = 10*log10(powWFS);
             powNSDB = 10*log10(powNS);
             
@@ -183,8 +181,7 @@ classdef simulationViewer < handle
             
             switch obj.representationType
                 case 'WFS'
-                    recOnlyNoiseCoef = obj.expInfStruct(obj.expScenInd).recOnlyNoiseCoef;
-                    recOnlyWFSCoef = recCoef - recOnlyNoiseCoef;
+                    recOnlyWFSCoef = obj.expInfStruct(obj.expScenInd).recOnlyWFSCoef(:, obj.cancelInd);
                     powOnlyWFS = (abs(recOnlyWFSCoef).^2)/2;
                     powOnlyWFSDB = 10*log10(powOnlyWFS);
                     obj.scatRec.CData = powOnlyWFSDB;
@@ -195,12 +192,20 @@ classdef simulationViewer < handle
                     obj.scatRec.CData = powOnlyNoiseDB;
                 case 'Cancellation'
                     % Get Cancellation
+                    recCoef = obj.expInfStruct(obj.expScenInd).recCoef(:, obj.cancelInd);
+                    powRec = (abs(recCoef).^2)/2;
+                    powRecDB = 10*log10(powRec);
+                    
                     recOnlyNoiseCoef = obj.expInfStruct(obj.expScenInd).recOnlyNoiseCoef;
                     powOnlyNoise = (abs(recOnlyNoiseCoef).^2)/2;
                     powOnlyNoiseDB = 10*log10(powOnlyNoise);
+                    
                     cancel = powRecDB - powOnlyNoiseDB;
                     obj.scatRec.CData = cancel;
                 case 'Field'
+                    recCoef = obj.expInfStruct(obj.expScenInd).recCoef(:, obj.cancelInd);
+                    powRec = (abs(recCoef).^2)/2;
+                    powRecDB = 10*log10(powRec);
                     obj.scatRec.CData = powRecDB;
             end
 

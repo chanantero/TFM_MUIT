@@ -1,4 +1,8 @@
 function printfig(fig, path, name, formats)
+    if ~iscellstr(formats)
+        formats = {formats};
+    end
+
     numFormats = numel(formats);
     for f = 1:numFormats
         format = formats{f};

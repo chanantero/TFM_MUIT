@@ -1481,7 +1481,7 @@ classdef WFSToolSimple < handle
         
         function simulateOnAxis(obj)
             % Configure simulator object
-            obj.WFScalculation('Grouping', 'AllTogether', 'SourceFilter', 'NoFilter', 'AcousticPath', 'Theoric');
+            obj.WFScalculation('Grouping', 'AllTogether', 'SourceFilter', 'NoFilter', 'AcousticPath', 'Theoretical');
             
             % Simulate
             obj.simulTheo.generateMeasurePoints();

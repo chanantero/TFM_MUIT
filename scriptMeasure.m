@@ -156,6 +156,8 @@ s.recOnlyNoiseCoef = noiseSourceSimulField;
 s.recCoef = totalSimulField;
     % Use viewer object
 objVis = simulationViewer(ax, s);
+    % Export 2D map
+printfig(fMap, 'C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Documentos\Img\', 'prueba2DMap', 'pdf');
 
 %% Experimental checking of correspondence
 
