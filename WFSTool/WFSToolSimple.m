@@ -879,7 +879,6 @@ classdef WFSToolSimple < handle
             
             [ pulseCoefMat, pulseLim ] = coefficients2pulseSignalParameters( obj.loudspeakerCoefficient, frequencies, SampleRate, option, varargin{:} );
             signalFunc = @(startSample, endSample) pulseCoefMat2signal(pulseCoefMat, pulseLim, frequencies, SampleRate, startSample, endSample);
-            %             signalFunc = @(startSample, endSample) coefficients2signal( sourcesCoef, frequencies, SampleRate, startSample, endSample, false, option, varargin{:});
             
             obj.reproduceSignalFunction(signalFunc, SampleRate, obj.loudspeakerChannelMapping);
             

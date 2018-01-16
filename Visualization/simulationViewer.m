@@ -5,11 +5,14 @@ classdef simulationViewer < handle
         % Results
         expInfStruct
         % Experiment information structure. Fields:
-        % - NScoef.
-        % - recOnlyNoiseCoef.
-        % - WFScoef.
-        % - recCoef.
-        % - recOnlyWFSCoef.
+        % - NScoef
+        % - WFScoef
+        % - recNScoef
+        % - recWFSCoef
+        % - recCoef
+        % - recNSCoefExp
+        % - recWFSCoefExp
+        % - recCoefExp
         
         % 2D map
         ax2Dmap
@@ -157,8 +160,10 @@ classdef simulationViewer < handle
         
         function updateVisualization2D(obj)
             
-            WFScoef = obj.expInfStruct(obj.expScenInd).WFScoef(:, obj.cancelInd);
-            NScoef = obj.expInfStruct(obj.expScenInd).NScoef;
+            sScen = obj.expInfStruct(obj.expScenInd);
+            
+            WFScoef = sScen.WFScoef(:, obj.cancelInd);
+            NScoef = sScen.NScoef;
             
             powWFS = (abs(WFScoef).^2)/2;
             powNS = (abs(NScoef).^2)/2;
@@ -166,49 +171,43 @@ classdef simulationViewer < handle
             powWFSDB = 10*log10(powWFS);
             powNSDB = 10*log10(powNS);
             
-            % % Set RGB color
+            % Set color
+            % % Example of RGB:
             % recColorMap = colormap('gray');
             % indices = scaled2indexedColors(size(recColorMap, 1), [-100 20], powRecDB);
             % scatRec.CData = recColorMap(indices, :);
-            %
-            % WFSColorMap = colormap('gray');
-            % indices = scaled2indexedColors(size(WFSColorMap, 1), [-100 20], powWFSDB);
-            % scatWFS.CData = WFSColorMap(indices, :);
-            
-            % Set color
             obj.scatWFS.CData = powWFSDB;
             obj.scatNS.CData = powNSDB;
             
-            switch obj.representationType
-                case 'WFS'
-                    recOnlyWFSCoef = obj.expInfStruct(obj.expScenInd).recOnlyWFSCoef(:, obj.cancelInd);
-                    powOnlyWFS = (abs(recOnlyWFSCoef).^2)/2;
-                    powOnlyWFSDB = 10*log10(powOnlyWFS);
-                    obj.scatRec.CData = powOnlyWFSDB;
-                case 'NS'
-                    recOnlyNoiseCoef = obj.expInfStruct(obj.expScenInd).recOnlyNoiseCoef;
-                    powOnlyNoise = (abs(recOnlyNoiseCoef).^2)/2;
-                    powOnlyNoiseDB = 10*log10(powOnlyNoise);
-                    obj.scatRec.CData = powOnlyNoiseDB;
-                case 'Cancellation'
-                    % Get Cancellation
-                    recCoef = obj.expInfStruct(obj.expScenInd).recCoef(:, obj.cancelInd);
-                    powRec = (abs(recCoef).^2)/2;
-                    powRecDB = 10*log10(powRec);
-                    
-                    recOnlyNoiseCoef = obj.expInfStruct(obj.expScenInd).recOnlyNoiseCoef;
-                    powOnlyNoise = (abs(recOnlyNoiseCoef).^2)/2;
-                    powOnlyNoiseDB = 10*log10(powOnlyNoise);
-                    
-                    cancel = powRecDB - powOnlyNoiseDB;
-                    obj.scatRec.CData = cancel;
-                case 'Field'
-                    recCoef = obj.expInfStruct(obj.expScenInd).recCoef(:, obj.cancelInd);
-                    powRec = (abs(recCoef).^2)/2;
-                    powRecDB = 10*log10(powRec);
-                    obj.scatRec.CData = powRecDB;
-            end
+            types = {'NS', 'WFS', 'Field', 'Cancellation', 'NS_exp', 'WFS_exp', 'Field_exp', 'Cancellation_exp'};
+            neededFields = {{'recNScoef'}, {'recWFSCoef'}, {'recCoef'}, {'recCoef', 'recNSCoef'},...
+                {'recNScoefExp'}, {'recWFScoefExp'}, {'recCoefExp'}, {'recCoefExp', 'recNScoefExp'}};
+            
+            if all(isfield(sScen, neededFields{ismember(types, obj.representationType)}))
+                
+                switch obj.representationType
+                    case 'WFS'
+                        repCoef = sScen.recWFSCoef(:, obj.cancelInd);
+                    case 'NS'
+                        repCoef = sScen.recNScoef;
+                    case 'Cancellation'
+                        repCoef = sScen.recCoef(:, obj.cancelInd)./sScen.recNSCoef;
+                    case 'Field'
+                        repCoef = sScen.recCoef(:, obj.cancelInd);
+                    case 'WFS_exp'
+                        repCoef = sScen.recWFScoefExp(:, obj.cancelInd);
+                    case 'NS_exp'
+                        repCoef = sScen.recNScoefExp(:, obj.cancelInd);
+                    case 'Field_exp'
+                        repCoef = sScen.recCoefExp(:, obj.cancelInd);
+                    case 'Cancellation_exp'
+                        repCoef = sScen.recCoefExp(:, obj.cancelInd)./sScen.recNScoefExp;
+                end
 
+                pow = (abs(repCoef).^2)/2;
+                powDB = 10*log10(pow);
+                obj.scatRec.CData = powDB;
+            end
         end
       
         function generateVisualizationHistogram(obj)
