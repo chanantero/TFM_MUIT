@@ -50,12 +50,17 @@ classdef SimulationController < handle
     properties(Dependent)
         % Microphones
         microPos % Microphone positions
+        microCoef % It is the simulated field, but for interface purposes, it is included as a microphone variable
+        microCoefNS % Simulated field with only the noise source (real, obviously) contributions
+        microCoefWFS % Simulated field with only the WFS array contributions
         
         % Noise Source
-        amplitude % Amplitude of the coefficient of the noise source
-        amplitudeVirt
-        phase % Phase of the coefficient of the noise source
-        phaseVirt
+        amplitude
+        amplitudeR
+        amplitudeV
+        phase
+        phaseR 
+        phaseV
         NScoef
         NSRcoef
         NSVcoef
@@ -95,31 +100,76 @@ classdef SimulationController < handle
             microPos = obj.WFSToolObj.receiverPosition;
         end
         
+        function microCoef = get.microCoef(obj)
+            microCoef = sum(obj.WFSToolObj.simulField, 2);
+        end
+        
+        function microCoef = get.microCoefNS(obj)
+            microCoef = obj.WFSToolObj.simulField(:, 1);
+        end
+        
+        function microCoef = get.microCoefWFS(obj)
+            microCoef = obj.WFSToolObj.simulField(:, 2);
+        end
+        
+        
         % Noise source variables
         function amplitude = get.amplitude(obj)
-            amplitude = obj.WFSToolObj.amplitude(1);
+            amplitude = obj.WFSToolObj.amplitude;
         end
         
         function set.amplitude(obj, value)
-            obj.WFSToolObj.amplitude = [value; value];
+            if size(value, 1) == 1
+                obj.WFSToolObj.amplitude = [value; value];
+            elseif size(value, 1) == 2
+                obj.WFSToolObj.amplitude = value;
+            end
             obj.WFSToolObj.updateReprodPanelBasedOnVariables();
         end
         
-        function amplitudeVirt = get.amplitudeVirt(obj)
-            amplitudeVirt = obj.WFSToolObj.amplitude(2);
+        function amplitudeR = get.amplitudeR(obj)
+            amplitudeR = obj.WFSToolObj.amplitude(1);
+        end
+        
+        function set.amplitudeR(obj, value)
+            obj.WFSToolObj.amplitude(1) = value;
+        end
+        
+        function amplitudeV = get.amplitudeV(obj)
+            amplitudeV = obj.WFSToolObj.amplitude(2);
+        end
+        
+        function set.amplitudeV(obj, value)
+            obj.WFSToolObj.amplitude(2) = value;
         end
         
         function phase = get.phase(obj)
-            phase = obj.WFSToolObj.phase(1);
+            phase = obj.WFSToolObj.phase;
         end
         
         function set.phase(obj, value)
-            obj.WFSToolObj.phase = [value; value];
+            if size(value, 1) == 1
+                obj.WFSToolObj.phase = [value; value];
+            elseif size(value, 1) == 2
+                obj.WFSToolObj.phase = value;
+            end            
             obj.WFSToolObj.updateReprodPanelBasedOnVariables();
         end
 
-        function phaseVirt = get.phaseVirt(obj)
-            phaseVirt = obj.WFSToolObj.phase(2);
+        function phaseR = get.phaseR(obj)
+            phaseR = obj.WFSToolObj.phase(1);
+        end
+        
+        function set.phaseR(obj, value)
+            obj.WFSToolObj.phase(1) = value;
+        end
+        
+        function phaseV = get.phaseV(obj)
+            phaseV = obj.WFSToolObj.phase(2);
+        end
+        
+        function set.phaseV(obj, value)
+            obj.WFSToolObj.phase(2) = value;
         end
         
         function NScoef = get.NScoef(obj)
@@ -203,6 +253,10 @@ classdef SimulationController < handle
         
         function WFScoef = get.WFScoef(obj)
             WFScoef = obj.WFSToolObj.WFSarrayCoefficient(:, 2);
+        end
+        
+        function set.WFScoef(obj, value)
+            obj.WFSToolObj.WFSarrayCoefficient(:, 2) = value;
         end
         
         function ax = get.ax(obj)
@@ -353,34 +407,13 @@ classdef SimulationController < handle
             end
             
             WFScoeff = permute(WFScoeff(:, 2, :), [1, 3, 2]); % (numSourcesWFSarray x N). The WFS coefficients of the first frequency are all 0. It is reserved for the real noise source.
-            noiseSourceSimulField = simulField(:, 1, 1); % (numReceivers x 1). The real noise source coefficient doesn't change between optimizations, so we just select the first one
             WFSSimulField = permute(simulField(:, 2, :), [1, 3, 2]);
             totalSimulField = permute(sum(simulField, 2), [1 3 2]); % (numReceivers x N)
             
-            S = repmat(struct(...
-                'NSRcoef', [],...
-                'NSVcoef', [],...
-                'NSRposition', [],...
-                'NSVposition', [],...
-                'WFSposition', [],...
-                'recPosition', [],...
-                'Frequency', [],...
-                'Type', [],...
-                'OptimizationOptions', [],...
-                'WFScoef', [],...
-                'recCoef', [],...
-                'recNScoef', [],...
-                'recWFScoef', []...
-                ), numAttempts, 1);
+            S = repmat(obj.generateBasicExportStructure(), numAttempts, 1);
             for k = 1:numAttempts
-                s = struct;
-                s.NSRcoef = obj.NSRcoef;
-                s.NSVcoef = obj.NSVcoef;
-                s.NSRposition = obj.NSRposition;
-                s.NSVposition = obj.NSVposition;
-                s.WFSposition = obj.WFSposition;
-                s.recPosition = obj.microPos;
-                s.Frequency = obj.frequency;
+                s = S(k);
+                
                 s.Type = 'normal';
                 s.OptimizationOptions.sourceFilter = sourceFilter{k};
                 s.OptimizationOptions.magConstraint = magConstraint(k);
@@ -389,7 +422,6 @@ classdef SimulationController < handle
                 s.OptimizationOptions.zerosFixed = zerosFixed(k);
                 s.WFScoef = WFScoeff(:, k);
                 s.recCoef = totalSimulField(:, k);
-                s.recNScoef = noiseSourceSimulField;
                 s.recWFScoef = WFSSimulField(:, k);
                 
                 S(k) = s;
@@ -407,7 +439,7 @@ classdef SimulationController < handle
             % The objective function accepts parameters as input arguments. It
             % returns the squared absolute value of the resulting field
             objectiveFunction = @(parameters) sum(abs(sum(noiseSourceParam2Field(parameters), 2)).^2);
-            x0 = [obj.NSposition, obj.amplitude, obj.phase]; % Initial value of parameters
+            x0 = [obj.NSRposition, obj.amplitudeR, obj.phaseR]; % Initial value of parameters
             [xOpt, ~] = fminunc(objectiveFunction, x0); % Optimize
             
             % Set the parameters
@@ -424,29 +456,18 @@ classdef SimulationController < handle
             % something, just scale them to fit the theoric acoustic paths.
             obj.WFSToolObj.WFScalculation(...
                 'SourceFilter', 'Loudspeakers',...
-                'AcousticPath', 'Theoric',...
+                'AcousticPath', 'Theoretical',...
                 'Grouping', 'AllTogether',...
                 'maxAbsoluteValueConstraint', false);
             
             % Simulate with the experimental acoustic path to see what is the resulting
             % field with these optimized theoric parameters of the virtual source
             obj.WFSToolObj.simulate();
-            
-            s = struct;
-            s.NSRcoef = obj.NSRcoef;
-            s.NSVcoef = obj.NSVcoef;
-            s.NSRposition = obj.NSRposition;
-            s.NSVposition = obj.NSVposition;
-            s.WFSposition = obj.WFSposition;
-            s.recPosition = obj.microPos;
-            s.Frequency = obj.frequency;
+                      
+            s = obj.generateBasicExportStructure();
             s.Type = 'OptVirtualNS';
-            s.WFScoef = obj.WFScoef;
-            s.recCoef = sum(obj.WFSToolObj.simulField, 2);
-            s.recNScoef = obj.WFSToolObj.simulField(:, 1);
-            s.recWFScoef = obj.WFSToolObj.simulField(:, 2);
-            
-            obj.cancelResults = [obj.cancelResults];
+                        
+            obj.cancelResults = [obj.cancelResults; s];
             
             function field = noiseSourceParam2Field(virtualNSparam)
                 
@@ -462,7 +483,7 @@ classdef SimulationController < handle
                 % WFS calculation
                 obj.WFSToolObj.WFScalculation(...
                     'SourceFilter', 'Loudspeakers',...
-                    'AcousticPath', 'Theoric',...
+                    'AcousticPath', 'Theoretical',...
                     'Grouping', 'AllTogether',...
                     'maxAbsoluteValueConstraint', true);
                 
@@ -521,6 +542,59 @@ classdef SimulationController < handle
             sExp = obj.getExperimentalResultVariables();
             recPulseCoefMat = signal2pulseCoefficientMatrix(sExp.pulseLimits, obj.frequency, sum(sExp.pulseCoefMat, 3), sExp.recordedSignal, sExp.sampleRate).';
             
+        end
+        
+        function s = generateBasicExportStructure(obj)
+           s = SimulationController.generateExportStructure(...
+                'NSRcoef', obj.NSRcoef,...
+                'NSVcoef', obj.NSVcoef,...
+                'WFScoef', obj.WFScoef,...
+                'microCoef', obj.microCoef,...
+                'microCoefNS', obj.microCoefNS,...
+                'microCoefWFS', obj.microCoefWFS,...
+                'NSRpos', obj.NSRposition,...
+                'NSVpos', obj.NSVposition,...
+                'WFSpos', obj.WFSposition,...
+                'microPos', obj.microPos,...
+                'Frequency', obj.frequency...
+                );
+        end
+    end
+    
+    methods(Static)
+        function s = generateExportStructure(varargin)
+            p = inputParser;
+            
+            addParameter(p, 'NSRcoef', []);
+            addParameter(p, 'NSVcoef', []);
+            addParameter(p, 'WFScoef', []);
+            addParameter(p, 'microCoef', []);
+            addParameter(p, 'microCoefNS', []);
+            addParameter(p, 'microCoefWFS', []);
+            addParameter(p, 'NSRpos', []);
+            addParameter(p, 'NSVpos', []);
+            addParameter(p, 'WFSpos', []);
+            addParameter(p, 'microPos', []);
+            addParameter(p, 'Frequency', []);
+            addParameter(p, 'OptimType', []);
+            addParameter(p, 'OptimOptions', []);
+            
+            parse(p, varargin{:});
+            
+            s = struct;
+            s.NSRcoef = p.Results.NSRcoef;
+            s.NSVcoef = p.Results.NSVcoef;
+            s.WFScoef = p.Results.WFScoef;
+            s.recCoef = p.Results.microCoef;
+            s.recNScoef = p.Results.microCoefNS;
+            s.recWFScoef = p.Results.microCoefWFS;
+            s.NSRposition = p.Results.NSRpos;
+            s.NSVposition = p.Results.NSVpos;
+            s.WFSposition = p.Results.WFSpos;
+            s.recPosition = p.Results.microPos;
+            s.Frequency = p.Results.Frequency;
+            s.Type = p.Results.OptimType;
+            s.OptimizationOptions = p.Results.OptimOptions;
         end
     end
     

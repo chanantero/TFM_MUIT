@@ -38,7 +38,14 @@ obj.cancel(sourceFilter, maxAbsValCons, acousticPathType, grouping, zerosFixed);
 % obj.experimentalChecking(); % Reproduce for experimental checking of
 % correspondence
 
-% Visualization
+%% Optimization of noise source theoric parameters
+% Find the theoric parameters for the virtual noise source that, applying
+% WFS cancellation with theoric acoustic path and unified optimization of loudspeakers, minimize the
+% magnitude of the resulting field using the experimental acoustic path
+
+obj.findBestVirtualSourceParameters();
+
+%% Visualization
     % Extract 2D map
 fMap = figure;
 ax = copyobj(obj.ax, fMap);
@@ -46,23 +53,12 @@ colormap(ax, 'jet')
 colorbar(ax)
     % Use viewer object
 s = obj.cancelResults;
-% - NScoef
-% - WFScoef
-% - recNScoef
-% - recWFSCoef
-% - recCoef
-% - recNSCoefExp
-% - recWFSCoefExp
-% - recCoefExp
-    
-objVis = simulationViewer(ax, obj.cancelResults);
+for k = 1:numel(s)
+    s(k).NScoef = [s(k).NSRcoef; s(k).NSVcoef];
+end
+   
+objVis = simulationViewer(ax, s);
     % Export 2D map
-printfig(fMap, 'C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Documentos\Img\', 'prueba2DMap', 'pdf');
+% printfig(fMap, 'C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Documentos\Img\', 'prueba2DMap', 'pdf');
 
-%% Optimization of noise source theoric parameters
-% Find the theoric parameters for the virtual noise source that, applying
-% WFS cancellation with theoric acoustic path and unified optimization of loudspeakers, minimize the
-% magnitude of the resulting field using the experimental acoustic path
-
-obj.findBestVirtualSourceParameters();
 

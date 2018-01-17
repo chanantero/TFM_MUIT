@@ -78,7 +78,7 @@ function x_output = solveLinearSystem(A, y, varargin)
                 % There is a constraint. Find the value of x_grouped with
                 % fmincon
                 fun = @(x_) (A_grouped*x_ - y_adapted)'*(A_grouped*x_ - y_adapted);
-                options = optimoptions(@fmincon, 'MaxFunctionEvaluations', 10000);
+                options = optimoptions(@fmincon, 'MaxFunctionEvaluations', 10000, 'Display', 'off');
                 nonlcon = @(x_) deal(InfToZero(abs(x_) - upperBound_grouped), zeros(numGroups, 1));
                 
                 x_grouped = fmincon(fun, x_grouped, [], [], [], [], [], [], nonlcon, options);

@@ -16,7 +16,8 @@ classdef simulationViewer < handle
         
         % 2D map
         ax2Dmap
-        representationType = 'Field' % Show real field, cancellation or only WFS field
+        representationType = categorical({'dB'}, simulationViewer.represTypeCat, simulationViewer.represTypeCat, 'Protected', true);
+        magnitude = categorical({'Field'}, simulationViewer.magnitudeCategories, simulationViewer.magnitudeCategories, 'Protected', true);
         
         % Histogram
         visibleConfHistInd % Indices of cancellation configurations that are visible in the histogram graphs
@@ -25,10 +26,14 @@ classdef simulationViewer < handle
     % Public properties
     properties(Dependent)
         numExpScenarios
-        numCancellations
         numWFS
         scenInd % Experimental scenario index
-        confInd % Cancellation (WFS configuration) index
+    end
+    
+    properties(Dependent, Access=private)
+        WFScoef
+        recNScoef
+        recCoef
     end
     
     % Private properties
@@ -38,7 +43,6 @@ classdef simulationViewer < handle
         scatWFS
         scatRec
         expScenInd % Experimental scenario index
-        cancelInd % Cancellation (WFS configuration) index
         
         % Histogram
         f
@@ -48,16 +52,18 @@ classdef simulationViewer < handle
         mapVisibleConfToCancelHist
     end
     
+    properties(Access = private, Constant)
+        % Auxiliar purposes during construction of object
+        magnitudeCategories = {'WFS', 'NS', 'Cancellation', 'Field', 'WFS_exp', 'NS_exp', 'Cancellation_exp', 'Field_exp'}
+        represTypeCat = {'dB', 'power', 'abs', 'phase', 'real', 'imag'};
+    end
+    
     % Getters and setters
     methods
         function numExpScen = get.numExpScenarios(obj)
             numExpScen = numel(obj.expInfStruct);
         end
-        
-        function numExpScen = get.numCancellations(obj)
-            numExpScen = size(obj.expInfStruct.WFScoef, 2);
-        end
-        
+               
         function set.ax2Dmap(obj, value)
             obj.ax2Dmap = value;
             obj.findScatObjects();
@@ -65,7 +71,7 @@ classdef simulationViewer < handle
         
         function set.expInfStruct(obj, value)
             obj.expInfStruct = value;
-            obj.setIndices(1, 1);
+            obj.setIndices(1);
             obj.generateVisualizationHistogram();
         end
         
@@ -75,24 +81,10 @@ classdef simulationViewer < handle
         
         function set.scenInd(obj, value)
             if value > 0 && value <= obj.numExpScenarios
-                obj.setIndices(value, obj.cancelInd);
+                obj.setIndices(value);
             else
                 warning('simulationViewer:wrongIndex', 'The scenInd propertie must be an integer bigger than 0 and less or equal than numExpScenarios');
             end
-        end
-        
-        function confInd = get.confInd(obj)
-            confInd = obj.cancelInd;
-        end
-        
-        function set.confInd(obj, value)
-            
-            if value > 0 && value <= obj.numCancellations
-                obj.setIndices(obj.expScenInd, value);
-            else
-                warning('simulationViewer:wrongIndex', 'The confInd propertie must be an integer bigger than 0 and less or equal than numCancellations');
-            end
-            
         end
         
         function set.visibleConfHistInd(obj, value)
@@ -111,18 +103,32 @@ classdef simulationViewer < handle
         end
         
         function set.representationType(obj, value)
-            if ismember(value, {'NS', 'WFS', 'Cancellation', 'Field'})
-                obj.representationType = value;
-                obj.updateVisualization2D();
-            end
+            obj.representationType(1) = value; % Indexing is necessary when working with categorical arrays
+            obj.updateVisualization2D();
         end
         
+        function set.magnitude(obj, value)
+            obj.magnitude(1) = value; % Indexing is necessary when working with categorical arrays
+            obj.updateVisualization2D();
+        end
+        
+        function WFScoef = get.WFScoef(obj)
+            WFScoef = [obj.expInfStruct(:).WFScoef];
+        end
+        
+        function recNScoef = get.recNScoef(obj)
+            recNScoef = [obj.expInfStruct(:).recNScoef];
+        end
+        
+        function recCoef = get.recCoef(obj)
+            recCoef = [obj.expInfStruct(:).recCoef];
+        end
     end
     
     % Public methods
     methods
         function obj = simulationViewer(ax, expInfStruct)
-       
+                      
             obj.f = figure;
             obj.axHistCoef = axes(obj.f);
             obj.axHistCancel = axes(obj.f);
@@ -133,7 +139,11 @@ classdef simulationViewer < handle
             
             obj.ax2Dmap = ax;
             obj.ax2Dmap.CLim = [-100, 20];
+            
             obj.expInfStruct = expInfStruct;
+            
+            obj.magnitude = categorical({'WFS'}, obj.magnitudeCategories, obj.magnitudeCategories, 'Protected', true);
+            obj.representationType = categorical({'dB'}, obj.represTypeCat, obj.represTypeCat, 'Protected', true);
             
         end
         
@@ -146,9 +156,8 @@ classdef simulationViewer < handle
     
     % Private methods
     methods(Access = private)
-        function setIndices(obj, expScenInd, cancelInd)
+        function setIndices(obj, expScenInd)
             obj.expScenInd = expScenInd;
-            obj.cancelInd = cancelInd;
             obj.updateVisualization2D();
         end
         
@@ -162,10 +171,10 @@ classdef simulationViewer < handle
             
             sScen = obj.expInfStruct(obj.expScenInd);
             
-            WFScoef = sScen.WFScoef(:, obj.cancelInd);
+            WFScoeff = sScen.WFScoef;
             NScoef = sScen.NScoef;
             
-            powWFS = (abs(WFScoef).^2)/2;
+            powWFS = (abs(WFScoeff).^2)/2;
             powNS = (abs(NScoef).^2)/2;
             
             powWFSDB = 10*log10(powWFS);
@@ -179,52 +188,65 @@ classdef simulationViewer < handle
             obj.scatWFS.CData = powWFSDB;
             obj.scatNS.CData = powNSDB;
             
-            types = {'NS', 'WFS', 'Field', 'Cancellation', 'NS_exp', 'WFS_exp', 'Field_exp', 'Cancellation_exp'};
-            neededFields = {{'recNScoef'}, {'recWFSCoef'}, {'recCoef'}, {'recCoef', 'recNSCoef'},...
+            neededFields = {{'recNScoef'}, {'recWFScoef'}, {'recCoef'}, {'recCoef', 'recNScoef'},...
                 {'recNScoefExp'}, {'recWFScoefExp'}, {'recCoefExp'}, {'recCoefExp', 'recNScoefExp'}};
             
-            if all(isfield(sScen, neededFields{ismember(types, obj.representationType)}))
+            if all(isfield(sScen, neededFields{categories(obj.magnitude) == obj.magnitude}))
                 
-                switch obj.representationType
+                switch obj.magnitude
                     case 'WFS'
-                        repCoef = sScen.recWFSCoef(:, obj.cancelInd);
+                        repCoef = sScen.recWFScoef;
                     case 'NS'
                         repCoef = sScen.recNScoef;
                     case 'Cancellation'
-                        repCoef = sScen.recCoef(:, obj.cancelInd)./sScen.recNSCoef;
+                        repCoef = sScen.recCoef./sScen.recNScoef;
                     case 'Field'
-                        repCoef = sScen.recCoef(:, obj.cancelInd);
+                        repCoef = sScen.recCoef;
                     case 'WFS_exp'
-                        repCoef = sScen.recWFScoefExp(:, obj.cancelInd);
+                        repCoef = sScen.recWFScoefExp;
                     case 'NS_exp'
-                        repCoef = sScen.recNScoefExp(:, obj.cancelInd);
+                        repCoef = sScen.recNScoefExp;
                     case 'Field_exp'
-                        repCoef = sScen.recCoefExp(:, obj.cancelInd);
+                        repCoef = sScen.recCoefExp;
                     case 'Cancellation_exp'
-                        repCoef = sScen.recCoefExp(:, obj.cancelInd)./sScen.recNScoefExp;
+                        repCoef = sScen.recCoefExp./sScen.recNScoefExp;
                 end
-
-                pow = (abs(repCoef).^2)/2;
-                powDB = 10*log10(pow);
-                obj.scatRec.CData = powDB;
+                
+                 switch obj.representationType
+                    case 'dB'
+                        pow = (abs(repCoef).^2)/2;
+                        x = 10*log10(pow);
+                    case 'power'
+                        x = (abs(repCoef).^2)/2;
+                    case 'abs'
+                        x = abs(repCoef);
+                    case 'phase'
+                        x = angle(repCoef);
+                    case 'real'
+                        x = real(repCoef);
+                    case 'imag'
+                        x = imag(repCoef);
+                 end
+                
+                 obj.scatRec.CData = x;
             end
         end
       
         function generateVisualizationHistogram(obj)
-            simulationViewer.visualizeSignalCoefficients(obj.expInfStruct.NScoef, obj.expInfStruct.WFScoef, obj.expInfStruct.recOnlyNoiseCoef, obj.expInfStruct.recCoef, obj.axHistCoef, obj.axHistCancel);
+            simulationViewer.visualizeSignalCoefficients(obj.expInfStruct(1).NScoef, obj.WFScoef, obj.recNScoef(:, 1), obj.recCoef, obj.axHistCoef, obj.axHistCancel);
             
-            obj.mapVisibleConfToCoefHist.originInd = reshape(repmat(1:obj.numCancellations, 2, 1), [obj.numCancellations*2, 1]);
-            obj.mapVisibleConfToCoefHist.destinationInd = (obj.numCancellations*2):-1:1;
+            obj.mapVisibleConfToCoefHist.originInd = reshape(repmat(1:obj.numExpScenarios, 2, 1), [obj.numExpScenarios*2, 1]);
+            obj.mapVisibleConfToCoefHist.destinationInd = (obj.numExpScenarios*2):-1:1;
             
-            obj.mapVisibleConfToCancelHist.originInd = 1:obj.numCancellations;
-            obj.mapVisibleConfToCancelHist.destinationInd = obj.numCancellations:-1:1;
+            obj.mapVisibleConfToCancelHist.originInd = 1:obj.numExpScenarios;
+            obj.mapVisibleConfToCancelHist.destinationInd = obj.numExpScenarios:-1:1;
             
-            obj.visibleConfHistInd = true(obj.numCancellations, 1);
+            obj.visibleConfHistInd = true(obj.numExpScenarios, 1);
         end
         
         function updateVisibilityHistogram(obj)
             
-            visibleCoefHist = false(obj.numCancellations*2+1, 1);
+            visibleCoefHist = false(obj.numExpScenarios*2+1, 1);
             visibleCoefHist(end) = true;
             visibleCoefHist(obj.mapVisibleConfToCoefHist.destinationInd) = obj.visibleConfHistInd(obj.mapVisibleConfToCoefHist.originInd);
             
@@ -236,7 +258,7 @@ classdef simulationViewer < handle
                 end
             end
             
-            visibleCancelHist = false(obj.numCancellations, 1);
+            visibleCancelHist = false(obj.numExpScenarios, 1);
             visibleCancelHist(obj.mapVisibleConfToCancelHist.destinationInd) = obj.visibleConfHistInd(obj.mapVisibleConfToCancelHist.originInd);
             
             for k = 1:numel(visibleCancelHist)
