@@ -37,6 +37,15 @@ marginY = (viewBoxHeight - rangeY)/2;
 
 viewBox = [min(xLoud) - marginX, min(yLoud) - marginY, viewBoxWidth, viewBoxHeight];
 
+% Flip vertically
+topViewBox = viewBox(2) + viewBox(4);
+yNoise = topViewBox - yNoise + viewBox(2);
+angleNoise = - angleNoise;
+yLoud = topViewBox - yLoud + viewBox(2);
+angleLoud = -angleLoud;
+yDiag = topViewBox - yDiag + viewBox(2);
+angleDiag = -angleDiag;
+
 % Create string that will draw them in SVG
 drawLoudspeakerStr = '<use xlink:href="symbolLibrary.svg#%s" x="%g" y="%g" transform="rotate(%g %g %g)"/>\n';
 drawMicrophoneStr = '<use xlink:href="symbolLibrary.svg#microphone" x="%g" y="%g"/>\n';
@@ -72,7 +81,7 @@ strLine = makePath('000000', 0.01, xNoise, yNoise, endPoint(1), endPoint(2), 'li
 % Draw curly brace to indicate the distance
 origWidth = 52.179153; % Original width of the curly brace
 origHeight = 163.10518; % Original height of the curly brace
-xEnd = xNoise; yEnd = yNoise; xStart = xLoud(selLoud); yStart = yLoud(selLoud);
+xStart = xNoise; yStart = yNoise; xEnd = xLoud(selLoud); yEnd = yLoud(selLoud);
 v = [xEnd - xStart; yEnd - yStart];
 L = norm(v); % Length
 scaleFactor = L/origHeight;
@@ -97,12 +106,12 @@ yEnd = yLoud(selLoud) + sind(angleLoud(selLoud))*l;
 strBroadside = makePath('000000', 0.01, xLoud(selLoud), yLoud(selLoud), xEnd, yEnd, 'broadside');
 
 % Draw arc to mark the angle alpha
-endAngle = angleLoud(selLoud);
-startAngle = rad2deg(cart2pol(dir(1), dir(2)));
+startAngle = angleLoud(selLoud);
+endAngle = rad2deg(cart2pol(dir(1), dir(2)));
 strArc = makeCircumferenceArc(xLoud(selLoud), yLoud(selLoud), 0.25, startAngle, endAngle, '000000', 0.01);
 
 % Write the symbols of the angle and the distance
-strAlpha = makeText( '$\alpha$', 0.1, '000000', xLoud(selLoud) + 0.3, yLoud(selLoud) + 0.15, 'alphaSymbol');
+strAlpha = makeText( '$\alpha$', 0.1, '000000', xLoud(selLoud) + 0.3, yLoud(selLoud) - 0.15, 'alphaSymbol');
 
 % Read file
 file = fopen('C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Documentos\Img\WFSarrayScheme_Template.svg');
