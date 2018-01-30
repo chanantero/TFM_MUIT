@@ -18,6 +18,8 @@ classdef simulationViewer < handle
         ax2Dmap
         representationType = categorical({'dB'}, simulationViewer.represTypeCat, simulationViewer.represTypeCat, 'Protected', true);
         magnitude = categorical({'Field'}, simulationViewer.magnitudeCategories, simulationViewer.magnitudeCategories, 'Protected', true);
+        axHist
+        hist
         
         % Histogram
         visibleConfHistInd % Indices of cancellation configurations that are visible in the histogram graphs
@@ -26,7 +28,6 @@ classdef simulationViewer < handle
     % Public properties
     properties(Dependent)
         numExpScenarios
-        numWFS
         scenInd % Experimental scenario index
     end
     
@@ -34,6 +35,7 @@ classdef simulationViewer < handle
         WFScoef
         recNScoef
         recCoef
+        numWFS
     end
     
     % Private properties
@@ -54,7 +56,7 @@ classdef simulationViewer < handle
     
     properties(Access = private, Constant)
         % Auxiliar purposes during construction of object
-        magnitudeCategories = {'WFS', 'NS', 'Cancellation', 'Field', 'WFS_exp', 'NS_exp', 'Cancellation_exp', 'Field_exp'}
+        magnitudeCategories = {'WFS', 'NS', 'Field', 'Cancellation', 'WFS2NSratio', 'WFS_exp', 'NS_exp', 'Cancellation_exp', 'Field_exp'}
         represTypeCat = {'dB', 'power', 'abs', 'phase', 'real', 'imag'};
     end
     
@@ -63,7 +65,7 @@ classdef simulationViewer < handle
         function numExpScen = get.numExpScenarios(obj)
             numExpScen = numel(obj.expInfStruct);
         end
-               
+        
         function set.ax2Dmap(obj, value)
             obj.ax2Dmap = value;
             obj.findScatObjects();
@@ -72,7 +74,7 @@ classdef simulationViewer < handle
         function set.expInfStruct(obj, value)
             obj.expInfStruct = value;
             obj.setIndices(1);
-            obj.generateVisualizationHistogram();
+%             obj.generateVisualizationHistogram();
         end
         
         function scenInd = get.scenInd(obj)
@@ -127,18 +129,23 @@ classdef simulationViewer < handle
     
     % Public methods
     methods
-        function obj = simulationViewer(ax, expInfStruct)
-                      
-            obj.f = figure;
-            obj.axHistCoef = axes(obj.f);
-            obj.axHistCancel = axes(obj.f);
-            obj.axHistCoef.NextPlot = 'Add';
-            obj.axHistCoef.OuterPosition = [0 0 0.5 1];
-            obj.axHistCancel.NextPlot = 'Add';
-            obj.axHistCancel.OuterPosition = [0.5 0 0.5 1];
+        function obj = simulationViewer(ax2D, expInfStruct, histogramAxes)
             
-            obj.ax2Dmap = ax;
+%             obj.f = figure;
+%             obj.axHistCoef = axes(obj.f);
+%             obj.axHistCancel = axes(obj.f);
+%             obj.axHistCoef.NextPlot = 'Add';
+%             obj.axHistCoef.OuterPosition = [0 0 0.5 1];
+%             obj.axHistCancel.NextPlot = 'Add';
+%             obj.axHistCancel.OuterPosition = [0.5 0 0.5 1];
+            
+            obj.ax2Dmap = ax2D;
             obj.ax2Dmap.CLim = [-100, 20];
+            
+            if exist('histogramAxes', 'var') == 1
+                obj.axHist = histogramAxes;
+                obj.hist = histogram(obj.axHist, [], [0 1], 'Normalization', 'Probability');
+            end
             
             obj.expInfStruct = expInfStruct;
             
@@ -158,6 +165,15 @@ classdef simulationViewer < handle
     methods(Access = private)
         function setIndices(obj, expScenInd)
             obj.expScenInd = expScenInd;
+            
+            % Update positions
+            obj.scatWFS.XData = obj.expInfStruct(obj.expScenInd).WFSposition(:, 1);
+            obj.scatWFS.YData = obj.expInfStruct(obj.expScenInd).WFSposition(:, 2);
+            obj.scatNS.XData = obj.expInfStruct(obj.expScenInd).NSposition(:, 1);
+            obj.scatNS.YData = obj.expInfStruct(obj.expScenInd).NSposition(:, 2);
+            obj.scatRec.XData = obj.expInfStruct(obj.expScenInd).recPosition(:, 1);
+            obj.scatRec.YData = obj.expInfStruct(obj.expScenInd).recPosition(:, 2);
+            
             obj.updateVisualization2D();
         end
         
@@ -188,50 +204,72 @@ classdef simulationViewer < handle
             obj.scatWFS.CData = powWFSDB;
             obj.scatNS.CData = powNSDB;
             
-            neededFields = {{'recNScoef'}, {'recWFScoef'}, {'recCoef'}, {'recCoef', 'recNScoef'},...
-                {'recNScoefExp'}, {'recWFScoefExp'}, {'recCoefExp'}, {'recCoefExp', 'recNScoefExp'}};
-            
-            if all(isfield(sScen, neededFields{categories(obj.magnitude) == obj.magnitude}))
-                
-                switch obj.magnitude
-                    case 'WFS'
-                        repCoef = sScen.recWFScoef;
-                    case 'NS'
-                        repCoef = sScen.recNScoef;
-                    case 'Cancellation'
-                        repCoef = sScen.recCoef./sScen.recNScoef;
-                    case 'Field'
-                        repCoef = sScen.recCoef;
-                    case 'WFS_exp'
-                        repCoef = sScen.recWFScoefExp;
-                    case 'NS_exp'
-                        repCoef = sScen.recNScoefExp;
-                    case 'Field_exp'
-                        repCoef = sScen.recCoefExp;
-                    case 'Cancellation_exp'
-                        repCoef = sScen.recCoefExp./sScen.recNScoefExp;
-                end
-                
-                 switch obj.representationType
-                    case 'dB'
-                        pow = (abs(repCoef).^2)/2;
-                        x = 10*log10(pow);
-                    case 'power'
-                        x = (abs(repCoef).^2)/2;
-                    case 'abs'
-                        x = abs(repCoef);
-                    case 'phase'
-                        x = angle(repCoef);
-                    case 'real'
-                        x = real(repCoef);
-                    case 'imag'
-                        x = imag(repCoef);
-                 end
-                
-                 obj.scatRec.CData = x;
+            switch obj.magnitude
+                case 'WFS'
+                    repCoef = sScen.recWFScoef;
+                case 'NS'
+                    repCoef = sScen.recNScoef;
+                case 'Field'
+                    repCoef = sScen.recCoef;
+                case 'Cancellation'
+                    repCoef = sScen.recCoef./sScen.recNScoef;
+                case 'WFS2NSratio'
+                    repCoef = sScen.recWFScoef./sScen.recNScoef;
+                case 'WFS_exp'
+                    repCoef = sScen.recWFScoefExp;
+                case 'NS_exp'
+                    repCoef = sScen.recNScoefExp;
+                case 'Field_exp'
+                    repCoef = sScen.recCoefExp;
+                case 'Cancellation_exp'
+                    repCoef = sScen.recCoefExp./sScen.recNScoefExp;
             end
+            
+            switch obj.representationType
+                case 'dB'
+                    pow = (abs(repCoef).^2)/2;
+                    x = 10*log10(pow);
+                    
+                    histTitle = 'dB';
+                    edges = -110:10:40;
+                case 'power'
+                    x = (abs(repCoef).^2)/2;
+                    
+                    histTitle = 'Power';
+                    edges = linspace(0, max(x), 10);
+                case 'abs'
+                    x = abs(repCoef);
+                    
+                    histTitle = 'Magnitude';
+                    edges = linspace(0, max(x), 10);
+                case 'phase'
+                    x = rad2deg(angle(repCoef));
+                    
+                    histTitle = 'Phase';
+                    edges = -180:10:180;
+                case 'real'
+                    x = real(repCoef);
+                    
+                    histTitle = 'Real';
+                    edges = linspace(min(x), max(x), 10);
+                case 'imag'
+                    x = imag(repCoef);
+                    
+                    histTitle = 'Imaginary';
+                    edges = linspace(min(x), max(x), 10);
+            end
+            
+            obj.scatRec.CData = x;
+            obj.adjustColorbar();
+            
+            if isgraphics(obj.hist)
+                obj.hist.Data = x;
+                obj.hist.BinEdges = edges;
+                obj.axHist.Title.String = histTitle;
+            end
+            
         end
-      
+        
         function generateVisualizationHistogram(obj)
             simulationViewer.visualizeSignalCoefficients(obj.expInfStruct(1).NScoef, obj.WFScoef, obj.recNScoef(:, 1), obj.recCoef, obj.axHistCoef, obj.axHistCancel);
             

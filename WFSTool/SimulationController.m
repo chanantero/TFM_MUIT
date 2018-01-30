@@ -6,8 +6,7 @@ classdef SimulationController < handle
     % The class can
     % perform various types of optimization in order to achieve
     % cancellation.
-    
-    
+      
     properties
         cancelResults
         % cancelResults is a structure that describes a scenario, the
