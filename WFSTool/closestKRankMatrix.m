@@ -7,6 +7,6 @@ Smod = zeros(size(S));
 for k = 1:rank
     Smod(k, k) = S(k);
 end
-Mapprox = U*Smod*V;
+Mapprox = U*Smod*V';
 
 end

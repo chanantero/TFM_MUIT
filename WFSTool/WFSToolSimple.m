@@ -704,7 +704,9 @@ classdef WFSToolSimple < handle
             obj.WFSarrayCoefficient = obj.getComplexCoeffWFS();
             
             % C) Apply optimization algorithm
-            obj.WFS_optimisation(varargin{:});
+            if nargin > 1
+                obj.WFS_optimisation(varargin{:});
+            end
             
             % D) Apply real and virtual flags
             obj.noiseSourceCoefficient_complete(:, ~obj.real) = 0;

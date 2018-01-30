@@ -352,49 +352,61 @@ classdef SimulationController < handle
             % vary the parameters of the virtual noise source in the first
             % step to get different WFS coefficients.
             
-            p = inputParser;
-            
-            addOptional(p, 'sourceFilter', [], @(x) all(ismember(x, {'NoFilter', 'Loudspeakers'})));
-            addOptional(p, 'magConstraint', [], @(x) all(islogical(x)))
-            addOptional(p, 'acousticPathType', [], @(x) all(ismember(x, {'Current', 'Theoretical'})));
-            addOptional(p, 'grouping', [], @(x) all(ismember(x, {'Independent', 'AllTogether'})));
-            addOptional(p, 'zerosFixed', [], @(x) all(islogical(x)));
-            
-            parse(p, varargin{:})
-            
-            sourceFilter = p.Results.sourceFilter;
-            magConstraint = p.Results.magConstraint; % Maximum absolute value constraint (magnitude of loudspeaker complex coefficients less or equal than 1)
-            acousticPathType = p.Results.acousticPathType;
-            grouping = p.Results.grouping;
-            zerosFixed = p.Results.zerosFixed;
-            
-            count = [
-            numel(sourceFilter);
-            numel(magConstraint);
-            numel(acousticPathType);
-            numel(grouping);
-            numel(zerosFixed)];
-        
-            numAttempts = max(count);
-            if any(count<numAttempts)
-                % Extend vectors
-                aux = {sourceFilter; magConstraint; acousticPathType; grouping; zerosFixed};
+            % A) Inputs
+            noOptimisation = false;
+            if nargin == 1
+                numAttempts = 1;
+                noOptimisation = true;
+            else
+                p = inputParser;
                 
-                for k = 1:5
-                    if count(k) < numAttempts
-                        % Extend vector
-                        aux{k} = repmat(aux{k}(1), 1, 5);
+                addOptional(p, 'sourceFilter', [], @(x) all(ismember(x, {'NoFilter', 'Loudspeakers'})));
+                addOptional(p, 'magConstraint', [], @(x) all(islogical(x)))
+                addOptional(p, 'acousticPathType', [], @(x) all(ismember(x, {'Current', 'Theoretical'})));
+                addOptional(p, 'grouping', [], @(x) all(ismember(x, {'Independent', 'AllTogether'})));
+                addOptional(p, 'zerosFixed', [], @(x) all(islogical(x)));
+                
+                parse(p, varargin{:})
+                
+                sourceFilter = p.Results.sourceFilter;
+                magConstraint = p.Results.magConstraint; % Maximum absolute value constraint (magnitude of loudspeaker complex coefficients less or equal than 1)
+                acousticPathType = p.Results.acousticPathType;
+                grouping = p.Results.grouping;
+                zerosFixed = p.Results.zerosFixed;
+                
+                count = [
+                    numel(sourceFilter);
+                    numel(magConstraint);
+                    numel(acousticPathType);
+                    numel(grouping);
+                    numel(zerosFixed)];
+                
+                numAttempts = max(count);
+                if any(count<numAttempts)
+                    % Extend vectors
+                    aux = {sourceFilter; magConstraint; acousticPathType; grouping; zerosFixed};
+                    
+                    for k = 1:5
+                        if count(k) < numAttempts
+                            % Extend vector
+                            aux{k} = repmat(aux{k}(1), 1, 5);
+                        end
                     end
+                    
+                    [sourceFilter, magConstraint, acousticPathType, grouping, zerosFixed] = aux{:};
                 end
-                
-                [sourceFilter, magConstraint, acousticPathType, grouping, zerosFixed] = aux{:};
             end
             
+            % B) Processing
             WFScoeff = zeros(obj.WFSToolObj.numSourcesWFSarray, obj.WFSToolObj.numNoiseSources, numAttempts);
             simulField = zeros(obj.WFSToolObj.numReceivers, obj.WFSToolObj.numNoiseSources, numAttempts);
             for k = 1:numAttempts
                 % WFS cancellation
-                obj.WFSToolObj.WFScalculation('SourceFilter', sourceFilter{k}, 'AcousticPath', acousticPathType{k}, 'Grouping', grouping{k}, 'maxAbsoluteValueConstraint', magConstraint(k), 'zerosFixed', zerosFixed(k));
+                if noOptimisation
+                    obj.WFSToolObj.WFScalculation();
+                else
+                    obj.WFSToolObj.WFScalculation('SourceFilter', sourceFilter{k}, 'AcousticPath', acousticPathType{k}, 'Grouping', grouping{k}, 'maxAbsoluteValueConstraint', magConstraint(k), 'zerosFixed', zerosFixed(k));
+                end
                 
                 % WFS array coefficients
                 WFScoeff(:, :, k) = obj.WFSToolObj.WFSarrayCoefficient;
@@ -410,16 +422,21 @@ classdef SimulationController < handle
             WFSSimulField = permute(simulField(:, 2, :), [1, 3, 2]);
             totalSimulField = permute(sum(simulField, 2), [1 3 2]); % (numReceivers x N)
             
+            % C) Format results
             S = repmat(obj.generateBasicExportStructure(), numAttempts, 1);
             for k = 1:numAttempts
                 s = S(k);
                 
                 s.Type = 'normal';
-                s.OptimizationOptions.sourceFilter = sourceFilter{k};
-                s.OptimizationOptions.magConstraint = magConstraint(k);
-                s.OptimizationOptions.acousticPathType = acousticPathType{k};
-                s.OptimizationOptions.grouping = grouping{k};
-                s.OptimizationOptions.zerosFixed = zerosFixed(k);
+                if noOptimisation
+                    s.OptimizationOptions = 'No optimization';
+                else
+                    s.OptimizationOptions.sourceFilter = sourceFilter{k};
+                    s.OptimizationOptions.magConstraint = magConstraint(k);
+                    s.OptimizationOptions.acousticPathType = acousticPathType{k};
+                    s.OptimizationOptions.grouping = grouping{k};
+                    s.OptimizationOptions.zerosFixed = zerosFixed(k);
+                end
                 s.WFScoef = WFScoeff(:, k);
                 s.recCoef = totalSimulField(:, k);
                 s.recWFScoef = WFSSimulField(:, k);

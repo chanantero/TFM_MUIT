@@ -277,7 +277,7 @@ classdef scenario < handle
             source.Tag = 'source';
             source.ButtonDownFcn = @(hObj, ~) obj.sourcesCallback(hObj);
             
-            receiver = scatter(ax, 0, 0, 50, obj.receiverColor, '^');
+            receiver = scatter(ax, 0, 0, 50, obj.receiverColor, '.');
             receiver.Tag = 'receiver';
             receiver.ButtonDownFcn = @(hObj, ~) obj.receiversCallback(hObj);
             

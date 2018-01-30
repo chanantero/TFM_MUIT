@@ -2,5 +2,5 @@ globalPath = 'C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-
 paths = genpath(globalPath);
 addpath(paths);
 
-inkscapeToolsPath = 'C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUTSRC\Código Matlab\InkscapeTools';
-addpath(inkscapeToolsPath);
+matlabTelecoMasterPath = genpath('C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\Matlab');
+addpath(matlabTelecoMasterPath);
