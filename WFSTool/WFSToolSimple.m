@@ -731,6 +731,7 @@ classdef WFSToolSimple < handle
             acousticPath = p.Results.AcousticPath;
             grouping = p.Results.Grouping;
             defaultGrid = ismember('TestPoints', p.UsingDefaults);
+            testPoints = p.Results.TestPoints;
             zerosFixed = p.Results.zerosFixed;
             constraintFlag = p.Results.maxAbsoluteValueConstraint;
             

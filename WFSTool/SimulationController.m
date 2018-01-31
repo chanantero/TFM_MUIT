@@ -80,7 +80,7 @@ classdef SimulationController < handle
         ax
     end
     
-    properties(Access = private)
+    properties(Access = public) % private
         WFSToolObj
     end
     
@@ -364,6 +364,7 @@ classdef SimulationController < handle
                 addOptional(p, 'acousticPathType', [], @(x) all(ismember(x, {'Current', 'Theoretical'})));
                 addOptional(p, 'grouping', [], @(x) all(ismember(x, {'Independent', 'AllTogether'})));
                 addOptional(p, 'zerosFixed', [], @(x) all(islogical(x)));
+                addParameter(p, 'testPoints', []);
                 
                 parse(p, varargin{:})
                 
@@ -372,6 +373,8 @@ classdef SimulationController < handle
                 acousticPathType = p.Results.acousticPathType;
                 grouping = p.Results.grouping;
                 zerosFixed = p.Results.zerosFixed;
+                testPoints = p.Results.testPoints;
+                defaultGrid = ismember('testPoints', p.UsingDefaults);
                 
                 count = [
                     numel(sourceFilter);
@@ -404,7 +407,11 @@ classdef SimulationController < handle
                 if noOptimisation
                     obj.WFSToolObj.WFScalculation();
                 else
-                    obj.WFSToolObj.WFScalculation('SourceFilter', sourceFilter{k}, 'AcousticPath', acousticPathType{k}, 'Grouping', grouping{k}, 'maxAbsoluteValueConstraint', magConstraint(k), 'zerosFixed', zerosFixed(k));
+                    if defaultGrid
+                        obj.WFSToolObj.WFScalculation('SourceFilter', sourceFilter{k}, 'AcousticPath', acousticPathType{k}, 'Grouping', grouping{k}, 'maxAbsoluteValueConstraint', magConstraint(k), 'zerosFixed', zerosFixed(k));
+                    else
+                        obj.WFSToolObj.WFScalculation('SourceFilter', sourceFilter{k}, 'AcousticPath', acousticPathType{k}, 'Grouping', grouping{k}, 'maxAbsoluteValueConstraint', magConstraint(k), 'zerosFixed', zerosFixed(k), 'testPoints', testPoints);
+                    end
                 end
                 
                 % WFS array coefficients

@@ -227,38 +227,61 @@ classdef simulationViewer < handle
             
             switch obj.representationType
                 case 'dB'
+                    powWFS = (abs(WFScoeff).^2)/2;
+                    powNS = (abs(NScoef).^2)/2;
+                    
+                    xWFS = 10*log10(powWFS);
+                    xNS = 10*log10(powNS);
+                    
                     pow = (abs(repCoef).^2)/2;
                     x = 10*log10(pow);
                     
                     histTitle = 'dB';
                     edges = -110:10:40;
                 case 'power'
+                    xWFS = (abs(WFScoeff).^2)/2;
+                    xNS = (abs(NScoef).^2)/2;
+                    
                     x = (abs(repCoef).^2)/2;
                     
                     histTitle = 'Power';
                     edges = linspace(0, max(x), 10);
                 case 'abs'
+                    xWFS = abs(WFScoeff);
+                    xNS = abs(NScoef);
+                    
                     x = abs(repCoef);
                     
                     histTitle = 'Magnitude';
                     edges = linspace(0, max(x), 10);
                 case 'phase'
+                    xWFS = rad2deg(angle(WFScoeff));
+                    xNS = rad2deg(angle(NScoef));
+                    
                     x = rad2deg(angle(repCoef));
                     
                     histTitle = 'Phase';
                     edges = -180:10:180;
                 case 'real'
+                    xWFS = real(WFScoeff);
+                    xNS = real(NScoef);
+                    
                     x = real(repCoef);
                     
                     histTitle = 'Real';
                     edges = linspace(min(x), max(x), 10);
                 case 'imag'
+                    xWFS = imag(WFScoeff);
+                    xNS = imag(NScoef);
+                    
                     x = imag(repCoef);
                     
                     histTitle = 'Imaginary';
                     edges = linspace(min(x), max(x), 10);
             end
             
+            obj.scatWFS.CData = xWFS;
+            obj.scatNS.CData = xNS;
             obj.scatRec.CData = x;
             obj.adjustColorbar();
             

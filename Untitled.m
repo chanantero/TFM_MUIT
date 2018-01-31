@@ -95,39 +95,79 @@ objVis = simulationViewer(ax, s, axHist);
 % printfig(fMap, 'C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Documentos\Img\', 'prueba2DMap', 'pdf');
 
 %% Grid of points for the noise source
-% Rectangular grid
-gridMinX = 3;
-gridMaxX = 4;
-gridMinY = -1;
-gridMaxY = 1;
-xLim = [gridMinX, gridMaxX ]; yLim = [gridMinY, gridMaxY];
-x = linspace(xLim(1), xLim(2), 10);
-y = linspace(yLim(1), yLim(2), 10);
-z = 0;
-[X, Y, Z] = ndgrid(x, y, z);
-NSpositions = [X(:), Y(:), Z(:)];
+% % Rectangular grid
+% gridMinX = 3;
+% gridMaxX = 4;
+% gridMinY = -1;
+% gridMaxY = 1;
+% xLim = [gridMinX, gridMaxX ]; yLim = [gridMinY, gridMaxY];
+% numPointsX = 10; numPointsY = 10;
+% x = linspace(xLim(1), xLim(2), numPointsX);
+% y = linspace(yLim(1), yLim(2), numPointsY);
+% z = 0;
+% [X, Y, Z] = ndgrid(x, y, z);
+% NSpositions = [X(:), Y(:), Z(:)];
+
+xOctagon = obj.WFSposition(1:2:end, 1);
+yOctagon = obj.WFSposition(1:2:end, 2);
+centreX = (max(xOctagon) - min(xOctagon))/2;
+centreY = (max(yOctagon) - min(yOctagon))/2;
+F = logspace(log10(1.2), log10(10), 5);
+x = centreX + (xOctagon - centreX)*F;
+y = centreY + (yOctagon - centreY)*F;
+
+numOct = numel(F);
+numPointsPerOct = size(xOctagon, 1);
+
+x = x(:);
+y = y(:);
+
+NSpositions = [x, y, zeros(numF*numPointsPerOct, 1)];
 numNSpos = size(NSpositions, 1);
 
-% Optimization options
-sourceFilter = {'Loudspeakers'}; % It makes no sense to optimize a less real scenario, so use loudspeakers filter
-maxAbsValCons = false; % We always want to be realistic about real constraints
-acousticPathType = {'Theoretical'}; % It makes no sense to optimize with a theoric acoustic path because it depends on the parameters of the noise source, and those parameters are actually unknown. Besides, the acousic path of the loudspeakers is only known in the places where microphones have been placed.
-grouping = {'AllTogether'};
-zerosFixed = false;
-
-rel = zeros(numNSpos, 1);
 for p = 1:numNSpos
+    fprintf('%d/%d\n', p, numNSpos);
+    
     obj.NSposition = NSpositions(p, :); % Assumed real position
+    obj.setAcousticPaths('NS', 'theoretical', 'WFS', 'theoretical');
     
-    % Perform WFS calculation without optimization
+    % a) Perform WFS calculation without optimization
     obj.cancel();
-    WFSnoOpt = obj.WFScoef;
+        
+    % b) Optimization with default theoretical acoustic paths and AllTogether
+    obj.cancel({'Loudspeakers'}, false, {'Theoretical'}, {'AllTogether'}, false);
     
-    % Optimization
-    obj.cancel(sourceFilter, maxAbsValCons, acousticPathType, grouping, zerosFixed);
-    WFSOpt = obj.WFScoef;
+    % c) Optimization with theoretical acoustic paths where the microphones
+    % are.
+    obj.cancel({'Loudspeakers'}, false, {'Theoretical'}, {'AllTogether'}, false, 'testPoints', obj.microPos);
     
-    rel(p) = WFSOpt(end)./WFSnoOpt(end);
+    % d) Optimization with current aocustic paths and AllToghether option.
+    % If we use theoretical acoustic paths, this result should be the same 
+    % as in c)
+    obj.cancel({'Loudspeakers'}, false, {'Current'}, {'AllTogether'}, false);
+    
+    % e) Optimization with no restrictions
+    obj.cancel({'Loudspeakers'}, false, {'Current'}, {'Independent'}, false);
 end
 
-rel = rel(~isnan(rel) & isfinite(rel));
+s = obj.cancelResults;
+s = reshape(s, [5, numPointsPerOct, numOct]);
+
+Cglobal = zeros(size(s));
+for k = 1:numel(s)
+    % Calculate global cancellation
+    Cglobal(k) = sum(s(k).recCoef.^2)/sum(s(k).recNScoef.^2);
+end
+
+absCg = abs(Cglobal);
+Cg_dB = 10*log10(abs(Cglobal));
+
+% M = 1:10;
+% N = mergeAndPermute( M, {[3], [1 2]}, true, [2 5]);
+% 
+% s = mergeAndPermute( s, {1, 2, 3}, true, [5, numPointsX, numPointsY]); 
+
+% Visualize
+visualObj = animation({1:5, 1:numPointsPerOct, 1:numOct},...
+    {Cg_dB}, {'Type', 'Points', 'Octogon'}, {'Cancellation'}, [], []);
+
