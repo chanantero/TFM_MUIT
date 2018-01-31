@@ -122,7 +122,7 @@ numPointsPerOct = size(xOctagon, 1);
 x = x(:);
 y = y(:);
 
-NSpositions = [x, y, zeros(numF*numPointsPerOct, 1)];
+NSpositions = [x, y, zeros(size(x))];
 numNSpos = size(NSpositions, 1);
 
 for p = 1:numNSpos
@@ -156,11 +156,10 @@ s = reshape(s, [5, numPointsPerOct, numOct]);
 Cglobal = zeros(size(s));
 for k = 1:numel(s)
     % Calculate global cancellation
-    Cglobal(k) = sum(s(k).recCoef.^2)/sum(s(k).recNScoef.^2);
+    Cglobal(k) = sum(abs(s(k).recCoef).^2)/sum(abs(s(k).recNScoef).^2);
 end
 
-absCg = abs(Cglobal);
-Cg_dB = 10*log10(abs(Cglobal));
+Cg_dB = 10*log10(Cglobal);
 
 % M = 1:10;
 % N = mergeAndPermute( M, {[3], [1 2]}, true, [2 5]);
