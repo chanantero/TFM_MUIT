@@ -72,8 +72,21 @@ function x_output = solveLinearSystem(A, y, varargin)
             y_adapted = y - A(:, fixed)*x_output(fixed);
             
             % Solve
+%             if rank(A_grouped) < min(size(A_grouped))
+%                 % Rank defficient, remove dependent columns for better
+%                 % performance
+%                 [A_grouped, indLI] = licols(A_grouped);
+%             end
+%             % Include this next block after finding x_grouped
+%             if exist('indLI','var') == 1
+%                 auxX = zeros(Rx, 1);
+%                 auxX(indLI) = x_grouped;
+%                 x_grouped = auxX;
+%             end
+
+
             x_grouped = A_grouped\y_adapted;
-            
+                        
             if constraintFlag
                 % There is a constraint. Find the value of x_grouped with
                 % fmincon
@@ -84,7 +97,7 @@ function x_output = solveLinearSystem(A, y, varargin)
                 x_grouped = fmincon(fun, x_grouped, [], [], [], [], [], [], nonlcon, options);
 
             end
-            
+                        
             % Map onto the original x vector
             for g = 1:numGroups
                 group = groups{g};

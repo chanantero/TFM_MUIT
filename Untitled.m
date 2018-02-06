@@ -108,11 +108,11 @@ objVis = simulationViewer(ax, s, axHist);
 % [X, Y, Z] = ndgrid(x, y, z);
 % NSpositions = [X(:), Y(:), Z(:)];
 
-xOctagon = obj.WFSposition(1:2:end, 1);
-yOctagon = obj.WFSposition(1:2:end, 2);
+xOctagon = obj.WFSposition(1:1:end, 1);
+yOctagon = obj.WFSposition(1:1:end, 2);
 centreX = (max(xOctagon) - min(xOctagon))/2;
 centreY = (max(yOctagon) - min(yOctagon))/2;
-F = logspace(log10(1.2), log10(10), 5);
+F = logspace(log10(1.2), log10(100), 7);
 x = centreX + (xOctagon - centreX)*F;
 y = centreY + (yOctagon - centreY)*F;
 
@@ -125,6 +125,7 @@ y = y(:);
 NSpositions = [x, y, zeros(size(x))];
 numNSpos = size(NSpositions, 1);
 
+obj.cancelResults = [];
 for p = 1:numNSpos
     fprintf('%d/%d\n', p, numNSpos);
     
@@ -137,22 +138,35 @@ for p = 1:numNSpos
     % b) Optimization with default theoretical acoustic paths and AllTogether
     obj.cancel({'Loudspeakers'}, false, {'Theoretical'}, {'AllTogether'}, false);
     
-    % c) Optimization with theoretical acoustic paths where the microphones
-    % are.
-    obj.cancel({'Loudspeakers'}, false, {'Theoretical'}, {'AllTogether'}, false, 'testPoints', obj.microPos);
+    % c) Optimization with default grid of theoretical acoustic paths and
+    % no restrictions (Independent).
+%     obj.cancel({'Loudspeakers'}, false, {'Theoretical'}, {'Independent'}, false);
     
-    % d) Optimization with current aocustic paths and AllToghether option.
-    % If we use theoretical acoustic paths, this result should be the same 
-    % as in c)
+    % d) Optimization with theoretical acoustic paths where the microphones
+    % are and AllTogether
+%     obj.cancel({'Loudspeakers'}, false, {'Theoretical'}, {'AllTogether'}, false, 'testPoints', obj.microPos);
+    
+    % e) Optimization with theoretical acoustic paths where the microphones
+    % are and Independent
+%     obj.cancel({'Loudspeakers'}, false, {'Theoretical'}, {'Independent'}, false, 'testPoints', obj.microPos);
+    
+    % f) Optimization with current aocustic paths and AllToghether option.
+    % If we use theoretical acoustic paths as current acoustic paths, this result should be the same 
+    % as in d)
     obj.cancel({'Loudspeakers'}, false, {'Current'}, {'AllTogether'}, false);
     
-    % e) Optimization with no restrictions
+    % g) Optimization with no restrictions. 
+    % If we use theoretical acoustic paths as current acoustic paths, this result should be the same 
+    % as in e)
     obj.cancel({'Loudspeakers'}, false, {'Current'}, {'Independent'}, false);
 end
 
 s = obj.cancelResults;
-s = reshape(s, [5, numPointsPerOct, numOct]);
+s = reshape(s, [4, numPointsPerOct, numOct]);
 
+% save([globalPath, 'Data/differentOcts_', ID, '.mat'], 's');
+
+%% Visualization: global cancellation
 Cglobal = zeros(size(s));
 for k = 1:numel(s)
     % Calculate global cancellation
@@ -161,12 +175,64 @@ end
 
 Cg_dB = 10*log10(Cglobal);
 
-% M = 1:10;
-% N = mergeAndPermute( M, {[3], [1 2]}, true, [2 5]);
-% 
-% s = mergeAndPermute( s, {1, 2, 3}, true, [5, numPointsX, numPointsY]); 
-
 % Visualize
-visualObj = animation({1:5, 1:numPointsPerOct, 1:numOct},...
+visualObj = animation({1:4, 1:numPointsPerOct, 1:numOct},...
     {Cg_dB}, {'Type', 'Points', 'Octogon'}, {'Cancellation'}, [], []);
+
+%% Visualization: correction factor AllTogether
+corrFact1 = zeros(numPointsPerOct, numOct);
+corrFact2 = zeros(numPointsPerOct, numOct);
+for o = 1:numOct
+    for p = 1:numPointsPerOct
+        % Calculate scaling correction factor in case b) and d)
+            % Find element that is not 0
+        defaultWFScoef = s(1, p, o).WFScoef;
+        ind = find(defaultWFScoef ~= 0, 1, 'first');
+            % Calculate
+        corrFact1(p, o) = mean(s(2, p, o).WFScoef(ind)./defaultWFScoef(ind));
+        corrFact2(p, o) = mean(s(3, p, o).WFScoef(ind)./defaultWFScoef(ind));
+    end
+end
+
+ax = axes(figure);
+ax.Title.Interpreter = 'latex';
+hold on
+data = corrFact1;
+cmap = colormap('lines');
+for k = 1:size(data, 2)
+xData = real(data(:, k));
+yData = imag(data(:, k));
+scat = scatter(ax, xData, yData, 10, cmap(k, :), 'filled');
+plot(ax, xData, yData, '-', 'Color', cmap(k, :));
+end
+% scat.CData = 1:numPointsPerOct;
+% colorbar
+% ax.XLim = [-max(abs(xData(:))), max(abs(xData(:)))];
+% ax.YLim = [-max(abs(yData(:))), max(abs(yData(:)))];
+maxAbs = max(abs(data(:)));
+ax.XLim = [-maxAbs, maxAbs]; ax.YLim = [-maxAbs, maxAbs];
+ax.DataAspectRatio = [1 1 3];
+
+meanData = mean(data);
+stdData = std(data);
+normStd = stdData./abs(meanData);
+
+meanAbs = mean(abs(data));
+stdAbs = std(abs(data));
+normStdAbs = stdAbs./meanAbs;
+
+meanPhase = mean(rad2deg(angle(data)));
+stdPhase = std(rad2deg(angle(data)));
+normStdPhase = stdPhase./meanPhase;
+
+str = cell(size(data, 2), 1);
+for k = 1:size(data, 2)
+    str{k} = sprintf('$\\sigma_{norm, %d} = %.2g$ | $\\sigma_{norm, abs} = %.2g$ | $\\sigma_{norm, phase} = %.2g$', k, normStd(k), normStdAbs(k), normStdPhase(k));
+end
+l = legend(ax, str);
+l.Interpreter = 'latex';
+
+ax = axes(figure);
+plot(ax, abs(data))
+plot(ax, rad2deg(angle((data))))
 
