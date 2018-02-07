@@ -8,7 +8,7 @@ ID = datestr(now, 'yyyy-mm-dd_HH-MM-SS');
 obj = SimulationController;
 
 obj.NSposition = [3.35 -0.2 0]; % Assumed real position
-obj.amplitude = 0.5;
+obj.amplitude = 1;
 obj.phase = 0;
 obj.frequency = 440;
 
@@ -42,23 +42,40 @@ obj.cancel(sourceFilter, maxAbsValCons, acousticPathType, grouping, zerosFixed);
 % Find the theoric parameters for the virtual noise source that, applying
 % WFS cancellation with theoric acoustic path and unified optimization of loudspeakers, minimize the
 % magnitude of the resulting field using the experimental acoustic path
-
 obj.findBestVirtualSourceParameters();
 
-%% Visualization
-    % Extract 2D map
+%% Visualization: global cancellation
+Cglobal = zeros(size(s));
+for k = 1:numel(s)
+    % Calculate global cancellation
+    Cglobal(k) = sum(abs(s(k).recCoef).^2)/sum(abs(s(k).recNScoef).^2);
+end
+
+Cg_dB = 10*log10(Cglobal);
+
+
+%% Visualization: 2D map, case by case
+
+s = obj.cancelResults;
+
+% Extract 2D map
 fMap = figure;
 ax = copyobj(obj.ax, fMap);
+ax.Units = 'Normalized';
+ax.OuterPosition = [0.5, 0, 0.5, 1];
 colormap(ax, 'jet')
 colorbar(ax)
-    % Use viewer object
-s = obj.cancelResults;
-for k = 1:numel(s)
-    s(k).NScoef = [s(k).NSRcoef; s(k).NSVcoef];
+% Create histogram axes
+axHist = axes(fMap, 'Units', 'normalized', 'OuterPosition', [0 0 0.5 1]);
+
+% Format structure
+for p = 1:numel(s)
+    s(p).NScoef = [s(p).NSRcoef; s(p).NSVcoef];
+    s(p).NSposition = [s(p).NSRposition; s(p).NSVposition];
 end
-   
-objVis = simulationViewer(ax, s);
-    % Export 2D map
+
+% Create simulationViewer object
+objVis = simulationViewer(ax, s, axHist);
+
+% % Export 2D map
 % printfig(fMap, 'C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Documentos\Img\', 'prueba2DMap', 'pdf');
-
-

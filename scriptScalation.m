@@ -1,10 +1,6 @@
 %% Why the default WFS calculation needs to be scaled?
 % Study with simulation
 
-% Description of the problem
-%
-%
-
 %% Preamble
 pathSetUp;
 
@@ -44,55 +40,6 @@ obj.microPos = grid;
 
 % Acoustic paths
 obj.setAcousticPaths('NS', 'theoretical', 'WFS', 'theoretical');
-
-%% Cancellation attempt
-
-% Perform WFS calculation without optimization and save the WFS
-% coefficients.
-obj.cancel();
-WFSnoOpt = obj.WFScoef;
-
-% Perform WFS calculation with optimization and save the WFS coefficients
-% The optimization should be done with the theoretical path and alltogether
-% option
-% Optimization options
-sourceFilter = {'Loudspeakers'}; % It makes no sense to optimize a less real scenario, so use loudspeakers filter
-maxAbsValCons = false; % We always want to be realistic about real constraints
-acousticPathType = {'Theoretical'}; % It makes no sense to optimize with a theoric acoustic path because it depends on the parameters of the noise source, and those parameters are actually unknown. Besides, the acousic path of the loudspeakers is only known in the places where microphones have been placed.
-grouping = {'AllTogether'};
-zerosFixed = false;
-% Optimization
-obj.cancel(sourceFilter, maxAbsValCons, acousticPathType, grouping, zerosFixed);
-
-WFSOpt = obj.WFScoef;
-
-rel = WFSOpt(end)./WFSnoOpt(end);
-
-abs(rel)
-rad2deg(angle(rel))
-
-%% Visualization
-% Extract 2D map
-fMap = figure;
-ax = copyobj(obj.ax, fMap);
-ax.Units = 'Normalized';
-ax.OuterPosition = [0.5, 0, 0.5, 1];
-colormap(ax, 'jet')
-colorbar(ax)
-% Create histogram axes
-axHist = axes(fMap, 'Units', 'normalized', 'OuterPosition', [0 0 0.5 1]);
-% Format structure
-s = obj.cancelResults;
-for p = 1:numel(s)
-    s(p).NScoef = [s(p).NSRcoef; s(p).NSVcoef];
-    s(p).NSposition = [s(p).NSRposition; s(p).NSVposition];
-end
-
-% Create simulationViewer object
-objVis = simulationViewer(ax, s, axHist);
-
-% % Export 2D map
-% printfig(fMap, 'C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Documentos\Img\', 'prueba2DMap', 'pdf');
 
 %% Grid of points for the noise source
 % % Rectangular grid
@@ -176,6 +123,30 @@ s = reshape(s, [3, numPointsPerOct, numOct]);
 
 % save([globalPath, 'Data/differentOcts_', ID, '.mat'], 's');
 
+%% Visualization: 2D map, case by case
+
+% Extract 2D map
+fMap = figure;
+ax = copyobj(obj.ax, fMap);
+ax.Units = 'Normalized';
+ax.OuterPosition = [0.5, 0, 0.5, 1];
+colormap(ax, 'jet')
+colorbar(ax)
+% Create histogram axes
+axHist = axes(fMap, 'Units', 'normalized', 'OuterPosition', [0 0 0.5 1]);
+
+% Format structure
+for p = 1:numel(s)
+    s(p).NScoef = [s(p).NSRcoef; s(p).NSVcoef];
+    s(p).NSposition = [s(p).NSRposition; s(p).NSVposition];
+end
+
+% Create simulationViewer object
+objVis = simulationViewer(ax, s, axHist);
+
+% % Export 2D map
+% printfig(fMap, 'C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Documentos\Img\', 'prueba2DMap', 'pdf');
+
 %% Visualization: global cancellation
 Cglobal = zeros(size(s));
 for k = 1:numel(s)
@@ -244,18 +215,3 @@ l.Interpreter = 'latex';
 ax = axes(figure);
 plot(ax, abs(data))
 plot(ax, rad2deg(unwrap(angle(data))))
-
-%% Qué pasa con las fases
-f = 440;
-c = 340;
-ss = s(1, 20, 7);
-ssAdapt = s(2, 20, 7);
-NSpos = ss.NSRposition;
-indWFS = 20;
-
-WFSpos = ss.WFSposition(indWFS, :);
-dist = norm(WFSpos - NSpos);
-phaseShiftTheo = rad2deg(wrapToPi(f*2*pi/c*dist));
-
-phaseShiftOrig = rad2deg(angle(ss.WFScoef(indWFS)));
-phaseShiftAdapt = rad2deg(angle(ssAdapt.WFScoef(indWFS)));
