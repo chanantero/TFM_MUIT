@@ -30,7 +30,7 @@ classdef scenario < handle
     end
     
     properties (Constant)
-        c = 343;
+        c = 340;
         sourceColor = [0 0 1];
         receiverColor = [1 0 1];
     end

@@ -108,11 +108,11 @@ objVis = simulationViewer(ax, s, axHist);
 % [X, Y, Z] = ndgrid(x, y, z);
 % NSpositions = [X(:), Y(:), Z(:)];
 
-xOctagon = obj.WFSposition(1:1:end, 1);
-yOctagon = obj.WFSposition(1:1:end, 2);
+xOctagon = obj.WFSposition(1:8:end, 1);
+yOctagon = obj.WFSposition(1:8:end, 2);
 centreX = (max(xOctagon) - min(xOctagon))/2;
 centreY = (max(yOctagon) - min(yOctagon))/2;
-F = logspace(log10(1.2), log10(100), 7);
+F = logspace(log10(1.5), log10(100), 1);
 x = centreX + (xOctagon - centreX)*F;
 y = centreY + (yOctagon - centreY)*F;
 
@@ -136,7 +136,7 @@ for p = 1:numNSpos
     obj.cancel();
         
     % b) Optimization with default theoretical acoustic paths and AllTogether
-    obj.cancel({'Loudspeakers'}, false, {'Theoretical'}, {'AllTogether'}, false);
+%     obj.cancel({'Loudspeakers'}, false, {'Theoretical'}, {'AllTogether'}, false);
     
     % c) Optimization with default grid of theoretical acoustic paths and
     % no restrictions (Independent).
@@ -158,11 +158,21 @@ for p = 1:numNSpos
     % g) Optimization with no restrictions. 
     % If we use theoretical acoustic paths as current acoustic paths, this result should be the same 
     % as in e)
-    obj.cancel({'Loudspeakers'}, false, {'Current'}, {'Independent'}, false);
+%     obj.cancel({'Loudspeakers'}, true, {'Current'}, {'Independent'}, false);
+    
+    % h) Optimization with no restrictions. Special case.
+    % Use solution of case f) as initial estimation of the solution with
+    % magnitude constraint.
+    obj.WFScoef = obj.cancelResults(end).WFScoef;
+    obj.WFSToolObj.WFS_optimisation('SourceFilter', 'Loudspeakers', 'AcousticPath', 'Current', 'Grouping', 'Independent', 'maxAbsoluteValueConstraint', true, 'zerosFixed', false);
+    obj.WFSToolObj.simulate();
+    simulField = obj.WFSToolObj.simulField;
+    sAux = obj.generateBasicExportStructure();
+    obj.cancelResults = [obj.cancelResults; sAux];
 end
 
 s = obj.cancelResults;
-s = reshape(s, [4, numPointsPerOct, numOct]);
+s = reshape(s, [3, numPointsPerOct, numOct]);
 
 % save([globalPath, 'Data/differentOcts_', ID, '.mat'], 's');
 
@@ -176,12 +186,12 @@ end
 Cg_dB = 10*log10(Cglobal);
 
 % Visualize
-visualObj = animation({1:4, 1:numPointsPerOct, 1:numOct},...
+numPointsPerOct = size(s, 2); numOct = size(s, 3);
+visualObj = animation({1:size(s, 1), 1:numPointsPerOct, 1:numOct},...
     {Cg_dB}, {'Type', 'Points', 'Octogon'}, {'Cancellation'}, [], []);
 
 %% Visualization: correction factor AllTogether
 corrFact1 = zeros(numPointsPerOct, numOct);
-corrFact2 = zeros(numPointsPerOct, numOct);
 for o = 1:numOct
     for p = 1:numPointsPerOct
         % Calculate scaling correction factor in case b) and d)
@@ -190,7 +200,6 @@ for o = 1:numOct
         ind = find(defaultWFScoef ~= 0, 1, 'first');
             % Calculate
         corrFact1(p, o) = mean(s(2, p, o).WFScoef(ind)./defaultWFScoef(ind));
-        corrFact2(p, o) = mean(s(3, p, o).WFScoef(ind)./defaultWFScoef(ind));
     end
 end
 
@@ -203,7 +212,7 @@ for k = 1:size(data, 2)
 xData = real(data(:, k));
 yData = imag(data(:, k));
 scat = scatter(ax, xData, yData, 10, cmap(k, :), 'filled');
-plot(ax, xData, yData, '-', 'Color', cmap(k, :));
+% plot(ax, xData, yData, '-', 'Color', cmap(k, :));
 end
 % scat.CData = 1:numPointsPerOct;
 % colorbar
@@ -227,12 +236,26 @@ normStdPhase = stdPhase./meanPhase;
 
 str = cell(size(data, 2), 1);
 for k = 1:size(data, 2)
-    str{k} = sprintf('$\\sigma_{norm, %d} = %.2g$ | $\\sigma_{norm, abs} = %.2g$ | $\\sigma_{norm, phase} = %.2g$', k, normStd(k), normStdAbs(k), normStdPhase(k));
+    str{k} = sprintf('$|\\overline{x}| = %.2g$, angle$(\\overline{x}) = %.0f$, $\\sigma_{n} = %.2g$, $\\sigma_{n, abs} = %.2g$, $\\sigma_{n, phase} = %.2g$', meanAbs(k), meanPhase(k), normStd(k), normStdAbs(k), normStdPhase(k));
 end
 l = legend(ax, str);
 l.Interpreter = 'latex';
 
 ax = axes(figure);
 plot(ax, abs(data))
-plot(ax, rad2deg(angle((data))))
+plot(ax, rad2deg(unwrap(angle(data))))
 
+%% Qué pasa con las fases
+f = 440;
+c = 340;
+ss = s(1, 20, 7);
+ssAdapt = s(2, 20, 7);
+NSpos = ss.NSRposition;
+indWFS = 20;
+
+WFSpos = ss.WFSposition(indWFS, :);
+dist = norm(WFSpos - NSpos);
+phaseShiftTheo = rad2deg(wrapToPi(f*2*pi/c*dist));
+
+phaseShiftOrig = rad2deg(angle(ss.WFScoef(indWFS)));
+phaseShiftAdapt = rad2deg(angle(ssAdapt.WFScoef(indWFS)));

@@ -9,6 +9,12 @@ function x_output = solveLinearSystem(A, y, varargin)
             % contains the lower bound for the absolute value of each
             % element of x. Ídem for the second column but with the upper
             % bound.
+            % - initialEstimation. Logical scalar. If true, before the
+            % nonlinear optimization, we calculate the default solution to
+            % the linear system (possibly overdetermined and inconsistent,
+            % hence, the least squares solution is found) and use it as
+            % initial estimation of the solution. If it is false, we use
+            % the input vector x as the intial estimation.
             % We can group elements of x in different sets. Then, the
             % values of the solution will be the original values
             % multiplied by a scalar. In other words, the optimization of x
@@ -31,6 +37,7 @@ function x_output = solveLinearSystem(A, y, varargin)
             addOptional(p, 'x', ones(Rx, 1));
             addParameter(p, 'zerosFixed', true);
             addParameter(p, 'maxAbsoluteValue', zeros(Rx, 1));
+            addParameter(p, 'initialEstimation', false);
             
             parse(p, varargin{:});
             
@@ -39,7 +46,7 @@ function x_output = solveLinearSystem(A, y, varargin)
             zerosFixed = p.Results.zerosFixed;
             maxAbsoluteValue = p.Results.maxAbsoluteValue;
             constraintFlag = ~ismember('maxAbsoluteValue', p.UsingDefaults);
-            
+            initialEstimation = p.Results.initialEstimation;
             
             % Create the grouped version of the matrix A and the fixed
             % indices of x vector
@@ -63,7 +70,7 @@ function x_output = solveLinearSystem(A, y, varargin)
                 end
                 
                 upperBound_grouped(g) = min(upperBound_g./abs_xg);
-                
+                            
                 A_grouped(:, g) = A(:, group) * xg;
                 fixed(group) = false;
             end
@@ -72,30 +79,24 @@ function x_output = solveLinearSystem(A, y, varargin)
             y_adapted = y - A(:, fixed)*x_output(fixed);
             
             % Solve
-%             if rank(A_grouped) < min(size(A_grouped))
-%                 % Rank defficient, remove dependent columns for better
-%                 % performance
-%                 [A_grouped, indLI] = licols(A_grouped);
-%             end
-%             % Include this next block after finding x_grouped
-%             if exist('indLI','var') == 1
-%                 auxX = zeros(Rx, 1);
-%                 auxX(indLI) = x_grouped;
-%                 x_grouped = auxX;
-%             end
-
-
-            x_grouped = A_grouped\y_adapted;
+            
                         
             if constraintFlag
                 % There is a constraint. Find the value of x_grouped with
                 % fmincon
                 fun = @(x_) (A_grouped*x_ - y_adapted)'*(A_grouped*x_ - y_adapted);
-                options = optimoptions(@fmincon, 'MaxFunctionEvaluations', 10000, 'Display', 'off');
+                options = optimoptions(@fmincon, 'MaxFunctionEvaluations', 100000, 'Display', 'off');
                 nonlcon = @(x_) deal(InfToZero(abs(x_) - upperBound_grouped), zeros(numGroups, 1));
                 
-                x_grouped = fmincon(fun, x_grouped, [], [], [], [], [], [], nonlcon, options);
-
+                if initialEstimation
+                    x0 = A_grouped\y_adapted;
+                else
+                    x0 = ones(numGroups, 1);
+                end
+                    
+                x_grouped = fmincon(fun, x0, [], [], [], [], [], [], nonlcon, options);
+            else
+                x_grouped = A_grouped\y_adapted;
             end
                         
             % Map onto the original x vector
@@ -109,3 +110,19 @@ end
 function x = InfToZero(x)
 x(~isfinite(x)) = 0;
 end
+
+%% Additional resources
+
+% % To remove dependent columns when matrix is rank defficient: QR
+% decomposition in licols
+%             if rank(A_grouped) < min(size(A_grouped))
+%                 % Rank defficient, remove dependent columns for better
+%                 % performance
+%                 [A_grouped, indLI] = licols(A_grouped);
+%             end
+%             % Include this next block after finding x_grouped
+%             if exist('indLI','var') == 1
+%                 auxX = zeros(Rx, 1);
+%                 auxX(indLI) = x_grouped;
+%                 x_grouped = auxX;
+%             end

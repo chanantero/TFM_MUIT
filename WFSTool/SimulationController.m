@@ -103,12 +103,12 @@ classdef SimulationController < handle
             microCoef = sum(obj.WFSToolObj.simulField, 2);
         end
         
-        function microCoef = get.microCoefNS(obj)
-            microCoef = obj.WFSToolObj.simulField(:, 1);
+        function microCoefNS = get.microCoefNS(obj)
+            microCoefNS = obj.WFSToolObj.simulField(:, 1);
         end
         
-        function microCoef = get.microCoefWFS(obj)
-            microCoef = obj.WFSToolObj.simulField(:, 2);
+        function microCoefWFS = get.microCoefWFS(obj)
+            microCoefWFS = obj.WFSToolObj.simulField(:, 2);
         end
         
         

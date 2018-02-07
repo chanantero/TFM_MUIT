@@ -811,7 +811,7 @@ classdef WFSToolSimple < handle
             for v = 1:numVirtualSources
                 f = virtualInd(v);
                 if constraintFlag
-                    x_new(:, f) = solveLinearSystem(acPath(:, :, f), zeros(numPoints, 1), groups, coeff(:, f), 'zerosFixed', zerosFixed, 'maxAbsoluteValue', ones(numSour, 1));
+                    x_new(:, f) = solveLinearSystem(acPath(:, :, f), zeros(numPoints, 1), groups, coeff(:, f), 'zerosFixed', zerosFixed, 'maxAbsoluteValue', ones(numSour, 1), 'initialEstimation', false);
                 else
                     x_new(:, f) = solveLinearSystem(acPath(:, :, f), zeros(numPoints, 1), groups, coeff(:, f), 'zerosFixed', zerosFixed);
                 end
