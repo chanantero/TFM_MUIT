@@ -113,7 +113,6 @@ for p = 1:numNSpos
     obj.WFScoef = obj.cancelResults(end).WFScoef;
     obj.WFSToolObj.WFS_optimisation('SourceFilter', 'Loudspeakers', 'AcousticPath', 'Current', 'Grouping', 'Independent', 'maxAbsoluteValueConstraint', true, 'zerosFixed', false);
     obj.WFSToolObj.simulate();
-    simulField = obj.WFSToolObj.simulField;
     sAux = obj.generateBasicExportStructure();
     obj.cancelResults = [obj.cancelResults; sAux];
 end

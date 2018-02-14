@@ -68,10 +68,12 @@ classdef SimulationController < handle
         NSposition
         NSRposition % Assumed real position of the noise source.
         NSVposition
+        numNS
         
         % WFS
         WFSposition
         WFScoef
+        numWFS
         
         % Cancellation attempts
         numCancellationAttempts
@@ -236,6 +238,10 @@ classdef SimulationController < handle
             obj.WFSToolObj.noiseSourcePosition(2, :) = value;
         end
         
+        function numNS = get.numNS(obj)
+            numNS = obj.WFSToolObj.numNoiseSources;
+        end
+        
         % WFS
         function WFSposition = get.WFSposition(obj)
             WFSposition = obj.WFSToolObj.WFSarrayPosition;
@@ -264,6 +270,10 @@ classdef SimulationController < handle
         
         function numCancellationAttempts = get.numCancellationAttempts(obj)
             numCancellationAttempts = numel(obj.cancelResults);
+        end
+        
+        function numWFS = get.numWFS(obj)
+            numWFS = obj.WFSToolObj.numSourcesWFSarray;
         end
     end
     
@@ -518,6 +528,23 @@ classdef SimulationController < handle
                 
             end
             
+        end
+        
+        function findBestNoiseSourcePosition(obj)
+            % The acoustic paths of the WFS array and the transmitted
+            % signals are given, so the virtual noise source parameters are
+            % irrelevant, since we don't perform any WFS calculation.
+            % We optimize the real noise source position in order to
+            % minimize the produced field.
+            % It's like the noise source is cancellating the WFS field
+            % instead of the opposite (which is the usual case)
+            
+            obj.WFSToolObj.prepareSimulation();
+            A = [obj.WFSToolObj.WFSarrayAcousticPath, obj.WFSToolObj.noiseSourceAcousticPath];
+            x0 = [obj.WFScoef; obj.NSRcoef; 0];
+            indNSReal = obj.numWFS + 1;
+            groups = {indNSReal};
+            solveLinearSystem(A, y, groups, x0);
         end
         
         function experimentalChecking(obj, varargin)

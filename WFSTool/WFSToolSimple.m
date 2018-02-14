@@ -714,6 +714,23 @@ classdef WFSToolSimple < handle
                 
         end
         
+        function prepareSimulation(obj)
+            % Assign to the correspondent variables of the simulator
+            % object, the acoustic paths, adjust coefficients depending on
+            % real and virtual flags, etc.
+            
+            % Set acoustic paths
+            obj.setAcousticPaths();
+            
+            % Set noise source coefficients
+            obj.noiseSourceCoefficient_complete = diag(obj.noiseSourceCoefficient);
+            
+            % Apply real and virtual flags
+            obj.noiseSourceCoefficient_complete(:, ~obj.real) = 0;
+            obj.WFSarrayCoefficient(:, ~obj.virtual) = 0;
+            
+        end
+        
         function WFS_optimisation(obj, varargin)
             
             p = inputParser;
@@ -1021,10 +1038,10 @@ classdef WFSToolSimple < handle
             obj.noiseSourceAcPathStruct = struct('acousticPaths', acPath, 'frequencies', uniqueFreq);
             
         end
-        
+              
     end
     
-    methods(Access = private)
+    methods(Access = private)       
         
         function setAcousticPaths(obj)
             % Take the acoustic path structures to assign the acoustic path

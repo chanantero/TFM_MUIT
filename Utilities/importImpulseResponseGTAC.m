@@ -1,4 +1,4 @@
-function [acousticPath] = importImpulseResponseGTAC(frequencies)
+function [acousticPath, varargout] = importImpulseResponseGTAC(frequencies)
 
 % Get the frequency response from the official impulse responses of the
 % GTAC.
@@ -23,24 +23,27 @@ for m = 1:numMicrophones
     acousticPath(m, :, :) = permute(dft, [3, 2 1]);
 end 
 
-
-% % Generate receiver positions according to the official paper
-% numMicroX = 15; numMicroY = 24;
-% incrX = 0.2; incrY = -0.2;
-% microRectXsize = abs((numMicroX - 1)*incrX);
-% microRectYsize = abs((numMicroY - 1)*incrY);
-% minWFSarrayX = min(obj.WFSarrayPosition(:, 1));
-% maxWFSarrayX = max(obj.WFSarrayPosition(:, 1));
-% WFSarrayXsize = maxWFSarrayX - minWFSarrayX;
-% minWFSarrayY = min(obj.WFSarrayPosition(:, 2));
-% maxWFSarrayY = max(obj.WFSarrayPosition(:, 2));
-% WFSarrayYsize = maxWFSarrayY - minWFSarrayY;
-% offsetX = minWFSarrayX + (WFSarrayXsize - microRectXsize)/2; 
-% offsetY = maxWFSarrayY - (WFSarrayYsize - microRectYsize)/2;
-% x = (0:numMicroX - 1) * incrX + offsetX;
-% y = (0:numMicroY - 1) * incrY + offsetY;
-% [Y, X] = ndgrid(y, x);
-% Z = zeros(size(X));
-% microphonePositions = [X(:), Y(:), Z(:)];
+if nargout > 1
+    % Generate receiver positions according to the official paper
+    numMicroX = 15; numMicroY = 24;
+    incrX = 0.2; incrY = -0.2;
+    microRectXsize = abs((numMicroX - 1)*incrX);
+    microRectYsize = abs((numMicroY - 1)*incrY);
+    minWFSarrayX = min(obj.WFSarrayPosition(:, 1));
+    maxWFSarrayX = max(obj.WFSarrayPosition(:, 1));
+    WFSarrayXsize = maxWFSarrayX - minWFSarrayX;
+    minWFSarrayY = min(obj.WFSarrayPosition(:, 2));
+    maxWFSarrayY = max(obj.WFSarrayPosition(:, 2));
+    WFSarrayYsize = maxWFSarrayY - minWFSarrayY;
+    offsetX = minWFSarrayX + (WFSarrayXsize - microRectXsize)/2;
+    offsetY = maxWFSarrayY - (WFSarrayYsize - microRectYsize)/2;
+    x = (0:numMicroX - 1) * incrX + offsetX;
+    y = (0:numMicroY - 1) * incrY + offsetY;
+    [Y, X] = ndgrid(y, x);
+    Z = zeros(size(X));
+    microphonePositions = [X(:), Y(:), Z(:)];
+    
+    varargout = {microphonePositions};
+end
 
 end

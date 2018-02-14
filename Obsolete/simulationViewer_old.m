@@ -14,13 +14,15 @@ classdef simulationViewer < handle
         % - recWFSCoefExp
         % - recCoefExp
         
-        % GUI
-        fig
+        % 2D map
         ax2Dmap
         representationType = categorical({'dB'}, simulationViewer.represTypeCat, simulationViewer.represTypeCat, 'Protected', true);
         magnitude = categorical({'Field'}, simulationViewer.magnitudeCategories, simulationViewer.magnitudeCategories, 'Protected', true);
         axHist
         hist
+        
+        % Histogram
+        visibleConfHistInd % Indices of cancellation configurations that are visible in the histogram graphs
     end
     
     % Public properties
@@ -46,6 +48,10 @@ classdef simulationViewer < handle
         
         % Histogram
         f
+        axHistCoef
+        axHistCancel
+        mapVisibleConfToCoefHist
+        mapVisibleConfToCancelHist
     end
     
     properties(Access = private, Constant)
@@ -83,6 +89,11 @@ classdef simulationViewer < handle
             end
         end
         
+        function set.visibleConfHistInd(obj, value)
+            obj.visibleConfHistInd = value;
+            obj.updateVisibilityHistogram();
+        end
+        
         function numWFS = get.numWFS(obj)
             CData = obj.scatWFS.CData;
             
@@ -118,32 +129,28 @@ classdef simulationViewer < handle
     
     % Public methods
     methods
-        function obj = simulationViewer(ax2D, expInfStruct)
+        function obj = simulationViewer(ax2D, expInfStruct, histogramAxes)
             
-            function scenIndCallback(ind)
-                obj.scenInd = ind;
+%             obj.f = figure;
+%             obj.axHistCoef = axes(obj.f);
+%             obj.axHistCancel = axes(obj.f);
+%             obj.axHistCoef.NextPlot = 'Add';
+%             obj.axHistCoef.OuterPosition = [0 0 0.5 1];
+%             obj.axHistCancel.NextPlot = 'Add';
+%             obj.axHistCancel.OuterPosition = [0.5 0 0.5 1];
+            
+            obj.ax2Dmap = ax2D;
+            obj.ax2Dmap.CLim = [-100, 20];
+            
+            if exist('histogramAxes', 'var') == 1
+                obj.axHist = histogramAxes;
+                obj.hist = histogram(obj.axHist, [], [0 1], 'Normalization', 'Probability');
             end
             
-            function magnitudeCallback(magnitude)
-                obj.magnitude = magnitude;
-            end
-            
-            function reprTypeCallback(representationType)
-                obj.representationType = representationType;
-            end
-                        
-            [fig, ax2Dmap, axHist, hist] = simulationViewer.createGUI(ax2D, @(ind) scenIndCallback(ind), @(mag) magnitudeCallback(mag), @(reprType) reprTypeCallback(reprType));
-            
-            obj.fig = fig;
-            obj.ax2Dmap = ax2Dmap;
-            
-            obj.axHist = axHist;
-            obj.hist = hist;
-  
             obj.expInfStruct = expInfStruct;
             
             obj.magnitude = categorical({'WFS'}, obj.magnitudeCategories, obj.magnitudeCategories, 'Protected', true);
-            obj.representationType = categorical({'dB'}, obj.represTypeCat, obj.represTypeCat, 'Protected', true);          
+            obj.representationType = categorical({'dB'}, obj.represTypeCat, obj.represTypeCat, 'Protected', true);
             
         end
         
@@ -152,6 +159,7 @@ classdef simulationViewer < handle
             maxCLim = max(obj.scatRec.CData);
             obj.ax2Dmap.CLim = [minCLim, maxCLim];
         end
+        
         
     end
     
@@ -279,11 +287,129 @@ classdef simulationViewer < handle
             
         end
         
+        function generateVisualizationHistogram(obj)
+            simulationViewer.visualizeSignalCoefficients(obj.expInfStruct(1).NScoef, obj.WFScoef, obj.recNScoef(:, 1), obj.recCoef, obj.axHistCoef, obj.axHistCancel);
+            
+            obj.mapVisibleConfToCoefHist.originInd = reshape(repmat(1:obj.numExpScenarios, 2, 1), [obj.numExpScenarios*2, 1]);
+            obj.mapVisibleConfToCoefHist.destinationInd = (obj.numExpScenarios*2):-1:1;
+            
+            obj.mapVisibleConfToCancelHist.originInd = 1:obj.numExpScenarios;
+            obj.mapVisibleConfToCancelHist.destinationInd = obj.numExpScenarios:-1:1;
+            
+            obj.visibleConfHistInd = true(obj.numExpScenarios, 1);
+        end
+        
+        function updateVisibilityHistogram(obj)
+            
+            visibleCoefHist = false(obj.numExpScenarios*2+1, 1);
+            visibleCoefHist(end) = true;
+            visibleCoefHist(obj.mapVisibleConfToCoefHist.destinationInd) = obj.visibleConfHistInd(obj.mapVisibleConfToCoefHist.originInd);
+            
+            for k = 1:numel(visibleCoefHist)
+                if visibleCoefHist(k)
+                    obj.axHistCoef.Children(k).Visible = 'on';
+                else
+                    obj.axHistCoef.Children(k).Visible = 'off';
+                end
+            end
+            
+            visibleCancelHist = false(obj.numExpScenarios, 1);
+            visibleCancelHist(obj.mapVisibleConfToCancelHist.destinationInd) = obj.visibleConfHistInd(obj.mapVisibleConfToCancelHist.originInd);
+            
+            for k = 1:numel(visibleCancelHist)
+                if visibleCancelHist(k)
+                    obj.axHistCancel.Children(k).Visible = 'on';
+                else
+                    obj.axHistCancel.Children(k).Visible = 'off';
+                end
+            end
+        end
+        
     end
     
     % Static methods
     methods(Static)
-         
+        function visualizeSignalCoefficients(NScoef, WFScoef, recOnlyNoiseCoef, recCoef, axHistCoef, axHistCancel)
+            % recOnlyNoiseCoef. P-element vector. Coefficients when there is only the effect of the noise source.
+            % coef. (P x N) matrix. Coefficients after cancellation
+            
+            N = size(recCoef,2);
+            
+            % Get power of the sinusoidal signals
+            powNS = (abs(NScoef).^2)/2;
+            powWFS = (abs(WFScoef).^2)/2;
+            powOnlyNoise = (abs(recOnlyNoiseCoef).^2)/2;
+            powRec = (abs(recCoef).^2)/2;
+            
+            % Get Cancellation
+            cancel = powRec./repmat(powOnlyNoise, 1, N);
+            cancelGlobal = sum(powRec, 1)./sum(powOnlyNoise);
+            
+            % Convert to dB
+            powNSLog = 10*log10(powNS);
+            powWFSLog = 10*log10(powWFS);
+            powOnlyNoiseLog = 10*log10(powOnlyNoise);
+            powRecLog = 10*log10(powRec);
+            cancelLog = 10*log10(cancel);
+            
+            % Get the strings with the statistical information
+            strRecOnlyNoise = simulationViewer.getStatsInfoStr( powOnlyNoise );
+            strWFS = simulationViewer.getStatsInfoStr( powWFS );
+            strRec = simulationViewer.getStatsInfoStr( powRec );
+            strCancel = simulationViewer.getStatsInfoStr( cancel );
+            % Add the global cancellation information to the end of
+            % each cancellation information string
+            for n = 1:N
+                strCancel{n} = [strCancel{n}, ', $C_{\mathit{global}} = ', num2str(cancelGlobal(n), 2), '$'];
+            end
+            
+            % Clear axes
+            cla(axHistCoef)
+            cla(axHistCancel)
+            
+            % Delete legends
+            legend(axHistCoef, 'off');
+            legend(axHistCancel, 'off');
+            
+            % Logaritmic Histogram
+            edgesCoef = -110:10:40; % Edges for the coefficients histogram
+            edgesCancel = -110:10:20; % Edges for the cancellation histogram
+            
+            powOnlyNoiseLog(powOnlyNoiseLog < edgesCancel(1)) = edgesCancel(1);
+            powWFSLog(powWFSLog < edgesCoef(1)) = edgesCoef(1);
+            powRecLog(powRecLog < edgesCoef(1)) = edgesCoef(1);
+            cancelLog(cancelLog < edgesCancel(1)) = edgesCancel(1);
+            
+            powOnlyNoiseLog(powOnlyNoiseLog > edgesCancel(end)) = edgesCancel(end);
+            powWFSLog(powWFSLog > edgesCoef(end)) = edgesCoef(end);
+            powRecLog(powRecLog > edgesCoef(end)) = edgesCoef(end);
+            cancelLog(cancelLog > edgesCancel(end)) = edgesCancel(end);
+            
+            map = colormap('lines');
+            
+            histogram(axHistCoef, powOnlyNoiseLog, edgesCoef, 'Normalization', 'Probability', 'DisplayStyle', 'stairs', 'EdgeColor', 'black');
+            for n = 1:N
+                histogram(axHistCoef, powWFSLog(:, n), edgesCoef, 'Normalization', 'Probability', 'DisplayStyle', 'stairs', 'LineStyle', '--', 'EdgeColor', map(n, :));
+                histogram(axHistCoef, powRecLog(:, n), edgesCoef, 'Normalization', 'Probability', 'DisplayStyle', 'stairs', 'EdgeColor', map(n, :));
+                histogram(axHistCancel, cancelLog(:, n), edgesCancel, 'Normalization', 'Probability', 'DisplayStyle', 'stairs', 'EdgeColor', map(n, :));
+            end
+            
+            axHistCoef.XTick = edgesCoef;
+            axHistCoef.XTickLabels{1} = '-Inf';
+            axHistCoef.XTickLabels{end} = 'Inf';
+            axHistCoef.XLim = [edgesCoef(1), edgesCoef(end)];
+            axHistCoef.XLabel.String = 'Normalized Power (dB)';
+            legend(axHistCoef, [strRecOnlyNoise; strWFS; strRec], 'Interpreter', 'Latex');
+            
+            axHistCancel.XTick = edgesCancel;
+            axHistCancel.XTickLabels{1} = '-Inf';
+            axHistCancel.XTickLabels{end} = 'Inf';
+            axHistCancel.XLim = [edgesCancel(1), edgesCancel(end)];
+            axHistCancel.XLabel.String = 'Cancellation (dB)';
+            legend(axHistCancel, strCancel, 'Interpreter', 'Latex');
+            
+        end
+        
         function strs = getStatsInfoStr( coefMat )
             
             N = size(coefMat, 2);
@@ -300,52 +426,23 @@ classdef simulationViewer < handle
             
         end
         
-        function [fig, ax2Dmap, axHist, hist, buttonPannel] = createGUI(ax2DmapOrig, scenIndCallback, magnitudeCallback, represTypeCallback)
+        function createGUI(ax2DmapOrig)
             fig = figure;
             
             ax2Dmap = copyobj(ax2DmapOrig, fig);
             ax2Dmap.Units = 'Normalized';
             ax2Dmap.OuterPosition = [0.5, 0, 0.5, 0.8];
-            ax2Dmap.CLim = [-100, 20];
             colormap(ax2Dmap, 'jet')
             colorbar(ax2Dmap)
             
             % Create histogram axes
             axHist = axes(fig, 'Units', 'normalized', 'OuterPosition', [0 0 0.5 1]);
-            hist = histogram(axHist, [], [0 1], 'Normalization', 'Probability');
             
             % Create buttons
-            buttonPannel = uipanel(fig, 'Units', 'Normalized', 'Position', [0.52 0.82 0.46 0.16]);
-            
-            scenIndButton = uicontrol(buttonPannel, 'Style', 'Edit',...
-                'Units', 'normalized', 'Position', [0 0 0.3 0.5],...
-                'String', '1', 'Callback', @(hObject, eventData, handles) scenIndCallback(scenIndProcessing()));
-            
-            magnitudeButton = uicontrol(buttonPannel, 'Style', 'popupmenu',...
-                'Units', 'normalized', 'Position', [0.4 0 0.3 0.5],...
-                'String', simulationViewer.magnitudeCategories, 'Callback', @(hObject, eventData, handles) magnitudeCallback(magnitudeProcessing()));
-            
-            represTypeButton = uicontrol(buttonPannel, 'Style', 'popupmenu',...
-                'Units', 'normalized', 'Position', [0.7 0 0.3 0.5],...
-                'String', simulationViewer.represTypeCat, 'Callback', @(hObject, eventData, handles) represTypeCallback(represTypeProcessing()));
-            
-            function magnitude = magnitudeProcessing()
-                magnitude = simulationViewer.magnitudeCategories(magnitudeButton.Value);
-            end
-            
-            function representationType = represTypeProcessing()
-                representationType = simulationViewer.represTypeCat(represTypeButton.Value);
-            end
-            
-            function scenInd = scenIndProcessing()
-                scenInd = str2double(scenIndButton.String);
-                if isnan(scenInd) || floor(scenInd) ~= scenInd
-                    warning('simulationViewer:scenIndButtonCallback', 'You must insert an integer number');
-                    scenInd = [];
-                end
-            end
+            uicontrol(fig, 'Style', 'pushbutton',...
+                'Units', 'normalized', 'Position', [0.6 0.95 0.1 0.05],...
+                'String', 'Simulate', 'Callback', @(hObject, eventData) obj.simulateOnAxis());
         end
-        
     end
     
 end
