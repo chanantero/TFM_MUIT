@@ -731,6 +731,19 @@ classdef WFSToolSimple < handle
             
         end
         
+        function prepareOptimization(obj)
+            % Assign to the correspondent variables of the simulator
+            % object, the acoustic paths, adjust coefficients depending on
+            % real and virtual flags, etc.
+            
+            % Set acoustic paths
+            obj.setAcousticPaths();
+            
+            % Set noise source coefficients
+            obj.noiseSourceCoefficient_complete = diag(obj.noiseSourceCoefficient);
+            
+        end
+        
         function WFS_optimisation(obj, varargin)
             
             p = inputParser;

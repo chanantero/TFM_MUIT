@@ -52,6 +52,7 @@ classdef SimulationController < handle
         microCoef % It is the simulated field, but for interface purposes, it is included as a microphone variable
         microCoefNS % Simulated field with only the noise source (real, obviously) contributions
         microCoefWFS % Simulated field with only the WFS array contributions
+        numMicro % Number of microphones
         
         % Noise Source
         amplitude
@@ -113,6 +114,9 @@ classdef SimulationController < handle
             microCoefWFS = obj.WFSToolObj.simulField(:, 2);
         end
         
+        function numMicro = get.numMicro(obj)
+            numMicro = obj.WFSToolObj.numReceivers;
+        end
         
         % Noise source variables
         function amplitude = get.amplitude(obj)
@@ -530,7 +534,7 @@ classdef SimulationController < handle
             
         end
         
-        function findBestNoiseSourcePosition(obj)
+        function [NSposOpt, fVal] = findBestNoiseSourcePosition(obj)
             % The acoustic paths of the WFS array and the transmitted
             % signals are given, so the virtual noise source parameters are
             % irrelevant, since we don't perform any WFS calculation.
@@ -539,12 +543,39 @@ classdef SimulationController < handle
             % It's like the noise source is cancellating the WFS field
             % instead of the opposite (which is the usual case)
             
-            obj.WFSToolObj.prepareSimulation();
-            A = [obj.WFSToolObj.WFSarrayAcousticPath, obj.WFSToolObj.noiseSourceAcousticPath];
-            x0 = [obj.WFScoef; obj.NSRcoef; 0];
-            indNSReal = obj.numWFS + 1;
-            groups = {indNSReal};
-            solveLinearSystem(A, y, groups, x0);
+            objectiveFunction = @(NSpos) NSpos2GlobalCancellation(NSpos);
+            NSpos0 = obj.NSRposition; % Initial value of parameters
+            [NSposOpt, fVal] = fminunc(objectiveFunction, NSpos0); % Optimize
+            
+            % Set the position of the solution
+            
+            function globalCancellation = NSpos2GlobalCancellation(NSpos)
+
+                % Assign new position for the noise source
+                obj.NSposition = NSpos;
+
+                % Calculate theoric acoustic path for the noise source
+                obj.setAcousticPaths('NS', 'theoretical');
+
+                % Make acoustic paths effective
+                obj.WFSToolObj.prepareSimulation();
+
+                % Scale properly
+                A = [obj.WFSToolObj.WFSarrayAcousticPath(:, :, 2), obj.WFSToolObj.noiseSourceAcousticPath(:, :, 1)];
+                x0 = [obj.WFScoef; obj.NSRcoef; 0];
+                indNSReal = obj.numWFS + 1;
+                groups = {indNSReal};
+                y = zeros(obj.numMicro, 1);
+                xScaled = solveLinearSystem(A, y, groups, x0);
+                obj.NScoef = xScaled(indNSReal);
+
+                % Simulate
+                obj.WFSToolObj.prepareSimulation();
+                obj.WFSToolObj.simulate();
+                
+                globalCancellation = sum(abs(obj.microCoef).^2)/sum(abs(obj.microCoefNS).^2);
+                
+            end
         end
         
         function experimentalChecking(obj, varargin)

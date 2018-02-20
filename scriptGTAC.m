@@ -80,7 +80,7 @@ end
 objVis = simulationViewer(obj.ax, s);
 
 % % Export 2D map
-printfig(objVis.fig, 'C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Documentos\Img\', 'prueba2DMap', 'pdf');
+% printfig(objVis.fig, 'C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Documentos\Img\', 'prueba2DMap', 'pdf');
 
 
 %% Diferencia de fase del caso real y el caso teórico
@@ -139,6 +139,7 @@ scatter(ax, distances(:), abs(WFSfield(:)), '.')
 
     % Fitting
 models = {'exp1', 'exp2', 'power1', 'power2', 'a*exp(-b*x)+c'};
+numModels = numel(models);
 data = repmat(struct('x', [], 'y', []), numLoudspeakers + 1, 1);
 for indLoud = 1:numLoudspeakers
     data(indLoud).x = distances(:, indLoud);
@@ -154,6 +155,9 @@ for m = 1:numModels
     plot(ax, [gofs(:, m).rmse])
 end
 legend(models)
+
+ax = axes(figure);
+plot(ax, [params{1}.b])
 
 % Phase
     % Specific Loudspeaker
@@ -175,3 +179,132 @@ scatter(ax, distances(:), rad2deg(angle(WFSfield(:))), '.')
 % lo máximo.
 % ¿Cómo mido el parecido? El escalado no es importante, así que siempre se
 % optimizará.
+
+% Select the loudspeaker for which you want to optimize
+indLoud = 25;
+obj.WFScoef(:) = 0;
+obj.WFScoef(indLoud) = 1;
+obj.NSposition = obj.WFSposition(indLoud,:);
+obj.setAcousticPaths('NS', 'theoretical');
+
+% % Optimize. It didn't work
+[NSposOpt, fVal] = obj.findBestNoiseSourcePosition();
+NSOffsetOpt = NSposOpt - obj.WFSposition(indLoud,:);
+
+%% Pasamos a modo manual
+xOffsetLim = [-0.3 -0.1];
+yOffsetLim = [0.05 0.1];
+numPointsX = 10;
+numPointsY = 10;
+xVec = linspace(xOffsetLim(1), xOffsetLim(2), numPointsX);
+yVec = linspace(yOffsetLim(1), yOffsetLim(2), numPointsY);
+[x, y] = ndgrid(xVec, yVec);
+x = x(:);
+y = y(:);
+gridOffset = [x, y, zeros(numel(x), 1)];
+numPointsGrid = size(gridOffset, 1);
+gridPoints = repmat(obj.WFSposition(indLoud,:), numPointsGrid, 1) + gridOffset;
+
+obj.cancelResults = [];
+n = 0;
+for p = 1:numPointsGrid
+    fprintf(repmat('\b', 1, n));
+    msg = sprintf('%d/%d', p, numPointsGrid);
+    fprintf(msg);
+    n = numel(msg);
+    
+% Place the noise source at the same position as the loudspeaker
+obj.NSposition = gridPoints(p, :);
+
+% Update the acoustic path for the noise source so it has a theoric
+% acoustic path
+obj.setAcousticPaths('NS', 'theoretical');
+
+% Simulate the produced field in the receiver positions
+obj.WFSToolObj.prepareOptimization();
+obj.WFScoef(indLoud) = 1;
+obj.WFSToolObj.WFS_optimisation('SourceFilter', 'NoFilter',...
+    'AcousticPath', 'Current', 'Grouping', 'AllTogether');
+obj.WFSToolObj.prepareSimulation();
+obj.WFSToolObj.simulate();
+
+% Save the information of this simulation
+sAux = obj.generateBasicExportStructure();
+obj.cancelResults = [obj.cancelResults; sAux];
+end
+fprintf('\n')
+
+s = obj.cancelResults;
+
+%% Visualization: global cancellation
+Cglobal = zeros(size(s));
+for k = 1:numel(s)
+    % Calculate global cancellation
+    Cglobal(k) = sum(abs(s(k).recCoef).^2)/sum(abs(s(k).recNScoef).^2);
+end
+
+Cg_dB = 10*log10(Cglobal);
+
+% Visualize
+simulFieldFormatted = mergeAndPermute(Cglobal, {3, [1 2]}, true, [numPointsX, numPointsY]);
+visualObj = animation({xVec, yVec},...
+    {simulFieldFormatted}, {'x', 'y'}, {'Power'}, [], []);
+
+%%
+
+% Visualize results
+microPos = obj.microPos;
+numMicro = size(microPos, 1);
+
+distances = zeros(numMicro, numPointsGrid);
+WFSfield = zeros(numMicro, numPointsGrid);
+NSfield = zeros(numMicro, numPointsGrid);
+field = zeros(numMicro, numPointsGrid);
+for p = 1:numPointsGrid
+    distances(:, p) = sqrt(sum((microPos - repmat(s(p).NSRposition, numMicro, 1)).^2, 2));
+    WFSfield(:, p) = s(p).recWFScoef;
+    NSfield(:, p) = s(p).recNScoef;
+    field(:, p) = s(p).recCoef;
+end
+distances0 = sqrt(sum((microPos - repmat(obj.WFSposition(indLoud,:), numMicro, 1)).^2, 2));
+
+
+% Magnitude
+ax = axes(figure);
+scat = scatter(ax, distances(:, p), abs(WFSfield(:, 1)), '.');
+ax.XLim = [0 5];
+for p = 1:numPointsGrid
+    ax.Title.String = ['[', num2str(s(p).NSRposition), ']'];
+    scat.XData = distances(:, p);
+    pause(0.2)
+end
+
+% Phase
+ax = axes(figure, 'NextPlot', 'Add');
+ax.XLim = [0 5];
+scat = scatter(ax, distances(:, 1), rad2deg(angle(WFSfield(:, 1))), '.');
+scatNS = scatter(ax, distances(:, 1), rad2deg(angle(NSfield(:, 1))), '.');
+for p = 1:numPointsGrid
+    scat.XData = distances(:, p);
+    scatNS.XData = distances(:, p);
+    scatNS.YData = rad2deg(angle(NSfield(:, p)));
+    ax.Title.String = ['[', num2str(s(p).NSRposition), ']'];
+    
+    pause(0.1)
+end
+
+ax = axes(figure, 'NextPlot', 'Add');
+scat = scatter(ax, 1:obj.numMicro, rad2deg(angle(NSfield(:, 1))), '.');
+for p = 1:numPointsGrid
+    scat.YData = rad2deg(angle(WFSfield(:, 1)./NSfield(:, p)));
+    ax.Title.String = ['[', num2str(s(p).NSRposition), ']'];
+    pause(0.1)
+end
+
+phases = angle(WFSfield(:, 1));
+[~, ind] = sort(distances0);
+orderedPhases = phases(ind);
+orderedPhases = unwrap(orderedPhases);
+ax = axes(figure);
+plot(ax, distances0(ind), orderedPhases)
+
