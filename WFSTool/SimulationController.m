@@ -558,9 +558,17 @@ classdef SimulationController < handle
                 obj.setAcousticPaths('NS', 'theoretical');
 
                 % Make acoustic paths effective
-                obj.WFSToolObj.prepareSimulation();
+                obj.WFSToolObj.prepareOptimization();
 
                 % Scale properly
+                % Scale noise source coefficient. Given how cancellation is
+                % done, I suspect it is not the appropiate way of
+                % performing the optimization, since the noise source
+                % coefficient appears in the denominator as well as the
+                % numerator. It's more simple to scale the loudspeaker
+                % coefficient. BUT! It's not the cancellation the thing in
+                % which we are interested, isn't it? So, by now, I will
+                % keep doing it this way.
                 A = [obj.WFSToolObj.WFSarrayAcousticPath(:, :, 2), obj.WFSToolObj.noiseSourceAcousticPath(:, :, 1)];
                 x0 = [obj.WFScoef; obj.NSRcoef; 0];
                 indNSReal = obj.numWFS + 1;

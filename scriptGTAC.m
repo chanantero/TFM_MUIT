@@ -184,6 +184,7 @@ scatter(ax, distances(:), rad2deg(angle(WFSfield(:))), '.')
 indLoud = 25;
 obj.WFScoef(:) = 0;
 obj.WFScoef(indLoud) = 1;
+obj.NScoef = 1;
 obj.NSposition = obj.WFSposition(indLoud,:);
 obj.setAcousticPaths('NS', 'theoretical');
 
@@ -205,6 +206,7 @@ gridOffset = [x, y, zeros(numel(x), 1)];
 numPointsGrid = size(gridOffset, 1);
 gridPoints = repmat(obj.WFSposition(indLoud,:), numPointsGrid, 1) + gridOffset;
 
+obj.NScoef = 1;
 obj.cancelResults = [];
 n = 0;
 for p = 1:numPointsGrid
@@ -221,12 +223,35 @@ obj.NSposition = gridPoints(p, :);
 obj.setAcousticPaths('NS', 'theoretical');
 
 % Simulate the produced field in the receiver positions
+obj.NScoef = 1;
 obj.WFSToolObj.prepareOptimization();
 obj.WFScoef(indLoud) = 1;
 obj.WFSToolObj.WFS_optimisation('SourceFilter', 'NoFilter',...
     'AcousticPath', 'Current', 'Grouping', 'AllTogether');
 obj.WFSToolObj.prepareSimulation();
 obj.WFSToolObj.simulate();
+
+abs(obj.WFScoef(indLoud))
+abs(obj.NSRcoef)
+Cglobal = sum(abs(obj.microCoef).^2)/sum(abs(obj.microCoefNS).^2)
+
+% Other way: scale noise source coefficient
+obj.WFScoef(indLoud) = 1;
+A = [obj.WFSToolObj.WFSarrayAcousticPath(:, :, 2), obj.WFSToolObj.noiseSourceAcousticPath(:, :, 1)];
+x0 = [obj.WFScoef; obj.NSRcoef; 0];
+indNSReal = obj.numWFS + 1;
+groups = {indNSReal};
+y = zeros(obj.numMicro, 1);
+xScaled = solveLinearSystem(A, y, groups, x0);
+obj.NScoef = xScaled(indNSReal);
+% Simulate
+obj.WFSToolObj.prepareSimulation();
+obj.WFSToolObj.simulate();
+
+abs(obj.WFScoef(indLoud))
+abs(obj.NSRcoef)
+Cglobal = sum(abs(obj.microCoef).^2)/sum(abs(obj.microCoefNS).^2)
+
 
 % Save the information of this simulation
 sAux = obj.generateBasicExportStructure();
@@ -250,7 +275,84 @@ simulFieldFormatted = mergeAndPermute(Cglobal, {3, [1 2]}, true, [numPointsX, nu
 visualObj = animation({xVec, yVec},...
     {simulFieldFormatted}, {'x', 'y'}, {'Power'}, [], []);
 
-%%
+%% Test
+
+% Simulate the produced field in the receiver positions
+obj.NScoef = 1;
+obj.WFSToolObj.prepareOptimization();
+obj.WFScoef(indLoud) = 1;
+obj.WFSToolObj.WFS_optimisation('SourceFilter', 'NoFilter',...
+    'AcousticPath', 'Current', 'Grouping', 'AllTogether');
+obj.WFSToolObj.prepareSimulation();
+obj.WFSToolObj.simulate();
+
+WFScoef_A = obj.WFScoef(indLoud);
+NSRcoef_A = obj.NSRcoef;
+microCoefWFS_A = obj.microCoefWFS;
+microCoefNS_A = obj.microCoefNS;
+microCoef_A = obj.microCoef;
+
+% Other way: scale noise source coefficient
+obj.WFScoef(indLoud) = 1;
+A = [obj.WFSToolObj.WFSarrayAcousticPath(:, :, 2), obj.WFSToolObj.noiseSourceAcousticPath(:, :, 1)];
+x0 = [obj.WFScoef; obj.NSRcoef; 0];
+indNSReal = obj.numWFS + 1;
+groups = {indNSReal};
+y = zeros(obj.numMicro, 1);
+xScaled = solveLinearSystem(A, y, groups, x0);
+obj.NScoef = xScaled(indNSReal);
+% Simulate
+obj.WFSToolObj.prepareSimulation();
+obj.WFSToolObj.simulate();
+
+WFScoef_A = obj.WFScoef(indLoud);
+NSRcoef_A = obj.NSRcoef;
+microCoefWFS_A = obj.microCoefWFS;
+microCoefNS_A = obj.microCoefNS;
+microCoef_A = obj.microCoef;
+
+obj.NScoef = 1;
+indWFSactive = indLoud;
+groups = {indWFSactive};
+y = zeros(obj.numMicro, 1);
+xScaled = solveLinearSystem(A, y, groups, x0);
+obj.WFScoef(indLoud) = xScaled(indWFSactive);
+% Simulate
+obj.WFSToolObj.prepareSimulation();
+obj.WFSToolObj.simulate();
+
+WFScoef_B = obj.WFScoef(indLoud);
+NSRcoef_B = obj.NSRcoef;
+microCoefWFS_B = obj.microCoefWFS;
+microCoefNS_B = obj.microCoefNS;
+microCoef_B = obj.microCoef;
+
+abs(WFScoef_A)
+abs(NSRcoef_A)
+Cglobal = sum(abs(microCoef_A).^2)/sum(abs(microCoefNS_A).^2)
+
+abs(WFScoef_B)
+abs(NSRcoef_B)
+Cglobal = sum(abs(microCoef_B).^2)/sum(abs(microCoefNS_B).^2)
+
+differ = microCoefNS_A./microCoefNS_B - NSRcoef_A/NSRcoef_B;
+max(abs(differ)); % Almost 0
+% Hence, the field produced by the NS is obviously correct
+
+differ = microCoefWFS_A./microCoefWFS_B - WFScoef_A./WFScoef_B;
+max(abs(differ))
+% Hence, the field produced by the lousdpeaker is obviously correct
+
+microCoef_A_custom = microCoefWFS_A + microCoefNS_A;
+microCoef_B_custom = microCoefWFS_B + microCoefNS_B;
+CglobalA = sum(abs(microCoef_A_custom).^2)./sum(abs(microCoefNS_A).^2)
+CglobalB = sum(abs(microCoef_B_custom).^2)./sum(abs(microCoefNS_B).^2)
+% This is coherent.
+
+% The question now is, why are the two solutions different? Let's reduce
+% the problem to the minimum expression
+
+%% Non-conclusive analysis
 
 % Visualize results
 microPos = obj.microPos;
