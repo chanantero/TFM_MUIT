@@ -4,6 +4,8 @@
 %% Preamble
 pathSetUp;
 
+imagesPath = 'C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Documentos\Img\';
+
 dataPathName = [globalPath, 'Data\'];
 ID = datestr(now, 'yyyy-mm-dd_HH-MM-SS');
 
@@ -96,10 +98,16 @@ cdata = real(field);
 cdata = reshape(cdata, [numPointsX, numPointsY]);
 cdata = cdata.';
 
+% Visualize image in order to check if everything is allright
+ax = axes(figure);
+im = image(cdata);
+im.CDataMapping = 'scaled';
+ax.CLim = [-1, 1];
+colormap(ax, extendedColormap);
+
 indices = scaled2indexedColors(size(extendedColormap, 1), ax.CLim, cdata);
 imwrite(indices, extendedColormap, 'C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Documentos\Img\Experiment1_Example_Field.png');
 
-imagesPath = 'C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Documentos\Img\';
 name = 'Experiment1_Example';
 fileName = [imagesPath, name, '.svg'];
 drawWFSarrayFun( fileName, viewBox, 'NSposition', obj.NSRposition(1:2), 'backgroundFileName', 'Experiment1_Example_Field.png',...
@@ -111,29 +119,81 @@ system(['inkscape -z "', imagesPath, name, '.svg" --export-pdf="', imagesPath, n
 cd(currentFolder)
 
 %% Grid of points for the noise source
-% % Rectangular grid
-% gridMinX = 3;
-% gridMaxX = 4;
-% gridMinY = -1;
-% gridMaxY = 1;
-% xLim = [gridMinX, gridMaxX ]; yLim = [gridMinY, gridMaxY];
-% numPointsX = 10; numPointsY = 10;
-% x = linspace(xLim(1), xLim(2), numPointsX);
-% y = linspace(yLim(1), yLim(2), numPointsY);
-% z = 0;
-% [X, Y, Z] = ndgrid(x, y, z);
-% NSpositions = [X(:), Y(:), Z(:)];
+% Create image with these noise source positions
 
-xOctagon = obj.WFSposition(1:8:end, 1);
+    % Grid of point: circles
+numPointsPerCircle = 20;
+radius = 5;
+numCircles = numel(radius);
+alpha = linspace(0, 2*pi, numPointsPerCircle + 1); alpha = alpha(1:end-1)';
+xOctagon = obj.WFSposition(:, 1);
+yOctagon = obj.WFSposition(:, 2);
+centreX = (max(xOctagon) + min(xOctagon))/2;
+centreY = (max(yOctagon) + min(yOctagon))/2;
+x = centreX + repmat(radius, numPointsPerCircle, 1).*repmat(cos(alpha), 1, numCircles);
+y = centreY + repmat(radius, numPointsPerCircle, 1).*repmat(sin(alpha), 1, numCircles);
+
+x = x(:);
+y = y(:);
+
+NSpositions = [x, y, zeros(size(x))];
+
+NSposRel = repmat([centreX, centreY], size(NSpositions, 1), 1) - NSpositions(:, 1:2);
+NSangles = atan2d(NSposRel(:, 2), NSposRel(:, 1));
+
+    % Create WFS array in SVG
+viewBox = [min(x)-1, min(y)-1, max(x) - min(x) + 2, max(y) - min(y) + 2];
+svgText = WFSarraySVG( viewBox, 'NSposition', NSpositions(:, 1:2), 'NSangle', NSangles);
+
+    % Draw line from the center of the octagon to the circle of loudspeakers
+selLoud = 2;
+strLine1 = makePath('000000', 0.01, centreX, centreY, NSpositions(selLoud,1), NSpositions(selLoud,2), 'line');
+
+    % Draw horizontal line
+strLine2 = makePath('000000', 0.01, centreX, centreY, centreX + radius/2, centreY + 0, 'line');
+
+    % Draw arc to mark the angle alpha
+endAngle = NSangles(selLoud) + 180;
+startAngle = 0;
+strArc = makeCircumferenceArc(centreX, centreY, 1, startAngle, endAngle, '000000', 0.01);
+
+    % Draw the symbol of the distance
+dir = (NSpositions(selLoud, 1:2) - [centreX, centreY])/radius;
+strDistance = makeText( '$R$', 0.1, '000000', centreX + dir(1)*radius*0.75, centreY + dir(2)*radius*0.75, 'distanceSymbol');
+
+    % Draw the symbol for the angle
+strAngle = makeText( '$\alpha$', 0.1, '000000', centreX + 1, centreY + 0.4, 'distanceSymbol');
+
+svgText = strrep(svgText, '[Other]', [strLine1, sprintf('\n'), strLine2, sprintf('\n'),...
+    strArc, sprintf('\n'), strAngle, sprintf('\n'), strDistance]);
+
+    % Write SVG file
+name = 'Experiment1_differentNSpositions';
+fileName = [imagesPath, name, '.svg'];
+destFile = fopen(fileName, 'w', 'n', 'UTF-8');
+fwrite(destFile, svgText, 'char');
+fclose(destFile);
+
+    % Export to PDF
+currentFolder = pwd;
+cd(imagesPath); % Needed for inkscape to link svg files properly
+system(['inkscape -z "', imagesPath, name, '.svg" --export-pdf="', imagesPath, name, '.pdf" --export-latex'])
+cd(currentFolder)
+
+%% Apply cancellation
+
+% Circles
+numPointsPerCircle = 80;
+radius = [5 50 500 5000];
+numCircles = numel(radius);
+alpha = linspace(0, 2*pi, numPointsPerCircle + 1); alpha = alpha(1:end-1)';
+xOctagon = obj.WFSposition(:, 1);
+yOctagon = obj.WFSposition(:, 2);
+centreX = (max(xOctagon) + min(xOctagon))/2;
+centreY = (max(yOctagon) + min(yOctagon))/2;
+x = centreX + repmat(radius, numPointsPerCircle, 1).*repmat(cos(alpha), 1, numCircles);
+y = centreY + repmat(radius, numPointsPerCircle, 1).*repmat(sin(alpha), 1, numCircles);
 yOctagon = obj.WFSposition(1:8:end, 2);
-centreX = (max(xOctagon) - min(xOctagon))/2;
-centreY = (max(yOctagon) - min(yOctagon))/2;
-F = logspace(log10(1.5), log10(100), 1);
-x = centreX + (xOctagon - centreX)*F;
-y = centreY + (yOctagon - centreY)*F;
-
-numOct = numel(F);
-numPointsPerOct = size(xOctagon, 1);
 
 x = x(:);
 y = y(:);
@@ -146,48 +206,14 @@ for p = 1:numNSpos
     fprintf('%d/%d\n', p, numNSpos);
     
     obj.NSposition = NSpositions(p, :); % Assumed real position
-    obj.setAcousticPaths('NS', 'theoretical', 'WFS', 'theoretical');
+    obj.setAcousticPaths('NS', 'theoretical');
     
-    % a) Perform WFS calculation without optimization
-    obj.cancel();
-        
-    % b) Optimization with default theoretical acoustic paths and AllTogether
-%     obj.cancel({'Loudspeakers'}, false, {'Theoretical'}, {'AllTogether'}, false);
-    
-    % c) Optimization with default grid of theoretical acoustic paths and
-    % no restrictions (Independent).
-%     obj.cancel({'Loudspeakers'}, false, {'Theoretical'}, {'Independent'}, false);
-    
-    % d) Optimization with theoretical acoustic paths where the microphones
-    % are and AllTogether
-%     obj.cancel({'Loudspeakers'}, false, {'Theoretical'}, {'AllTogether'}, false, 'testPoints', obj.microPos);
-    
-    % e) Optimization with theoretical acoustic paths where the microphones
-    % are and Independent
-%     obj.cancel({'Loudspeakers'}, false, {'Theoretical'}, {'Independent'}, false, 'testPoints', obj.microPos);
-    
-    % f) Optimization with current aocustic paths and AllToghether option.
-    % If we use theoretical acoustic paths as current acoustic paths, this result should be the same 
-    % as in d)
-    obj.cancel({'Loudspeakers'}, false, {'Current'}, {'AllTogether'}, false);
-    
-    % g) Optimization with no restrictions. 
-    % If we use theoretical acoustic paths as current acoustic paths, this result should be the same 
-    % as in e)
-%     obj.cancel({'Loudspeakers'}, true, {'Current'}, {'Independent'}, false);
-    
-    % h) Optimization with no restrictions. Special case.
-    % Use solution of case f) as initial estimation of the solution with
-    % magnitude constraint.
-    obj.WFScoef = obj.cancelResults(end).WFScoef;
-    obj.WFSToolObj.WFS_optimisation('SourceFilter', 'Loudspeakers', 'AcousticPath', 'Current', 'Grouping', 'Independent', 'maxAbsoluteValueConstraint', true, 'zerosFixed', false);
-    obj.WFSToolObj.simulate();
-    sAux = obj.generateBasicExportStructure();
-    obj.cancelResults = [obj.cancelResults; sAux];
+    obj.cancel();   
+    obj.cancel({'NoFilter'}, false, {'Current'}, {'AllTogether'}, false);
 end
 
 s = obj.cancelResults;
-s = reshape(s, [3, numPointsPerOct, numOct]);
+s = reshape(s, [2, numPointsPerCircle, numCircles]);
 
 % save([globalPath, 'Data/differentOcts_', ID, '.mat'], 's');
 
@@ -215,14 +241,41 @@ end
 Cg_dB = 10*log10(Cglobal);
 
 % Visualize
-numPointsPerOct = size(s, 2); numOct = size(s, 3);
-visualObj = animation({1:size(s, 1), 1:numPointsPerOct, 1:numOct},...
-    {Cg_dB}, {'Type', 'Points', 'Octogon'}, {'Cancellation'}, [], []);
+numPointsPerCircle = size(s, 2); numCircles = size(s, 3);
+visualObj = animation({1:size(s, 1), 1:numPointsPerCircle, 1:numCircles},...
+    {Cg_dB}, {'Type', 'Points', 'Circle'}, {'Cancellation'}, [], []);
 
+% Generate graph for TFM report
+ax = axes(figure);
+Cg_dB_scal = permute(Cg_dB(2, :, :), [2 3, 1]);
+plot(ax, rad2deg(alpha), Cg_dB_scal)
+ax.XLabel.String = '\alpha (º)';
+ax.YLabel.String = 'Global cancellation (dB)';
+legLab = cell(numCircles, 1);
+for c = 1:numCircles
+    legLab{c} = num2str(radius(c));
+end
+l = legend(ax, legLab);
+title(l, 'R')
+
+% widthInPixels = 600;
+% heightInPixels = 600;
+% fig = ax.Parent;
+% fig.Position(3:4) = [widthInPixels, heightInPixels];
+% fig.Position(1:2) = [0 0];
+
+fontSize_axesWidth_ratio = 0.08;
+fontSize = ax.Position(3) * fontSize_axesWidth_ratio;
+ax.XLabel.FontUnits = 'normalized';
+ax.XLabel.FontSize = fontSize;
+ax.YLabel.FontUnits = 'normalized';
+ax.YLabel.FontSize = fontSize;
+
+printfig(ax.Parent, imagesPath, 'Experiment1_globalCancDifNSpos', 'eps');
 %% Visualization: correction factor AllTogether
-corrFact1 = zeros(numPointsPerOct, numOct);
-for o = 1:numOct
-    for p = 1:numPointsPerOct
+corrFact1 = zeros(numPointsPerCircle, numCircles);
+for o = 1:numCircles
+    for p = 1:numPointsPerCircle
         % Calculate scaling correction factor in case b) and d)
             % Find element that is not 0
         defaultWFScoef = s(1, p, o).WFScoef;
@@ -259,9 +312,11 @@ meanAbs = mean(abs(data));
 stdAbs = std(abs(data));
 normStdAbs = stdAbs./meanAbs;
 
-meanPhase = mean(rad2deg(angle(data)));
-stdPhase = std(rad2deg(angle(data)));
+[meanPhase, ~, stdPhase] = circularDistributionParameters(angle(data));
+stdPhase = rad2deg(stdPhase);
+meanPhase = rad2deg(meanPhase);
 normStdPhase = stdPhase./meanPhase;
+
 
 str = cell(size(data, 2), 1);
 for k = 1:size(data, 2)
@@ -269,7 +324,7 @@ for k = 1:size(data, 2)
 end
 l = legend(ax, str);
 l.Interpreter = 'latex';
-
-ax = axes(figure);
-plot(ax, abs(data))
-plot(ax, rad2deg(unwrap(angle(data))))
+% 
+% ax = axes(figure);
+% plot(ax, abs(data))
+% plot(ax, rad2deg(unwrap(angle(data))))
