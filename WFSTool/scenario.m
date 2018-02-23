@@ -409,9 +409,8 @@ classdef scenario < handle
 %             obj.loudspeakersState(:) = true;
 
             atten = obj.calcPhysicalAttenuation(distances, cosAlfa);
-                      
+             
             atten(~obj.getEnabledLoudspeakers()) = 0;
-            
             
         end
         
@@ -450,9 +449,16 @@ classdef scenario < handle
                 sourceIndices = 1:obj.numSources;
             end
             
-            forcedEnabled = repmat(obj.forcedEnabledLoudspeakers, 1, numel(sourceIndices));
-            forcedDisabled = repmat(obj.forcedDisabledLoudspeakers, 1, numel(sourceIndices));
-            ind = (obj.loudspeakersState | forcedEnabled) & ~forcedDisabled;
+            forcedEnabled = repmat(obj.forcedEnabledLoudspeakers, 1, numel(sourceIndices));            
+            
+            % Let the parend class handle the problem of the disabled
+            % loudspeakers. That's why I commented the next lines
+            
+%             forcedDisabled = repmat(obj.forcedDisabledLoudspeakers, 1, numel(sourceIndices));
+%             ind = (obj.loudspeakersState | forcedEnabled) & ~forcedDisabled;
+
+            % and substituted them by
+            ind = (obj.loudspeakersState | forcedEnabled);
         end
               
     end

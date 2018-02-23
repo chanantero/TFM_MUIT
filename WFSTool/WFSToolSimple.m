@@ -863,6 +863,7 @@ classdef WFSToolSimple < handle
             [obj.loudspeakerChannelMapping, mapping] = combineIndices(obj.WFSarrayChannelMapping, noiseSourceChannelMapping_real);
             mapping(2).originInd = indReal(mapping(2).originInd);
             obj.loudspeakerMapping = mapping;
+            obj.updateForcedDisabledLoudspeakers();
         end
         
         function reproduceSignalFunction(obj, signalFunction, signalSampleRate, channelMapping)

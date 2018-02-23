@@ -46,6 +46,11 @@ obj.microPos = grid;
 % Acoustic paths
 obj.setAcousticPaths('NS', 'theoretical', 'WFS', 'theoretical');
 
+% The real noise channel is not associated to any loudspeaker of the WFS
+% array, since we don't want to reproduce anything but only simulate
+% obj.WFSToolObj.noiseSourceChannelMapping = [0; 0];
+% obj.WFSToolObj.updateForcedDisabledLoudspeakers();
+
 %% One position cancellation
 % Choose a position for the noise source.
 obj.NSposition = [-1 2.5 0];
@@ -183,8 +188,8 @@ cd(currentFolder)
 %% Apply cancellation
 
 % Circles
-numPointsPerCircle = 80;
-radius = [5 50 500 5000];
+numPointsPerCircle = 60;
+radius = [5 50 5000];
 numCircles = numel(radius);
 alpha = linspace(0, 2*pi, numPointsPerCircle + 1); alpha = alpha(1:end-1)';
 xOctagon = obj.WFSposition(:, 1);
@@ -248,9 +253,11 @@ visualObj = animation({1:size(s, 1), 1:numPointsPerCircle, 1:numCircles},...
 % Generate graph for TFM report
 ax = axes(figure);
 Cg_dB_scal = permute(Cg_dB(2, :, :), [2 3, 1]);
-plot(ax, rad2deg(alpha), Cg_dB_scal)
+plot(ax, rad2deg([alpha; 2*pi]), [Cg_dB_scal; Cg_dB_scal(1, :)])
 ax.XLabel.String = '\alpha (º)';
 ax.YLabel.String = 'Global cancellation (dB)';
+ax.XTick = 0:90:360;
+ax.XLim = [0, 360];
 legLab = cell(numCircles, 1);
 for c = 1:numCircles
     legLab{c} = num2str(radius(c));
@@ -258,6 +265,7 @@ end
 l = legend(ax, legLab);
 title(l, 'R')
 
+% Print graph
 % widthInPixels = 600;
 % heightInPixels = 600;
 % fig = ax.Parent;
