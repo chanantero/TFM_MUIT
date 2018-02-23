@@ -46,11 +46,6 @@ obj.microPos = grid;
 % Acoustic paths
 obj.setAcousticPaths('NS', 'theoretical', 'WFS', 'theoretical');
 
-% The real noise channel is not associated to any loudspeaker of the WFS
-% array, since we don't want to reproduce anything but only simulate
-% obj.WFSToolObj.noiseSourceChannelMapping = [0; 0];
-% obj.WFSToolObj.updateForcedDisabledLoudspeakers();
-
 %% One position cancellation
 % Choose a position for the noise source.
 obj.NSposition = [-1 2.5 0];
