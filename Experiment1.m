@@ -240,10 +240,10 @@ end
 
 Cg_dB = 10*log10(Cglobal);
 
-% Visualize
-numPointsPerCircle = size(s, 2); numCircles = size(s, 3);
-visualObj = animation({1:size(s, 1), 1:numPointsPerCircle, 1:numCircles},...
-    {Cg_dB}, {'Type', 'Points', 'Circle'}, {'Cancellation'}, [], []);
+% % Visualize
+% numPointsPerCircle = size(s, 2); numCircles = size(s, 3);
+% visualObj = animation({1:size(s, 1), 1:numPointsPerCircle, 1:numCircles},...
+%     {Cg_dB}, {'Type', 'Points', 'Circle'}, {'Cancellation'}, [], []);
 
 % Generate graph for TFM report
 ax = axes(figure);
@@ -320,14 +320,40 @@ stdPhase = rad2deg(stdPhase);
 meanPhase = rad2deg(meanPhase);
 normStdPhase = stdPhase./meanPhase;
 
-
 str = cell(size(data, 2), 1);
 for k = 1:size(data, 2)
     str{k} = sprintf('$|\\overline{x}| = %.2g$, angle$(\\overline{x}) = %.0f$, $\\sigma_{n} = %.2g$, $\\sigma_{n, abs} = %.2g$, $\\sigma_{n, phase} = %.2g$', meanAbs(k), meanPhase(k), normStd(k), normStdAbs(k), normStdPhase(k));
 end
 l = legend(ax, str);
 l.Interpreter = 'latex';
-% 
-% ax = axes(figure);
-% plot(ax, abs(data))
-% plot(ax, rad2deg(unwrap(angle(data))))
+
+ax = axes(figure);
+yyaxis(ax, 'left')
+plot(ax, rad2deg([alpha; 2*pi]), abs([data; data(1,:)]))
+ax.XLabel.String = '\alpha';
+ax.YLim = [0, max(abs(data(:)))*2];
+ax.XLim = [0, 360];
+ax.YLabel.String = '|\Psi|';
+yyaxis(ax, 'right');
+lAngle = plot(ax, rad2deg([alpha; 2*pi]), rad2deg(unwrap(angle([data; data(1,:)]))));
+ax.YLim = [-180 180];
+ax.YLabel.String = 'Phase of \Psi (º)';
+
+legLab = cell(numCircles, 1);
+for c = 1:numCircles
+    legLab{c} = num2str(radius(c));
+end
+l = legend(ax, [legLab; legLab]);
+l.Interpreter = 'latex';
+title(l, 'R (m)')
+
+fontSize_axesWidth_ratio = 0.08;
+fontSize = ax.Position(3) * fontSize_axesWidth_ratio;
+ax.XLabel.FontUnits = 'normalized';
+ax.XLabel.FontSize = fontSize;
+ax.YAxis(1).Label.FontUnits = 'normalized';
+ax.YAxis(1).Label.FontSize = fontSize;
+ax.YAxis(2).Label.FontUnits = 'normalized';
+ax.YAxis(2).Label.FontSize = fontSize;
+
+printfig(ax.Parent, imagesPath, 'Experiment1_globalCancScaleFactor', 'eps');
