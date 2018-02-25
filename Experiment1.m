@@ -118,10 +118,9 @@ cd(imagesPath); % Needed for inkscape to link svg files properly
 system(['inkscape -z "', imagesPath, name, '.svg" --export-pdf="', imagesPath, name, '.pdf"'])
 cd(currentFolder)
 
-%% Grid of points for the noise source
-% Create image with these noise source positions
+%% Image of different noise source positions
 
-    % Grid of point: circles
+% Grid of points for the noise source: circles
 numPointsPerCircle = 20;
 radius = 5;
 numCircles = numel(radius);
@@ -140,6 +139,8 @@ NSpositions = [x, y, zeros(size(x))];
 
 NSposRel = repmat([centreX, centreY], size(NSpositions, 1), 1) - NSpositions(:, 1:2);
 NSangles = atan2d(NSposRel(:, 2), NSposRel(:, 1));
+
+% Create image with these noise source positions
 
     % Create WFS array in SVG
 viewBox = [min(x)-1, min(y)-1, max(x) - min(x) + 2, max(y) - min(y) + 2];
