@@ -358,3 +358,153 @@ ax.YAxis(2).Label.FontUnits = 'normalized';
 ax.YAxis(2).Label.FontSize = fontSize;
 
 printfig(ax.Parent, imagesPath, 'Experiment1_globalCancScaleFactor', 'eps');
+
+%% Different grids
+
+% Create grids of microphones
+extRectXmin = min(obj.WFSposition(:, 1));
+extRectXmax = max(obj.WFSposition(:, 1));
+extRectYmin = min(obj.WFSposition(:, 2));
+extRectYmax = max(obj.WFSposition(:, 2));
+octagonRectPos = [extRectXmin, extRectYmin, extRectXmax - extRectXmin, extRectYmax - extRectYmin];
+gridXLength = 2.1;
+gridYLength = 3.8;
+centerX = (extRectXmax + extRectXmin)/2;
+centerY = (extRectYmax + extRectYmin)/2;
+gridMinX = centerX - gridXLength/2;
+gridMaxX = centerX + gridXLength/2;
+gridMinY = centerY - gridYLength/2;
+gridMaxY = centerY + gridYLength/2;
+xLim = [gridMinX, gridMaxX]; yLim = [gridMinY, gridMaxY];
+
+    % First grid
+imageGrid1 = [centerX, centerY, 0];
+radius1 = 0.05;
+
+    % Second grid
+numPointsX = 20;
+numPointsY = 20;
+x = linspace(xLim(1), xLim(2), numPointsX);
+y = linspace(yLim(1), yLim(2), numPointsY);
+z = 0;
+[X, Y, Z] = ndgrid(x, y, z);
+imageGrid2 = [X(:), Y(:), Z(:)];
+deltaX = x(2) - x(1);
+deltaY = y(2) - y(1);
+radius2 = min(deltaX, deltaY)/3;
+
+    % Third grid
+numPointsX = 40;
+numPointsY = 40;
+x = linspace(xLim(1), xLim(2), numPointsX);
+y = linspace(yLim(1), yLim(2), numPointsY);
+z = 0;
+[X, Y, Z] = ndgrid(x, y, z);
+imageGrid3 = [X(:), Y(:), Z(:)];
+deltaX = x(2) - x(1);
+deltaY = y(2) - y(1);
+radius3 = min(deltaX, deltaY)/3;
+
+    % Create images
+grids = {imageGrid1, imageGrid2, imageGrid3};
+names = {'Experiment1_imageGrid1', 'Experiment1_imageGrid2', 'Experiment1_imageGrid3'};
+radius = [radius1, radius2, radius3];
+numGrids = numel(grids);
+
+viewBox = [octagonRectPos(1) - 0.25, octagonRectPos(2) - 0.25, octagonRectPos(3) + 0.5, octagonRectPos(4) + 0.5];
+objSVG = SVGdrawer('viewBox', viewBox, 'NSpositions', double.empty(0,2), 'microSymbol', 'dot', 'microSize', 0.01);
+for k = 1:numGrids
+imageGrid = grids{k};
+objSVG.microPositions = imageGrid;
+objSVG.microSize = radius(k);
+
+fileName = [imagesPath, names{k}, '.svg'];
+objSVG.drawSVG(fileName);
+
+currentFolder = pwd;
+cd(imagesPath); % Needed for inkscape to link svg files properly
+system(['inkscape -z "', imagesPath, names{k}, '.svg" --export-pdf="', imagesPath, names{k}, '.pdf"'])
+cd(currentFolder)
+end
+
+% Apply cancellation
+    % Circles
+numPointsPerCircle = 60;
+radius = [50];
+numCircles = numel(radius);
+alpha = linspace(0, 2*pi, numPointsPerCircle + 1); alpha = alpha(1:end-1)';
+xOctagon = obj.WFSposition(:, 1);
+yOctagon = obj.WFSposition(:, 2);
+centreX = (max(xOctagon) + min(xOctagon))/2;
+centreY = (max(yOctagon) + min(yOctagon))/2;
+x = centreX + repmat(radius, numPointsPerCircle, 1).*repmat(cos(alpha), 1, numCircles);
+y = centreY + repmat(radius, numPointsPerCircle, 1).*repmat(sin(alpha), 1, numCircles);
+yOctagon = obj.WFSposition(1:8:end, 2);
+
+x = x(:);
+y = y(:);
+
+NSpositions = [x, y, zeros(size(x))];
+numNSpos = size(NSpositions, 1);
+
+    % Calculate correction factor
+obj.cancelResults = [];
+for g = 1:numGrids
+    fprintf('%d/%d Grids\n', g, numGrids);
+    obj.microPos = grids{g};
+    obj.setAcousticPaths('WFS', 'theoretical');
+    
+    for p = 1:numNSpos
+        fprintf(' %d/%d pos\n', p, numNSpos);
+        
+        obj.NSposition = NSpositions(p, :); % Assumed real position
+        obj.setAcousticPaths('NS', 'theoretical');
+        obj.cancel();
+        obj.cancel({'NoFilter'}, false, {'Current'}, {'AllTogether'}, false);
+    end
+end
+
+s = obj.cancelResults;
+s = reshape(s, [2, numPointsPerCircle, numCircles, numGrids]);
+
+corrFact = zeros(numPointsPerCircle, numCircles, numGrids);
+for p = 1:numPointsPerCircle
+    for c = 1:numCircles
+        for g = 1:numGrids
+            defaultWFScoef = s(1, p, c, g).WFScoef;
+            ind = find(defaultWFScoef ~= 0, 1, 'first');
+            corrFact(p, c, g) = s(2, p, c, g).WFScoef(ind)/s(1, p, c, g).WFScoef(ind);
+        end
+    end
+end
+
+% ax = axes(figure);
+% ax.Title.Interpreter = 'latex';
+% hold on
+% data = corrFact;
+% cmap = colormap('lines');
+% for k = 1:size(data, 3)
+% xData = real(data(:, :, k));
+% yData = imag(data(:, :, k));
+% scat = scatter(ax, xData, yData, 10, cmap(k, :), 'filled');
+% end
+% maxAbs = max(abs(data(:)));
+% ax.XLim = [-maxAbs, maxAbs]; ax.YLim = [-maxAbs, maxAbs];
+% ax.DataAspectRatio = [1 1 3];
+
+    % Global cancellation for last grid with different values of global
+% correction factor
+numMicro = numel(s(1, 1, 1, end).recCoef);
+cMicro = zeros(numMicro, numPointsPerCircle, numCircles, numGrids);
+cancGlob = zeros(numPointsPerCircle, numCircles, numGrids);
+for p = 1:numPointsPerCircle
+    for c = 1:numCircles
+        recNS = s(1, p, c, end).recNScoef;
+        recWFSdefault = s(1, p, c, end).recWFScoef;
+        for g = 1:numGrids
+            cMicro(:, p, c, g) = recNS + recWFSdefault*corrFact(p, c, g);
+            cancGlob(p, c, g) = sum(abs(cMicro(:, p, c, g)).^2)/sum(abs(recNS).^2);
+        end
+    end
+end
+

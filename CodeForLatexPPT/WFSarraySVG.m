@@ -41,7 +41,13 @@ betabd = 45; % Deviation angle between bottom/upper and diagonal sides
 [ xLoud, yLoud, angleLoud ] = octogon(d, nb, nd, nl, betabd);
 
 % Position and orientation of noise loudspeaker
+if numel(NSpos) == 0
+    xNoise = [];
+    yNoise = [];
+    angleNoise = [];
+else
 xNoise = NSpos(:, 1); yNoise = NSpos(:, 2); angleNoise = NSangle; noiseName = 'loudspeakerSound';
+end
 
 % Positions of microphones
 xMicro = microPos(:, 1);
