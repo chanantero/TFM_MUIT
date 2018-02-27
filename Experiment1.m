@@ -216,8 +216,6 @@ end
 s = obj.cancelResults;
 s = reshape(s, [2, numPointsPerCircle, numCircles]);
 
-% save([globalPath, 'Data/differentOcts_', ID, '.mat'], 's');
-
 %% Visualization: 2D map, case by case
 
 % Format structure
@@ -262,20 +260,20 @@ l = legend(ax, legLab);
 title(l, 'R')
 
 % Print graph
-% widthInPixels = 600;
-% heightInPixels = 600;
-% fig = ax.Parent;
-% fig.Position(3:4) = [widthInPixels, heightInPixels];
-% fig.Position(1:2) = [0 0];
+% % widthInPixels = 600;
+% % heightInPixels = 600;
+% % fig = ax.Parent;
+% % fig.Position(3:4) = [widthInPixels, heightInPixels];
+% % fig.Position(1:2) = [0 0];
 
-fontSize_axesWidth_ratio = 0.08;
-fontSize = ax.Position(3) * fontSize_axesWidth_ratio;
-ax.XLabel.FontUnits = 'normalized';
-ax.XLabel.FontSize = fontSize;
-ax.YLabel.FontUnits = 'normalized';
-ax.YLabel.FontSize = fontSize;
-
-printfig(ax.Parent, imagesPath, 'Experiment1_globalCancDifNSpos', 'eps');
+% fontSize_axesWidth_ratio = 0.08;
+% fontSize = ax.Position(3) * fontSize_axesWidth_ratio;
+% ax.XLabel.FontUnits = 'normalized';
+% ax.XLabel.FontSize = fontSize;
+% ax.YLabel.FontUnits = 'normalized';
+% ax.YLabel.FontSize = fontSize;
+% 
+% printfig(ax.Parent, imagesPath, 'Experiment1_globalCancDifNSpos', 'eps');
 %% Visualization: correction factor AllTogether
 corrFact1 = zeros(numPointsPerCircle, numCircles);
 for o = 1:numCircles
@@ -377,60 +375,47 @@ gridMinY = centerY - gridYLength/2;
 gridMaxY = centerY + gridYLength/2;
 xLim = [gridMinX, gridMaxX]; yLim = [gridMinY, gridMaxY];
 
-    % First grid
-imageGrid1 = [centerX, centerY, 0];
-radius1 = 0.05;
-
-    % Second grid
-numPointsX = 20;
-numPointsY = 20;
-x = linspace(xLim(1), xLim(2), numPointsX);
-y = linspace(yLim(1), yLim(2), numPointsY);
-z = 0;
-[X, Y, Z] = ndgrid(x, y, z);
-imageGrid2 = [X(:), Y(:), Z(:)];
-deltaX = x(2) - x(1);
-deltaY = y(2) - y(1);
-radius2 = min(deltaX, deltaY)/3;
-
-    % Third grid
-numPointsX = 40;
-numPointsY = 40;
-x = linspace(xLim(1), xLim(2), numPointsX);
-y = linspace(yLim(1), yLim(2), numPointsY);
-z = 0;
-[X, Y, Z] = ndgrid(x, y, z);
-imageGrid3 = [X(:), Y(:), Z(:)];
-deltaX = x(2) - x(1);
-deltaY = y(2) - y(1);
-radius3 = min(deltaX, deltaY)/3;
-
-    % Create images
-grids = {imageGrid1, imageGrid2, imageGrid3};
-names = {'Experiment1_imageGrid1', 'Experiment1_imageGrid2', 'Experiment1_imageGrid3'};
-radius = [radius1, radius2, radius3];
+numPointsX = [3 5 10 20];
+numPointsY = [3 5 10 20];
+numGrids = numel(numPointsX);
+grids = cell(numGrids, 1);
+dotRadius = zeros(numGrids, 1);
+for g = 1:numGrids
+    x = linspace(xLim(1), xLim(2), numPointsX(g));
+    y = linspace(yLim(1), yLim(2), numPointsY(g));
+    z = 0;
+    [X, Y, Z] = ndgrid(x, y, z);
+    grids{g} = [X(:), Y(:), Z(:)];
+    deltaX = x(2) - x(1);
+    deltaY = y(2) - y(1);
+    dotRadius(g) = min(deltaX, deltaY)/3;   
+end
+% First grid is special
+grids = [{[centerX, centerY, 0]}; grids];
+dotRadius = [0.05; dotRadius];
 numGrids = numel(grids);
 
-viewBox = [octagonRectPos(1) - 0.25, octagonRectPos(2) - 0.25, octagonRectPos(3) + 0.5, octagonRectPos(4) + 0.5];
-objSVG = SVGdrawer('viewBox', viewBox, 'NSpositions', double.empty(0,2), 'microSymbol', 'dot', 'microSize', 0.01);
-for k = 1:numGrids
-imageGrid = grids{k};
-objSVG.microPositions = imageGrid;
-objSVG.microSize = radius(k);
-
-fileName = [imagesPath, names{k}, '.svg'];
-objSVG.drawSVG(fileName);
-
-currentFolder = pwd;
-cd(imagesPath); % Needed for inkscape to link svg files properly
-system(['inkscape -z "', imagesPath, names{k}, '.svg" --export-pdf="', imagesPath, names{k}, '.pdf"'])
-cd(currentFolder)
-end
+% currentFolder = pwd;
+% cd(imagesPath); % Needed for inkscape to link svg files properly
+% viewBox = [octagonRectPos(1) - 0.25, octagonRectPos(2) - 0.25, octagonRectPos(3) + 0.5, octagonRectPos(4) + 0.5];
+% objSVG = SVGdrawer('viewBox', viewBox, 'NSpositions', double.empty(0,2), 'microSymbol', 'dot', 'microSize', 0.01);
+% for k = 1:numGrids
+% imageGrid = grids{k};
+% objSVG.microPositions = imageGrid;
+% objSVG.microSize = 0.035; % dotRadius(k);
+% 
+% name = ['Experiment1_imageGrid', num2str(k)];
+% fileName = [imagesPath, name, '.svg'];
+% objSVG.drawSVG(fileName);
+% 
+% system(['inkscape -z "', imagesPath, name, '.svg" --export-pdf="', imagesPath, name, '.pdf"'])
+% end
+% cd(currentFolder)
 
 % Apply cancellation
     % Circles
 numPointsPerCircle = 60;
-radius = [50];
+radius = 50;
 numCircles = numel(radius);
 alpha = linspace(0, 2*pi, numPointsPerCircle + 1); alpha = alpha(1:end-1)';
 xOctagon = obj.WFSposition(:, 1);
@@ -478,19 +463,19 @@ for p = 1:numPointsPerCircle
     end
 end
 
-% ax = axes(figure);
-% ax.Title.Interpreter = 'latex';
-% hold on
-% data = corrFact;
-% cmap = colormap('lines');
-% for k = 1:size(data, 3)
-% xData = real(data(:, :, k));
-% yData = imag(data(:, :, k));
-% scat = scatter(ax, xData, yData, 10, cmap(k, :), 'filled');
-% end
-% maxAbs = max(abs(data(:)));
-% ax.XLim = [-maxAbs, maxAbs]; ax.YLim = [-maxAbs, maxAbs];
-% ax.DataAspectRatio = [1 1 3];
+ax = axes(figure);
+ax.Title.Interpreter = 'latex';
+hold on
+data = corrFact;
+cmap = colormap('lines');
+for k = 1:size(data, 3)
+xData = real(data(:, :, k));
+yData = imag(data(:, :, k));
+scat = scatter(ax, xData, yData, 10, cmap(k, :), 'filled');
+end
+maxAbs = max(abs(data(:)));
+ax.XLim = [-maxAbs, maxAbs]; ax.YLim = [-maxAbs, maxAbs];
+ax.DataAspectRatio = [1 1 3];
 
     % Global cancellation for last grid with different values of global
 % correction factor
@@ -508,3 +493,109 @@ for p = 1:numPointsPerCircle
     end
 end
 
+% Visualize
+ax = axes(figure);
+Cg_dB = permute(10*log10(cancGlob(:, 1, :)), [1 3 2]);
+plot(ax, rad2deg([alpha; 2*pi]), [Cg_dB; Cg_dB(1, :)])
+ax.XLabel.String = '\alpha (º)';
+ax.YLabel.String = 'Global cancellation (dB)';
+ax.XTick = 0:90:360;
+ax.XLim = [0, 360];
+legLab = cell(numGrids, 1);
+l = legend(ax, {'a', 'b', 'c', 'd', 'e'});
+
+fontSize_axesWidth_ratio = 0.08;
+fontSize = ax.Position(3) * fontSize_axesWidth_ratio;
+ax.XLabel.FontUnits = 'normalized';
+ax.XLabel.FontSize = fontSize;
+ax.YAxis.Label.FontUnits = 'normalized';
+ax.YAxis.Label.FontSize = fontSize;
+
+% printfig(ax.Parent, imagesPath, 'Experiment1_diffMicroGrid', 'eps');
+
+%% Optimization without restrictions. Is it useful?
+
+obj.NSposition = [3.35 -0.2 0]; % Assumed real position
+
+% Create a pixel grid for the image
+marginRatioLeft = 0.6;
+marginRatioRight = 0.2;
+marginRatioTop = 0.2;
+marginRatioBottom = 0.2;
+numPointsX = 400;
+numPointsY = 400;
+
+extRectXmin = min(obj.WFSposition(:, 1));
+extRectXmax = max(obj.WFSposition(:, 1));
+extRectYmin = min(obj.WFSposition(:, 2));
+extRectYmax = max(obj.WFSposition(:, 2));
+gridMinX = extRectXmin - gridXLength*marginRatioLeft;
+gridMaxX = extRectXmax + gridXLength*marginRatioRight;
+gridMinY = extRectYmin - gridYLength*marginRatioBottom;
+gridMaxY = extRectYmax + gridYLength*marginRatioTop;
+xLim = [gridMinX, gridMaxX]; yLim = [gridMinY, gridMaxY];
+x = linspace(xLim(1), xLim(2), numPointsX);
+y = linspace(yLim(1), yLim(2), numPointsY);
+z = 0;
+[X, Y, Z] = ndgrid(x, y, z);
+imageGrid = [X(:), Y(:), Z(:)];
+
+% Calculate
+field = zeros(size(imageGrid, 1), 2, numGrids);
+for g = 1:numGrids
+    fprintf('%d/%d\n', g, numGrids);
+obj.microPos = grids{g}; % From previous section
+
+% Apply WFS calculation with global scalation
+obj.setAcousticPaths('NS', 'theoretical', 'WFS', 'theoretical');
+obj.cancel({'NoFilter'}, false, {'Current'}, {'Independent'}, false);
+
+% Simulate
+% For efficiency purposes, simulate big number of receivers at a more low
+% level
+field(:, :, g) = obj.WFSToolObj.simulTheo.calculateTheoricField(imageGrid);
+end
+fieldNS = permute(field(:, 1, :), [1, 3, 2]);
+fieldWFS = permute(field(:, 2, :), [1, 3, 2]);
+fieldTotal = permute(sum(field, 2), [1, 3, 2]);
+
+% Print image
+viewBox = [xLim(1), yLim(1), xLim(2) - xLim(1), yLim(2) - yLim(1)];
+
+basicColormap = [0 1 0; 1 1 1; 1 1 0];
+colorMap_R = interp1(1:3, basicColormap(:,1), linspace(1, 3, 128)');
+colorMap_G = interp1(1:3, basicColormap(:,2), linspace(1, 3, 128)');
+colorMap_B = interp1(1:3, basicColormap(:,3), linspace(1, 3, 128)');
+extendedColormap = [colorMap_R, colorMap_G, colorMap_B];
+
+objSVG = SVGdrawer('viewBox', viewBox, 'NSpositions', obj.NSRposition, 'NSangles', 135, 'microSymbol', 'dot', 'microSize', 0.01);
+
+ax = axes(figure);
+im = image(ax, zeros(numPointsY, numPointsX));
+im.CDataMapping = 'scaled';
+ax.CLim = [-1, 1];
+colormap(ax, extendedColormap);
+currentFolder = pwd;
+cd(imagesPath); % Needed for inkscape to link svg files properly
+for g = 1:numGrids
+cdata = reshape(real(fieldTotal(:,g)), [numPointsX, numPointsY]).';
+im.CData = cdata;
+
+indices = scaled2indexedColors(size(extendedColormap, 1), ax.CLim, cdata);
+backgroundName = ['Experiment1_noConstOpt_grid', num2str(g), '_field'];
+imwrite(indices, extendedColormap, [imagesPath, backgroundName, '.png']);
+
+nameSVG = ['Experiment1_noConstOpt_grid', num2str(g)];
+
+objSVG.microPositions = grids{g};
+objSVG.microSize = 0.035;
+objSVG.backgroundFileName = [imagesPath, backgroundName, '.png'];
+
+fileName = [imagesPath, nameSVG, '.svg'];
+objSVG.drawSVG(fileName);
+
+system(['inkscape -z "', imagesPath, nameSVG, '.svg" --export-pdf="', imagesPath, nameSVG, '.pdf"'])
+end
+cd(currentFolder)
+
+% How are the WFS coefficients

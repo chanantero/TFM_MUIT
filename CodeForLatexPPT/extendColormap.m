@@ -8,6 +8,5 @@ colorMap_B = interp1(1:numColInput, inputColormap(:,3), linspace(1, numColInput,
 
 extendedColormap = [colorMap_R, colorMap_G, colorMap_B];
 
-
 end
 

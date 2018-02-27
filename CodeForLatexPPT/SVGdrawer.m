@@ -12,6 +12,11 @@ classdef SVGdrawer
         % Sizes
         microSize
         
+        % Colors
+        microColor % Cell string. Hexadecimal format.
+        WFScolor
+        NScolor
+        
         % Symbols
         NSsymbol
         WFSsymbol
@@ -36,6 +41,9 @@ classdef SVGdrawer
         numWFS
         numMicro
         backgroundFlag
+        microColorUnique
+        WFScolorUnique
+        NScolorUnique
     end
     
     % Getters and setters
@@ -55,6 +63,18 @@ classdef SVGdrawer
         function backgroundFlag = get.backgroundFlag(obj)
             backgroundFlag = ~isempty(obj.backgroundFileName);
         end
+        
+        function microColorUnique = get.microColorUnique(obj)
+            microColorUnique = numel(obj.microColor) ~= obj.numMicro;
+        end
+        
+        function WFScolorUnique = get.WFScolorUnique(obj)
+            WFScolorUnique = numel(obj.WFScolor) ~= obj.numWFS;
+        end
+        
+        function NScolorUnique = get.NScolorUnique(obj)
+            NScolorUnique = numel(obj.NScolor) ~= obj.numNS;
+        end
     end
     
     methods
@@ -63,7 +83,7 @@ classdef SVGdrawer
             
             addParameter(p, 'viewBox', [-1 -1 5 8]);
             addParameter(p, 'NSpositions', [0 0]);
-            addParameter(p, 'NSangle', 0);
+            addParameter(p, 'NSangles', 0);
             addParameter(p, 'microPositions', double.empty(0, 2));
             addParameter(p, 'WFSdiagramIndices', []);
             addParameter(p, 'WFSdiagramNames', []);
@@ -76,12 +96,15 @@ classdef SVGdrawer
             addParameter(p, 'WFSsymbol', 'loudspeaker');
             addParameter(p, 'microSymbol', 'microphone');
             addParameter(p, 'microSize', 0.8);
+            addParameter(p, 'microColor', {'000000'});
+            addParameter(p, 'WFScolor', {'000000'});
+            addParameter(p, 'NScolor', {'000000'});
             
             parse(p, varargin{:});
             
             obj.viewBox = p.Results.viewBox;
             obj.NSpositions = p.Results.NSpositions;
-            obj.NSangles = p.Results.NSangle;
+            obj.NSangles = p.Results.NSangles;
             obj.microPositions = p.Results.microPositions;
             obj.WFSdiagramIndices = p.Results.WFSdiagramIndices;
             obj.WFSdiagramNames = p.Results.WFSdiagramNames;
@@ -92,6 +115,9 @@ classdef SVGdrawer
             obj.WFSsymbol = p.Results.WFSsymbol;
             obj.microSymbol = p.Results.microSymbol;
             obj.microSize = p.Results.microSize;
+            obj.microColor = p.Results.microColor;
+            obj.WFScolor = p.Results.WFScolor;
+            obj.NScolor = p.Results.NScolor;
             
             if ismember('WFSpositions', p.UsingDefaults)
                 % Generate positions and orientations of WFS array loudspeakers
@@ -129,8 +155,8 @@ classdef SVGdrawer
             height = obj.viewBox(4)*viewPort2viewBoxRatio;
             
             % Create string that will draw them in SVG
-            drawLoudspeakerStr = '<use xlink:href="symbolLibrary.svg#%s" x="%g" y="%g" transform="rotate(%g %g %g)"/>\n';
-            drawMicrophoneStr = '<use xlink:href="symbolLibrary.svg#%s" transform="translate(%g %g) scale(%g)"/>\n';
+            drawLoudspeakerStr = '<use xlink:href="symbolLibrary.svg#%s" x="%g" y="%g" transform="rotate(%g %g %g)" style="fill:%s"/>\n';
+            drawMicrophoneStr = '<use xlink:href="symbolLibrary.svg#%s" transform="translate(%g %g) scale(%g)" style="fill:%s"/>\n'; % Example: fill:#AA00FF. Hashtag is necessary
             drawDiagramStr = '<use xlink:href="symbolLibrary.svg#%s" x="%g" y="%g" transform="rotate(%g %g %g)" />\n';
             drawBackgroundStr = '<image xlink:href="%s" x="%g" y="%g" width="%g" height="%g" preserveAspectRatio="none"/>';
             
@@ -142,20 +168,36 @@ classdef SVGdrawer
             
             strLoud = cell(obj.numWFS, 1);
             for k = 1:obj.numWFS
-                strLoud{k} = sprintf(drawLoudspeakerStr, obj.WFSsymbol, obj.WFSpositions(k, 1), obj.WFSpositions(k, 2), obj.WFSangles(k), obj.WFSpositions(k, 1), obj.WFSpositions(k, 2));
+                if ~obj.WFScolorUnique
+                    strLoud{k} = sprintf(drawLoudspeakerStr, obj.WFSsymbol, obj.WFSpositions(k, 1), obj.WFSpositions(k, 2), obj.WFSangles(k), obj.WFSpositions(k, 1), obj.WFSpositions(k, 2),...
+                        obj.WFScolor{k});
+                else
+                    strLoud{k} = sprintf(drawLoudspeakerStr, obj.WFSsymbol, obj.WFSpositions(k, 1), obj.WFSpositions(k, 2), obj.WFSangles(k), obj.WFSpositions(k, 1), obj.WFSpositions(k, 2),...
+                    obj.WFScolor{1});
+                end
             end
             strLoud = strjoin(strLoud);
             strLoud = [sprintf('<g>\n'), strLoud, sprintf('</g>\n')];
             
             strLoudNoise = cell(obj.numNS, 1);
             for k = 1:obj.numNS
-                strLoudNoise{k} = sprintf(drawLoudspeakerStr, obj.NSsymbol, obj.NSpositions(k, 1), obj.NSpositions(k, 2), angleNoise(k), obj.NSpositions(k, 1), obj.NSpositions(k, 2));
+                if ~obj.NScolorUnique
+                    strLoudNoise{k} = sprintf(drawLoudspeakerStr, obj.NSsymbol, obj.NSpositions(k, 1), obj.NSpositions(k, 2), obj.NSangles(k), obj.NSpositions(k, 1), obj.NSpositions(k, 2),...
+                            obj.WFScolor{k});   
+                else
+                    strLoudNoise{k} = sprintf(drawLoudspeakerStr, obj.NSsymbol, obj.NSpositions(k, 1), obj.NSpositions(k, 2), obj.NSangles(k), obj.NSpositions(k, 1), obj.NSpositions(k, 2),...
+                            obj.WFScolor{1});
+                end
             end
             strLoudNoise = strjoin(strLoudNoise);
             
             strMicro = cell(obj.numMicro, 1);
             for k = 1:obj.numMicro
-                strMicro{k} = sprintf(drawMicrophoneStr, obj.microSymbol, obj.microPositions(k, 1), obj.microPositions(k, 2), obj.microSize);
+                if ~obj.microColorUnique
+                    strMicro{k} = sprintf(drawMicrophoneStr, obj.microSymbol, obj.microPositions(k, 1), obj.microPositions(k, 2), obj.microSize, obj.microColor{k});
+                else
+                    strMicro{k} = sprintf(drawMicrophoneStr, obj.microSymbol, obj.microPositions(k, 1), obj.microPositions(k, 2), obj.microSize, obj.microColor{1});
+                end
             end
             strMicro = strjoin(strMicro);
             
