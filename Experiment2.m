@@ -61,10 +61,11 @@ for p = 1:numNSpos
     
     obj.cancel();   
     obj.cancel({'NoFilter'}, false, {'Current'}, {'AllTogether'}, false);
+    obj.cancel({'NoFilter'}, false, {'Current'}, {'Independent'}, false);
 end
 
 s = obj.cancelResults;
-s = reshape(s, [2, numPointsPerCircle, numCircles]);
+s = reshape(s, [3, numPointsPerCircle, numCircles]);
 
 %% Visualize global cancellation
 
@@ -92,12 +93,6 @@ l = legend(ax, legLab);
 title(l, 'R')
 
 % Print graph
-% widthInPixels = 600;
-% heightInPixels = 600;
-% fig = ax.Parent;
-% fig.Position(3:4) = [widthInPixels, heightInPixels];
-% fig.Position(1:2) = [0 0];
-
 fontSize_axesWidth_ratio = 0.08;
 fontSize = ax.Position(3) * fontSize_axesWidth_ratio;
 ax.XLabel.FontUnits = 'normalized';
@@ -105,7 +100,30 @@ ax.XLabel.FontSize = fontSize;
 ax.YLabel.FontUnits = 'normalized';
 ax.YLabel.FontSize = fontSize;
 
-printfig(ax.Parent, imagesPath, 'Experiment2_globalCancDifNSpos', 'eps');
+% printfig(ax.Parent, imagesPath, 'Experiment2_globalCancDifNSpos', 'eps');
+
+% No constraint optimization
+ax = axes(figure);
+Cg_dB_scal = permute(Cg_dB(3, :, :), [2, 3, 1]);
+plot(ax, rad2deg([alpha; 2*pi]), [Cg_dB_scal; Cg_dB_scal(1, :)])
+ax.XLabel.String = '\alpha (º)';
+ax.YLabel.String = 'Global cancellation (dB)';
+ax.XTick = 0:90:360;
+ax.XLim = [0, 360];
+legLab = cell(numCircles, 1);
+for c = 1:numCircles
+    legLab{c} = num2str(radius(c));
+end
+l = legend(ax, legLab);
+title(l, 'R')
+
+fontSize_axesWidth_ratio = 0.08;
+fontSize = ax.Position(3) * fontSize_axesWidth_ratio;
+ax.XLabel.FontUnits = 'normalized';
+ax.XLabel.FontSize = fontSize;
+ax.YLabel.FontUnits = 'normalized';
+ax.YLabel.FontSize = fontSize;
+% printfig(ax.Parent, imagesPath, 'Experiment2_globalCancDifNSposNoConst', 'eps');
 
 %% One by one loudspeaker excitation
 % Visualize the response of each loudspeaker of the array and compare it's
@@ -268,41 +286,62 @@ ax = axes(figure, 'NextPlot', 'Add');
 scatter(ax, distances(:), abs(WFSfield(:)), '.')
 
 % Phase
-    % Specific Loudspeaker
-ax = axes(figure, 'NextPlot', 'Add');
-indLoud = 20;
-phase = angle(WFSfield(:, indLoud));
-dist = distances(:, indLoud);
-[distSort, indSort] = sort(dist);
-dVec = 0:0.05:max(dist);
-idealPhase = -2*pi*obj.frequency/obj.WFSToolObj.c*distSort;
-realPhase = idealPhase + wrapToPi(phase(indSort) - idealPhase);
-plot(ax, distSort, rad2deg(idealPhase))
-scatter(ax, distSort, rad2deg(realPhase), '.')
-ax.XLabel.String = 'Distance (m)';
-ax.YLabel.String = 'Phase (º)';
-legend(ax, {'Theoretical', 'Measured'});
-printfig(ax.Parent, imagesPath, 'Experiment2_loud20_PhaseByDist', 'eps');
+phaseReal = angle(WFSfield);
+phaseTheo = -2*pi*obj.frequency/obj.WFSToolObj.c*distances; % It is the same as: phaseTheo = angle(NSfield);
 
-ax = axes(figure, 'NextPlot', 'Add');
-% scatter(ax, dist, rad2deg(phase));
-plot(ax, rad2deg(wrapToPi(phase(indSort) - idealPhase)))
+    % Specific Loudspeaker
+indLoud = 29;
+phaseRealLoud = phaseReal(:, indLoud);
+phaseTheoLoud = phaseTheo(:, indLoud);
+distLoud = distances(:, indLoud);
+% [distSort, indSort] = sort(dist);
+% idealPhase = -2*pi*obj.frequency/obj.WFSToolObj.c*distSort;
+% ax = axes(figure, 'NextPlot', 'Add');
+% realPhase = idealPhase + wrapToPi(phase(indSort) - idealPhase);
+% plot(ax, distSort, rad2deg(idealPhase))
+% scatter(ax, distSort, rad2deg(realPhase), '.')
+% ax.XLabel.String = 'Distance (m)';
+% ax.YLabel.String = 'Phase (º)';
+% legend(ax, {'Theoretical', 'Measured'});
+
+    % Phase shift
+ax = axes(figure);
+scatter(ax, distLoud, rad2deg(wrapToPi(phaseLoud - phaseTheoLoud)), '.');
+ax.YLim = [-180, 180];
+ax.YTick = -180:60:180;
+ax.YGrid = 'on';
+ax.XLabel.String = 'Distance (m)';
+ax.YLabel.String = 'Phase shift (º)';
+% printfig(ax.Parent, imagesPath, 'Experiment2_loud20_PhaseByDist', 'eps');
 
     % Global phase
-ax = axes(figure, 'NextPlot', 'Add');
-scatter(ax, distances(:), rad2deg(angle(NSfield(:))), '.')
-scatter(ax, distances(:), rad2deg(angle(WFSfield(:))), '.')
+
+    % Global Phase shift
+ax = axes(figure);
+scatter(ax, distances(:), rad2deg(wrapToPi(phaseReal(:) - phaseTheo(:))), '.');
+ax.YLim = [-180, 180];
+ax.YTick = -180:60:180;
+ax.YGrid = 'on';
+ax.XLabel.String = 'Distance (m)';
+ax.YLabel.String = 'Phase shift (º)';
+
+     % % Other way
+% ax = axes(figure, 'NextPlot', 'Add');
+% phase = angle(WFSfield(:));
+% dist = distances(:);
+% [distSort, indSort] = sort(dist);
+% idealPhase = -2*pi*obj.frequency/obj.WFSToolObj.c*distSort;
+% realPhase = idealPhase + wrapToPi(phase(indSort) - idealPhase);
+% plot(ax, distSort, rad2deg(idealPhase))
+% scatter(ax, distSort, rad2deg(realPhase), '.')
+% ax.XLabel.String = 'Distance (m)';
+% ax.YLabel.String = 'Phase (º)';
+% legend(ax, {'Theoretical', 'Measured'});
 
 
-%% Diferencia de fase del caso real y el caso teórico
-numScen = numel(s);
-numMicro = size(obj.microPos, 1);
-WFS2NSratio = zeros(numMicro, numScen);
-for k = 1:numScen
-    WFS2NSratio(:, k) = s(k).recWFScoef./s(k).recNScoef;
-end
+% Phase shift
+phaseShift = wrapToPi(phaseReal - phaseTheo); % The same as: phaseShift = angle(WFSfield./NSfield);
 
-phaseShift = angle(WFS2NSratio);
 [meanPhaseShift, ~, stdPhaseShift] = circularDistributionParameters(phaseShift);
 meanPhaseShift = rad2deg(meanPhaseShift);
 stdPhaseShift = rad2deg(stdPhaseShift);
@@ -317,4 +356,7 @@ globalStd = std(phaseShift(:));
 
 axHist = axes(figure);
 histogram(axHist, phaseShift)
+
+%% Optimization without restrictions. What is the best cancellation we can achieve?
+
 
