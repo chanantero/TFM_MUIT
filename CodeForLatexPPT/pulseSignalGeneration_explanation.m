@@ -66,7 +66,6 @@ freqs = [2, 0.25];
 
 complete = pulseCoefMat2signal(pulseCoefMat, pulseLimits, freqs, sampleRate, 0, 10, 'type_marker', 'time', 'type_pulseLimits', 'time');
 
-
 % Graphs
 path = 'C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Documentos\Img\';
 
@@ -76,21 +75,22 @@ ax.YLim = [-2, 2];
 ax.XLabel.String = 'Time (s)';
 l = line(ax, t, zeros(size(t)));
 
-l.YData = tone;
-printfig(fig, path, 'baseTone', {'emf'})
-
-l.YData = toneCoef;
-printfig(fig, path, 'coefTone', {'emf'})
-
-l.YData = signal;
-printfig(fig, path, 'singlePulse', {'emf'})
-
-l.YData = multPulses;
-printfig(fig, path, 'multPulses', {'emf'})
-
-l.YData = multFreq;
-printfig(fig, path, 'multFreq', {'emf'})
-
-l = line(ax, t, complete);
-printfig(fig, path, 'completePulseSignal', {'emf'})
-
+% l.YData = tone;
+% printfig(fig, path, 'baseTone', {'emf'})
+% 
+% l.YData = toneCoef;
+% printfig(fig, path, 'coefTone', {'emf'})
+% 
+% l.YData = signal;
+% printfig(fig, path, 'singlePulse', {'emf'})
+% 
+% l.YData = multPulses;
+% printfig(fig, path, 'multPulses', {'emf'})
+% 
+% l.YData = multFreq;
+% printfig(fig, path, 'multFreq', {'emf'})
+% 
+l = line(ax, t, complete(:,[2 1]));
+legend(ax, {'Channel 1', 'Channel 2'})
+% printfig(fig, path, 'completePulseSignal', {'emf'})
+% printfig(fig, path, 'completePulseSignalRectWindow', {'eps'})
