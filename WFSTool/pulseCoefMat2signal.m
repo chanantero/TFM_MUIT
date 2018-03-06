@@ -62,8 +62,6 @@ else
     signal(ind1, :) = wholePulseSignal(ind2, :);
 end
 
-
-
 end
 
 function signal = genSignal(coefMat, freq, pulseLimits, offsetSample, sampleRate)
@@ -99,7 +97,7 @@ for p = 1:numPulses
     for c = 1:numChannels
         pulse = genTones(coefMat(p, c, :), freq, t);
         
-        signal(ind + 1, c) = pulse.*windMask;
+        signal(ind + 1, c) = signal(ind + 1, c) + pulse.*windMask; % Si solo está pulse.*windMask, no se pueden solapar los pulsos. Con signal(ind + 1, c) + pulse.*windMask, sí puede haber solapamiento.
     end
 end
 
@@ -119,3 +117,7 @@ end
 pulse = sum(aux, 2);
 
 end
+
+
+
+

@@ -40,6 +40,8 @@ classdef SimulationController < handle
         % - recCoef
         % - recNScoef
         % - recWFScoef
+        
+        cancelResultsExp
     end
     
     properties(Dependent)
@@ -372,7 +374,7 @@ classdef SimulationController < handle
                 addOptional(p, 'magConstraint', [], @(x) all(islogical(x)))
                 addOptional(p, 'acousticPathType', [], @(x) all(ismember(x, {'Current', 'Theoretical'})));
                 addOptional(p, 'grouping', [], @(x) all(ismember(x, {'Independent', 'AllTogether'})));
-                addOptional(p, 'zerosFixed', [], @(x) all(islogical(x)));
+                addOptional(p, 'zerosFixed', false, @(x) all(islogical(x)));
                 addParameter(p, 'testPoints', []);
                 
                 parse(p, varargin{:})
