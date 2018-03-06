@@ -94,10 +94,12 @@ classdef audioPlayer < matlab.System
             stored = [obj.storedSamples; signal];
             frSize = obj.frameSize;
             numFrames = floor(size(stored, 1)/frSize);
+            inf = info(obj.deviceWriter);
+            maxNumOutputChann = inf.MaximumOutputChannels;
             if numFrames > 0 % Send it for the reproduction
                 for k = 1:numFrames
                     sampleIndices = (k-1)*frSize+1:k*frSize;
-                    frame = stored(sampleIndices, :);
+                    frame = stored(sampleIndices, 1:maxNumOutputChann);
                     numUnderrun = play(obj.deviceWriter, frame);
                     t = tic;
                     obj.count = obj.count + 1;

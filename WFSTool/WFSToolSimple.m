@@ -328,10 +328,6 @@ classdef WFSToolSimple < handle
             obj.updateLoudspeakerMappingVariables();
         end
         
-        function set.WFSarrayChannelMapping(obj, value)
-            obj.WFSarrayChannelMapping = value;
-            obj.updateLoudspeakerMappingVariables();
-        end
     end
     
     % Export methods
@@ -431,7 +427,7 @@ classdef WFSToolSimple < handle
     methods
         
         function obj = WFSToolSimple()
-            fig = figure('Units', 'pixels', 'Position', [0 50 1200 600]);
+            fig = figure('Units', 'pixels', 'Position', [0 50 1200 600], 'DeleteFcn', @(hObj, evntData) obj.deleteObj());
             obj.fig = fig;
             
             obj.player = reproductorRecorder();
@@ -563,8 +559,8 @@ classdef WFSToolSimple < handle
             s = WFSToolSimple.generateScenario(numWFSsources);
             obj.adjustSimulTheoSources(obj.numSourcesWFSarray, obj.numNoiseSources, 'WFSarray', numWFSsources);
             obj.WFSarrayChannelMapping = (1:numWFSsources)';
-            obj.updateLoudspeakerMappingVariables();
             obj.scenarioObj.setScenario(obj.noiseSourcePosition, obj.receiverPosition, s.loudspeakersPosition, s.loudspeakersOrientation, s.roomPosition);
+            obj.updateLoudspeakerMappingVariables();
             obj.WFSarrayPosition = s.loudspeakersPosition;
             obj.WFSarrayRadiationPattern = repmat({@ simulator.monopoleRadPat}, numWFSsources, 1);
             uniqueFreq = unique(obj.frequency);
@@ -742,6 +738,11 @@ classdef WFSToolSimple < handle
             % Set noise source coefficients
             obj.noiseSourceCoefficient_complete = diag(obj.noiseSourceCoefficient);
             
+        end
+        
+        function prepareReproduction(obj)
+            % Set noise source coefficients
+            obj.noiseSourceCoefficient_complete = diag(obj.noiseSourceCoefficient);
         end
         
         function WFS_optimisation(obj, varargin)
@@ -1056,6 +1057,14 @@ classdef WFSToolSimple < handle
     end
     
     methods(Access = private)       
+        
+        function deleteObj(obj)
+            release(obj.player);
+        end
+        
+        function delete(obj)
+            obj.deleteObj();
+        end
         
         function setAcousticPaths(obj)
             % Take the acoustic path structures to assign the acoustic path

@@ -42,10 +42,6 @@ classdef SimulationController < handle
         % - recWFScoef
     end
     
-    properties
-        numWFSsources = 96
-    end
-    
     properties(Dependent)
         % Microphones
         microPos % Microphone positions
@@ -255,7 +251,6 @@ classdef SimulationController < handle
             numWFS = size(value, 1);
             if numWFS ~= obj.WFSToolObj.numSourcesWFSarray
                 obj.WFSToolObj.setNumWFSarraySources(numWFS);
-                obj.numWFSsources = numWFS;
             end
             obj.WFSToolObj.WFSarrayPosition = value;
         end
@@ -296,7 +291,7 @@ classdef SimulationController < handle
             obj.WFSToolObj.setReal([true; false]);
             
             % Set WFS array variables
-            obj.WFSToolObj.setNumWFSarraySources(obj.numWFSsources);
+            obj.WFSToolObj.setNumWFSarraySources(96);
             
             obj.WFSToolObj.updateReprodPanelBasedOnVariables();
             obj.WFSToolObj.updateRecordPanelBasedOnVariables();            
@@ -587,7 +582,7 @@ classdef SimulationController < handle
         end
         
         function experimentalChecking(obj, varargin)
-            
+            % rpcm: received pulse coefficient matrix
             rpcm_Noise = zeros(obj.WFSToolObj.numReceivers, obj.numCancellationAttempts);
             rpcm_WFS = zeros(obj.WFSToolObj.numReceivers, obj.numCancellationAttempts);
             rpcm_Total = zeros(obj.WFSToolObj.numReceivers, obj.numCancellationAttempts);
