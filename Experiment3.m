@@ -54,7 +54,7 @@ signalFunction = @(startSample, endSample) pulseCoefMat2signal(coefMat, pulseLim
 
 obj.WFSToolObj.reproduceSignalFunction(signalFunction, 44100);
 
-%% Test for theoric frequency response
+%% Test for experimental frequency response
 obj.WFSToolObj.reproduceAndRecordForAcousticPaths();
 obj.WFSToolObj.calculateExperimentalAcousticPaths();
 expAcPath = obj.WFSToolObj.expAcPathStruct;
@@ -64,10 +64,13 @@ obj.setLoudspeakerAcousticPath(expAcPath);
 % Calculate coefficients for the cancellation with the experimental
 % acoustic paths, but also with the official acoustic paths.
 
-% WFS coefficients and global theoretical correction
+% Calculate WFS coefficients
+obj.cancelResults = [];
+
+    % WFS coefficients and global theoretical correction
 obj.cancel({'NoFilter'}, true, {'Theoretical'}, {'AllTogether'}, false);
 
-% WFS coefficients and global correction with GTAC official impulse
+    % WFS coefficients and global correction with GTAC official impulse
 % responses
 load([dataPathName, 'acousticPathsGTAC_440.mat'])
 obj.microPos = microphonePositions;
@@ -76,19 +79,35 @@ acPathWFSarrayStruct.frequencies = 440;
 obj.setAcousticPaths('NS', 'theoretical', 'WFS', acPathWFSarrayStruct);
 obj.cancel({'NoFilter'}, true, {'Current'}, {'AllTogether'}, false);
 
-% WFS coefficients and global correction with experimental impulseResponses
+    % WFS coefficients and global correction with experimental impulseResponses
 obj.setLoudspeakerAcousticPath(expAcPath);
 obj.cancel({'NoFilter'}, true, {'Current'}, {'AllTogether'}, false);
+obj.setLoudspeakerAcousticPath(expAcPath);
 
+% Simulate with experimental acoustic paths to see what we should get in
+% the experimental case
+obj.setLoudspeakerAcousticPath(expAcPath);
+for k = 1:obj.numCancellationAttempts
+    obj.WFScoef = obj.cancelResults(k).WFScoef;
+    obj.WFSToolObj.prepareSimulation();
+    obj.WFSToolObj.simulate();
+    obj.cancelResults(k).recCoef = obj.microCoef;
+    obj.cancelResults(k).recNScoef = obj.microCoefNS;
+    obj.cancelResults(k).recWFScoef = obj.microCoefWFS;
+end
 
-%% Reproduce
+%% Experimental checking
 % Reproduce to check if the calculated predictions are veryfied by the
 % experimental results
 obj.experimentalChecking();
-obj.cancelResultsExp;
+s = obj.cancelResults;
 
-%%
-obj.WFSToolObj.prepareReproduction();
-obj.WFSToolObj.reproduceAndRecord('main', 'soundTime', 2); % Simple reproduction of one pulse of 2 seconds
-
+% Visualize 2D map
+    % Format structure
+for p = 1:numel(s)
+    s(p).NScoef = [s(p).NSRcoef; s(p).NSVcoef];
+    s(p).NSposition = [s(p).NSRposition; s(p).NSVposition];
+end
+    % Create simulationViewer object
+objVis = simulationViewer(obj.ax, s);
 

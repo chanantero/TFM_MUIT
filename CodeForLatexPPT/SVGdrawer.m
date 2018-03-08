@@ -155,7 +155,7 @@ classdef SVGdrawer
             height = obj.viewBox(4)*viewPort2viewBoxRatio;
             
             % Create string that will draw them in SVG
-            drawLoudspeakerStr = '<use xlink:href="symbolLibrary.svg#%s" x="%g" y="%g" transform="rotate(%g %g %g)" style="fill:%s"/>\n';
+            drawLoudspeakerStr = '<use id="%s" xlink:href="symbolLibrary.svg#%s" x="%g" y="%g" transform="rotate(%g %g %g)" style="fill:%s"/>\n';
             drawMicrophoneStr = '<use xlink:href="symbolLibrary.svg#%s" transform="translate(%g %g) scale(%g)" style="fill:%s"/>\n'; % Example: fill:#AA00FF. Hashtag is necessary
             drawDiagramStr = '<use xlink:href="symbolLibrary.svg#%s" x="%g" y="%g" transform="rotate(%g %g %g)" />\n';
             drawBackgroundStr = '<image xlink:href="%s" x="%g" y="%g" width="%g" height="%g" preserveAspectRatio="none"/>';
@@ -168,24 +168,26 @@ classdef SVGdrawer
             
             strLoud = cell(obj.numWFS, 1);
             for k = 1:obj.numWFS
+                id = ['WFSloudspeaker_', num2str(k)];
                 if ~obj.WFScolorUnique
-                    strLoud{k} = sprintf(drawLoudspeakerStr, obj.WFSsymbol, obj.WFSpositions(k, 1), obj.WFSpositions(k, 2), obj.WFSangles(k), obj.WFSpositions(k, 1), obj.WFSpositions(k, 2),...
+                    strLoud{k} = sprintf(drawLoudspeakerStr, id, obj.WFSsymbol, obj.WFSpositions(k, 1), obj.WFSpositions(k, 2), obj.WFSangles(k), obj.WFSpositions(k, 1), obj.WFSpositions(k, 2),...
                         obj.WFScolor{k});
                 else
-                    strLoud{k} = sprintf(drawLoudspeakerStr, obj.WFSsymbol, obj.WFSpositions(k, 1), obj.WFSpositions(k, 2), obj.WFSangles(k), obj.WFSpositions(k, 1), obj.WFSpositions(k, 2),...
+                    strLoud{k} = sprintf(drawLoudspeakerStr, id, obj.WFSsymbol, obj.WFSpositions(k, 1), obj.WFSpositions(k, 2), obj.WFSangles(k), obj.WFSpositions(k, 1), obj.WFSpositions(k, 2),...
                     obj.WFScolor{1});
                 end
             end
             strLoud = strjoin(strLoud);
-            strLoud = [sprintf('<g>\n'), strLoud, sprintf('</g>\n')];
+            strLoud = [sprintf('<g id="WFSarray">\n'), strLoud, sprintf('</g>\n')];
             
             strLoudNoise = cell(obj.numNS, 1);
             for k = 1:obj.numNS
+                id = ['NS_', num2str(k)];
                 if ~obj.NScolorUnique
-                    strLoudNoise{k} = sprintf(drawLoudspeakerStr, obj.NSsymbol, obj.NSpositions(k, 1), obj.NSpositions(k, 2), obj.NSangles(k), obj.NSpositions(k, 1), obj.NSpositions(k, 2),...
+                    strLoudNoise{k} = sprintf(drawLoudspeakerStr, id, obj.NSsymbol, obj.NSpositions(k, 1), obj.NSpositions(k, 2), obj.NSangles(k), obj.NSpositions(k, 1), obj.NSpositions(k, 2),...
                             obj.WFScolor{k});   
                 else
-                    strLoudNoise{k} = sprintf(drawLoudspeakerStr, obj.NSsymbol, obj.NSpositions(k, 1), obj.NSpositions(k, 2), obj.NSangles(k), obj.NSpositions(k, 1), obj.NSpositions(k, 2),...
+                    strLoudNoise{k} = sprintf(drawLoudspeakerStr, id, obj.NSsymbol, obj.NSpositions(k, 1), obj.NSpositions(k, 2), obj.NSangles(k), obj.NSpositions(k, 1), obj.NSpositions(k, 2),...
                             obj.WFScolor{1});
                 end
             end

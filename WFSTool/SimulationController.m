@@ -40,8 +40,6 @@ classdef SimulationController < handle
         % - recCoef
         % - recNScoef
         % - recWFScoef
-        
-        cancelResultsExp
     end
     
     properties(Dependent)
@@ -584,19 +582,12 @@ classdef SimulationController < handle
         end
         
         function experimentalChecking(obj, varargin)
-            % rpcm: received pulse coefficient matrix
-            rpcm_Noise = zeros(obj.WFSToolObj.numReceivers, obj.numCancellationAttempts);
-            rpcm_WFS = zeros(obj.WFSToolObj.numReceivers, obj.numCancellationAttempts);
-            rpcm_Total = zeros(obj.WFSToolObj.numReceivers, obj.numCancellationAttempts);
+           
             for a = 1:obj.numCancellationAttempts
-                rpcm_Noise(:, a) = obj.reproduce(a, 'Noise'); % Received signal pulse coefficient matrix of the noise
-                rpcm_WFS(:, a) = obj.reproduce(a, 'WFS');
-                rpcm_Total(:, a) = obj.reproduce(a, 'Total');
+                obj.cancelResults(a).recNScoefExp = obj.reproduce(a, 'Noise'); % Received signal pulse coefficient matrix of the noise
+                obj.cancelResults(a).recWFScoefExp = obj.reproduce(a, 'WFS');
+                obj.cancelResults(a).recCoefExp = obj.reproduce(a, 'Total');
             end
-            
-            obj.cancelResultsExp.recNScoefExp = rpcm_Noise;
-            obj.cancelResultsExp.recWFScoefExp = rpcm_WFS;
-            obj.cancelResultsExp.recCoefExp = rpcm_Total;
                         
         end
         
