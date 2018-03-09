@@ -57,8 +57,8 @@ numCircles = numel(radius);
 alpha = linspace(0, 2*pi, numPointsPerCircle + 1); alpha = alpha(1:end-1)';
 zAngleVec = linspace(zAngleLim(1), zAngleLim(2), numPointsZ);
 [Alpha, Radius, Zangle] = ndgrid(alpha, radius, zAngleVec);
-x = centreX + Radius(:).*cos(Alpha(:));
-y = centreY + Radius(:).*sin(Alpha(:));
+x = centerX + Radius(:).*cos(Alpha(:));
+y = centerY + Radius(:).*sin(Alpha(:));
 z = Radius(:).*tan(Zangle(:));
 
 NSpositions = [x, y, z];
@@ -120,14 +120,14 @@ l = legend(ax, legLab);
 title(l, 'R')
 
 % % Print graph
-% fontSize_axesWidth_ratio = 0.08;
-% fontSize = ax.Position(3) * fontSize_axesWidth_ratio;
-% ax.XLabel.FontUnits = 'normalized';
-% ax.XLabel.FontSize = fontSize;
-% ax.YLabel.FontUnits = 'normalized';
-% ax.YLabel.FontSize = fontSize;
-% 
-% printfig(ax.Parent, imagesPath, 'Experiment4_globalCancDifNSz', 'eps');
+fontSize_axesWidth_ratio = 0.08;
+fontSize = ax.Position(3) * fontSize_axesWidth_ratio;
+ax.XLabel.FontUnits = 'normalized';
+ax.XLabel.FontSize = fontSize;
+ax.YLabel.FontUnits = 'normalized';
+ax.YLabel.FontSize = fontSize;
+
+printfig(ax.Parent, imagesPath, 'Experiment4_globalCancDifNSz', 'eps');
 %% Visualization: correction factor AllTogether
 sizeS = size(s);
 corrFact = zeros(sizeS(2:end));
@@ -211,10 +211,10 @@ centerY = (extRectYmax + extRectYmin)/2;
 centre = [centerX, centerY];
 
 theta = 60;
-phi = -60;
+phi = -80;
 alpha = phi + 90;
 
-NSposition = [5 7 1];
+NSposition = [4 6 1];
 
 % Consult appendix of thesis
 h = 100;
@@ -222,21 +222,33 @@ ro = h*[cosd(phi)*sind(theta), sind(phi)*sind(theta), cosd(theta)] + [centerX, c
 l = [sind(phi); -cosd(phi); 0];
 u = [-cosd(phi)*cosd(theta); -sind(phi)*cosd(theta); sind(theta)];
 
-rs_NS = [-l, u]'*(NSposition)' + centre';
+rs_NS = [-l, u]'*(NSposition - [centerX, centerY, 0])' + centre';
 
-% rs_centre = [-l, u]'*centre';
-% strLine1 = makePath('000000', 0.01, centreX, centreY, NSpositions(selLoud,1), NSpositions(selLoud,2), 'line');
+NSz0 = [NSposition(1:2), 0];
+rs_NS_z0 = [-l, u]'*(NSz0 - [centerX, centerY, 0])' + centre';
 
+strLine1 = makePath('000000', 0.01, centerX, centerY, rs_NS_z0(1), rs_NS_z0(2), 'line');
+strLine2 = makePath('000000', 0.01, centerX, centerY, rs_NS(1), rs_NS(2), 'line');
+strLine3 = makePath('000000', 0.01, rs_NS_z0(1), rs_NS_z0(2), rs_NS(1), rs_NS(2), 'line');
+
+% Draw Arc
+NSzAngle = atan2d(NSposition(3), sqrt(sum((NSposition(1:2) - [centerX, centerY]).^2)));
+NSphi = atan2d(NSposition(2), NSposition(1));
+startAngle = 0;
+endAngle = NSzAngle;
+arcRadius = 1;
+strArc = makeCircumferenceArc(0, 0, arcRadius, startAngle, endAngle, '000000', 0.01);
+ind = strfind(strArc, '<path ');
+
+strArc = [strArc(1:6), 'id="arc"', strArc(7:end)];
 
 margin = 3;
 viewBox = [octagonRectPos(1) - margin, octagonRectPos(2) - margin, octagonRectPos(3) + margin*2, octagonRectPos(4) + margin*2];
-objSVG = SVGdrawer('viewBox', viewBox, 'NSpositions', rs_NS', 'microSymbol', 'dot', 'microSize', 0.01);
+objSVG = SVGdrawer('viewBox', viewBox, 'NSpositions', rs_NS', 'NSangles', 180, 'microSymbol', 'dot', 'microSize', 0.01);
 
 svgText = objSVG.getSVG;
 
-
 % Mannually apply transformation to loudspeaker group
-
 translate = (centerY - extRectYmin)*(1 - cosd(theta));
 strTransf_temp = 'transform="translate(0 %g) scale(1 %g) rotate(%g %g %g)"';
 strTransf = sprintf(strTransf_temp, translate, cosd(theta), -alpha, centerX, centerY);
@@ -244,6 +256,19 @@ strTransf = sprintf(strTransf_temp, translate, cosd(theta), -alpha, centerX, cen
 tag = 'id="WFSarray"';
 k = strfind(svgText, tag);
 svgText = [svgText(1:k+numel(tag)-1), ' ', strTransf, svgText(k+numel(tag):end)];
+
+% Add lines and arc
+svgText = strrep(svgText, '[Other]', [strLine1, strLine2, strLine3, strArc]);
+
+strTransf_temp = 'transform="translate(%g %g) scale(%g %g)" ';
+aux = arcRadius*tand(NSphi - 90 - phi)*sind(90-theta);
+strTransf = sprintf(strTransf_temp, centerX, aux + centerY, cosd(NSphi - 90 - phi), -cosd(90-theta));
+tag = 'id="arc"';
+k = strfind(svgText, tag);
+
+svgText = [svgText(1:k+numel(tag)-1), ' ', strTransf, svgText(k+numel(tag):end)];
+
+% Add letters manually
 
 % Write file
 name = 'Experiment4_diffNSzpos';
