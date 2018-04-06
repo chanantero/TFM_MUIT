@@ -7,7 +7,9 @@ classdef WFSToolSimple < handle
         
         % Noise source
         virtual
+        virtualVolume
         real
+        realVolume
         noiseSourceChannelMapping
         signalsSpec % String that specifies the coefficient
         amplitude
@@ -391,7 +393,9 @@ classdef WFSToolSimple < handle
             s.noiseSourceOrientation = obj.noiseSourceOrientation;
             s.noiseSourceRadiationPattern = obj.noiseSourceRadiationPattern;
             s.virtual = obj.virtual;
+            s.virtualVolume = obj.virtualVolume;
             s.real = obj.real;
+            s.realVolume = obj.realVolume;
             s.noiseSourceChannelMapping = obj.noiseSourceChannelMapping;
             s.amplitude = obj.amplitude;
             s.phase = obj.phase;
@@ -479,9 +483,11 @@ classdef WFSToolSimple < handle
                 realRight = all(size(obj.reprodPanel.real) == rightSize);
                 signalsRight = all(size(obj.signalsSpec) == rightSize);
                 channelNumberRight = all(size(obj.noiseSourceChannelMapping) == rightSize);
+                virtualVolumeRight = all(size(obj.virtualVolume) == rightSize);
+                realVolumeRight = all(size(obj.virtualVolume) == rightSize);
                 
-                assert(virtualRight && realRight && signalsRight && channelNumberRight,...
-                   'WFSTool2:updateEverything', 'The signals specifications and the virtual and real flags must have the same size')
+                assert(virtualRight && realRight && signalsRight && channelNumberRight...
+                    && virtualVolumeRight && realVolumeRight, 'WFSTool2:updateEverything', 'The signals specifications and the virtual and real flags must have the same size')
                 
                 comMat = WFSToolSimple.createCommutationMatrix(obj.virtual, obj.real);
                 obj.player.setProps('comMatrix', comMat);
@@ -505,8 +511,10 @@ classdef WFSToolSimple < handle
                 realRight = all(size(obj.real) == rightSize);
                 signalsRight = all(size(obj.signalsSpec) == rightSize);
                 channelNumberRight = all(size(obj.noiseSourceChannelMapping) == rightSize);
-                assert(virtualRight && realRight && signalsRight && channelNumberRight,...
-                    'WFSTool2:updateEverything', 'The signals specifications and the virtual and real flags must have the same size')
+                virtualVolumeRight = all(size(obj.virtualVolume) == rightSize);
+                realVolumeRight = all(size(obj.virtualVolume) == rightSize);
+                assert(virtualRight && realRight && signalsRight && channelNumberRight...
+                    && virtualVolumeRight && realVolumeRight, 'WFSTool2:updateEverything', 'The signals specifications and the virtual and real flags must have the same size')
                 
                 obj.updateScenario(obj.real, obj.virtual, obj.reprodPanel.real, obj.reprodPanel.virtual);
                 obj.updateDelayAndAttenFunctions();
@@ -528,6 +536,8 @@ classdef WFSToolSimple < handle
             obj.adjustSimulTheoSources(obj.numSourcesWFSarray, obj.numNoiseSources, 'noiseSource', numNoiseSources);
             obj.noiseSourceChannelMapping = zeros(numNoiseSources, 1);
             obj.updateLoudspeakerMappingVariables();
+            obj.virtualVolume = ones(numNoiseSources, 1);
+            obj.realVolume = ones(numNoiseSources, 1);
             obj.noiseSourceOrientation = repmat([1, 0, 0, 1], numNoiseSources, 1);
             obj.noiseSourceRadiationPattern = repmat({@ simulator.monopoleRadPat}, numNoiseSources, 1);
             
@@ -1115,6 +1125,8 @@ classdef WFSToolSimple < handle
             obj.virtual = obj.reprodPanel.virtual;
             obj.real = obj.reprodPanel.real;
             obj.noiseSourceChannelMapping = obj.reprodPanel.channelNumber;
+            obj.virtualVolume = obj.reprodPanel.virtualVolume;
+            obj.realVolume = obj.reprodPanel.realVolume;
         end
         
         function GUIenabling(obj, newPlayingState)
@@ -1135,7 +1147,9 @@ classdef WFSToolSimple < handle
                 case 'numSources'
                     obj.signalsSpec = obj.reprodPanel.signals;
                     obj.noiseSourceChannelMapping = obj.reprodPanel.channelNumber;
-                                        
+                    obj.virtualVolume = obj.reprodPanel.virtualVolume;
+                    obj.realVolume = obj.reprodPanel.realVolume;
+                    
                     obj.changed.numNoiseSources = true;
                 case 'virtual'
                     obj.changed.virtual = true;
@@ -1144,6 +1158,10 @@ classdef WFSToolSimple < handle
                 case 'channelNumber'
                     obj.noiseSourceChannelMapping = obj.reprodPanel.channelNumber;
                     obj.updateForcedDisabledLoudspeakers();
+                case 'virtualVolume'
+                    obj.virtualVolume = obj.reprodPanel.virtualVolume;
+                case 'realVolume'
+                    obj.realVolume = obj.reprodPanel.realVolume;
             end
             
             obj.updateEverything();
@@ -1417,7 +1435,7 @@ classdef WFSToolSimple < handle
             
             % Virtual
             if obj.virtual(index)
-                attenuations = obj.scenarioObj.attenuations(:, ind);
+                attenuations = obj.virtualVolume(index)*obj.scenarioObj.attenuations(:, ind);
             else
                 attenuations = zeros(obj.numSourcesWFSarray, 1);
             end
@@ -1425,7 +1443,7 @@ classdef WFSToolSimple < handle
             % If the real flag is set to true, the real value overrides the
             % virtual value for the selected loudspeaker
             if obj.real(index)
-                attenuations(obj.noiseSourceChannelMapping(index)) = -1;
+                attenuations(obj.noiseSourceChannelMapping(index)) = -obj.realVolume(index);
             end
         end
         
@@ -1445,6 +1463,17 @@ classdef WFSToolSimple < handle
             for k = 1:obj.numNoiseSources
                 delays = obj.getDelaysWFS(k);
                 atten = obj.getAttenuationsWFS(k);
+                sourceCoef = obj.noiseSourceCoefficient(k);
+                
+                complexCoeff(:, k) = sourceCoef * atten .* exp(-1i*2*pi*obj.frequency(k)*delays);
+            end
+        end
+        
+        function complexCoeff = getComplexCoeff(obj)
+            complexCoeff = zeros(obj.numLoudspeakers, obj.numNoiseSources);
+            for k = 1:obj.numNoiseSources
+                delays = obj.getDelays(k);
+                atten = obj.getAttenuations(k);
                 sourceCoef = obj.noiseSourceCoefficient(k);
                 
                 complexCoeff(:, k) = sourceCoef * atten .* exp(-1i*2*pi*obj.frequency(k)*delays);
