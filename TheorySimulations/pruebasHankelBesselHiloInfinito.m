@@ -110,3 +110,19 @@ Iteo = -pi*1i*besselh(0, 2, k*x);
 ax = axes(figure, 'NextPlot', 'Add');
 plot(ax, x, real(Iteo), x, real(I2))
 plot(ax, x, imag(Iteo), x, imag(I2))
+
+% Phase stationary method
+k = 1;
+x = 0.1:0.1:100;
+Iteo = -pi*1i*besselh(0, 2, k*x);
+approx = exp(-1i*k*x)./sqrt(x)*sqrt(2*pi/(1i*k));
+ax = axes(figure, 'NextPlot', 'Add');
+plot(ax, x, real(Iteo), x, real(approx))
+plot(ax, x, imag(Iteo), '--', x, imag(approx), '--')
+
+rel = approx./Iteo;
+ax = axes(figure, 'NextPlot', 'Add');
+plot(ax, x, 10*log10(abs(rel).^2 - 1))
+plot(ax, x, 10*log10(rad2deg(abs(angle(rel)))))
+xlabel('kr')
+legend('Amplitude error', 'Phase error')

@@ -15,6 +15,7 @@ classdef WFSToolSimple < handle
         
         % WFS Array
         WFSarrayChannelMapping
+        WFSarrayAdjacentSeparation = 0.18; % meteres
         
         % Microphones
         receiverChannelMapping % Active channels of the receiver device
@@ -759,7 +760,7 @@ classdef WFSToolSimple < handle
             switch sourceFilter
                 case 'NoFilter'
                     % Coefficients
-                    coeff = [obj.WFSarrayCoefficient; obj.noiseSourceCoefficient_complete];
+                    coeff = [obj.WFSarrayCoefficient; -obj.noiseSourceCoefficient_complete]; % The minus sign was added because of the way that the linear system is solved.
                     
                     % Indices
                     varInd = 1:obj.numSourcesWFSarray;
@@ -1436,6 +1437,11 @@ classdef WFSToolSimple < handle
             
             attenuations = zeros(obj.numSourcesWFSarray, numel(indices));
             attenuations(:, isActive) = obj.scenarioObj.attenuations(:, indScenario(isActive));
+            
+            % Adjust attenuation according to the 2.5D Rayleigh I integral
+            % coefficient that depends on frequency
+            attenuations = attenuations * obj.WFSarrayAdjacentSeparation ...
+                .* repmat(sqrt(1i * obj.frequency(indices)'/obj.c ), obj.numSourcesWFSarray, 1);
             
         end
         

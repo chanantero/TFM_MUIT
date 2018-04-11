@@ -14,6 +14,7 @@ obj = SimulationController;
 
 obj.NSposition = [3.35 -0.2 0]; % Assumed real position
 obj.amplitude = 1;
+obj.amplitude(2) = -obj.amplitude(1);
 obj.phase = 0;
 obj.frequency = 440;
 
@@ -184,7 +185,7 @@ cd(currentFolder)
 %% Apply cancellation
 
 % Circles
-numPointsPerCircle = 60;
+numPointsPerCircle = 20;
 radius = [5 50 5000];
 numCircles = numel(radius);
 alpha = linspace(0, 2*pi, numPointsPerCircle + 1); alpha = alpha(1:end-1)';
