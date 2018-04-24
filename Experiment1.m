@@ -4,7 +4,7 @@
 %% Preamble
 pathSetUp;
 
-imagesPath = 'C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Documentos\Img\';
+imagesPath = 'C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Documentos\TFM\Img\';
 
 dataPathName = [globalPath, 'Data\'];
 ID = datestr(now, 'yyyy-mm-dd_HH-MM-SS');
@@ -356,7 +356,7 @@ ax.YAxis(1).Label.FontSize = fontSize;
 ax.YAxis(2).Label.FontUnits = 'normalized';
 ax.YAxis(2).Label.FontSize = fontSize;
 
-printfig(ax.Parent, imagesPath, 'Experiment1_globalCancScaleFactor', 'eps');
+% printfig(ax.Parent, imagesPath, 'Experiment1_globalCancScaleFactor', 'eps');
 
 %% Different grids
 

@@ -54,4 +54,5 @@ obj.WFSToolObj.reproduceAndRecordForAcousticPaths();
 obj.WFSToolObj.calculateExperimentalAcousticPaths();
 expAcPath = obj.WFSToolObj.expAcPathStruct;
 
-%%
+%% 
+obj.WFSToolObj.WFScalculation();

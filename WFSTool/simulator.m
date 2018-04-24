@@ -4,7 +4,6 @@ classdef simulator < handle
         
         % Sources
         sourcePositions
-        sourceCoefficients % (numSources x numFrequencies) matrix
         sourceOrientations % Mx4 matrix. Rotation vector: [angle of rotation, Xaxis, Yaxis, Zaxis]. Counter clock-wise
         radPatFuns
         
@@ -15,7 +14,7 @@ classdef simulator < handle
         
         % Other
         freq
-        acPath
+        Fs % Sampling frequency of the time domain processing
         
         % Graphical
         ax
@@ -30,14 +29,30 @@ classdef simulator < handle
     end
     
     properties(SetAccess = private)
-        field
         scat
         fieldImage
         imag
+        
+        % Sources
+        sourceSignalsFrequency % Frequency domain (numSources x numFrequencies) matrix
+        sourceSignalsTime % Time domain (numSources x NsSignals) matrix
+        
+        % Receivers
+        recCoefficients % Frequency domain
+        recSignals % Time domain
+        
+        % Acoustic Paths
+        frequencyResponses
+        impulseResponses % (numReceivers x numSources x NsIR)     
+    end
+    
+    properties(Access = private)
+        domain = categorical({'frequency'}, simulator.domainTypes, simulator.domainTypes, 'Protected', true);
     end
     
     properties(Constant)
         c = 340;
+        domainTypes = {'frequency', 'time'};
     end
     
     properties(Dependent)
@@ -46,6 +61,13 @@ classdef simulator < handle
         numRec
         numPointsImage
         k % Propagation constant. numFrequencies-element vector
+        sourceCoefficients % Depends on the domain
+        acPath % Depends on the domain
+        field % Depends on the domain
+        Domain % With capital D, it is public
+        NsSignals % Number of samples of the signals
+        NsIR % Number of samples of the impulse responses
+        
     end
     
     % Getters and setters
@@ -68,6 +90,76 @@ classdef simulator < handle
         
         function k = get.k(obj)
             k = 2*pi*obj.freq/obj.c;
+        end
+        
+        function NsSignals = get.NsSignals(obj)
+            NsSignals = size(obj.sourceSignalsTime, 2);
+        end
+        
+        function NsIR = get.NsIR(obj)
+            NsIR = size(obj.impulseResponses, 3);
+        end
+        
+        function Domain = get.Domain(obj)
+            Domain = obj.domain;
+        end
+        
+        function set.Domain(obj, value)
+            obj.domain(1) = value;
+        end
+        
+        function acPath = get.acPath(obj)
+            switch obj.domain
+                case 'frequency'
+                    acPath = obj.frequencyResponses;
+                case 'time'
+                    acPath = obj.impulseResponses;
+            end
+        end
+          
+        function set.acPath(obj, value)
+            switch obj.domain
+                case 'frequency'
+                    obj.frequencyResponses = value;
+                case 'time'
+                    obj.impulseResponses = value;
+            end
+        end
+        
+        function field = get.field(obj)
+            switch obj.domain
+                case 'frequency'
+                    field = obj.recCoefficients;
+                case 'time'
+                    field = obj.recSignals;
+            end
+        end
+                 
+        function set.field(obj, value)
+            switch obj.domain
+                case 'frequency'
+                    obj.recCoefficients = value;
+                case 'time'
+                    obj.recSignals = value;
+            end
+        end
+        
+        function sourceSignals = get.sourceCoefficients(obj)
+            switch obj.domain
+                case 'frequency'
+                    sourceSignals = obj.sourceSignalsFrequency;
+                case 'time'
+                    sourceSignals = obj.sourceSignalsTime;
+            end
+        end
+        
+        function set.sourceCoefficients(obj, value)
+            switch obj.domain
+                case 'frequency'
+                    obj.sourceSignalsFrequency = value;
+                case 'time'
+                    obj.sourceSignalsTime = value;
+            end
         end
     end
     
@@ -191,18 +283,18 @@ classdef simulator < handle
   
             acPathFilt = obj.acPath(:, sourceFlags, :);
             sourceCoeffFilt = obj.sourceCoefficients(sourceFlags, :);
-            obj.field = simulator.calculateField(acPathFilt, sourceCoeffFilt);
-            
+            obj.field = simulator.calculateField(acPathFilt, sourceCoeffFilt, 'domain', obj.domain);
+                       
         end
         
         function updateFieldImage(obj)
 
-            obj.fieldImage = simulator.calculateField(obj.acPathImage, obj.sourceCoefficients);
+            obj.fieldImage = simulator.calculateField(obj.acPathImage, obj.sourceCoefficients, 'domain', 'frequency');
             
         end
         
         function updateTheoricAcousticPaths(obj)
-            obj.acPath = obj.calculateTheoricAcousticPath();         
+            obj.acPath = obj.calculateTheoricAcousticPath();
         end
         
         function updateTheoricAcousticPathsImage(obj)
@@ -224,29 +316,42 @@ classdef simulator < handle
                      
             acousPath = obj.calculateTheoricAcousticPath(recPos);
            
-            U = simulator.calculateField(acousPath, obj.sourceCoefficients, separatedSources);
+            U = simulator.calculateField(acousPath, obj.sourceCoefficients, 'separatedSources', separatedSources, 'domain', obj.domain);
             
         end
         
         function acPath = calculateTheoricAcousticPath(obj, receiverPositions)
             if nargin < 2
-                acPath = simulator.calculateTheoricAcousticPaths(...
-                    obj.sourcePositions, obj.radPatFuns, obj.sourceOrientations,...
-                    obj.recPositions, obj.recRadPatFuns, obj.recOrientations,...
-                    obj.freq, obj.c);
-            else
-                % The effect of receivers is considered null. This means that they are
-                % ideal: the radiation pattern is a monopole. This is the
-                % same as saying that we are measuring directly the value
-                % of the field.
-                numRecPos = size(receiverPositions, 1);
-                recRadPat = repmat({@simulator.monopoleRadPat}, [numRecPos, 1]);
-                recOrient = repmat([0 0 0 1], [numRecPos, 1]);
+                switch obj.domain
+                    case 'frequency'
+                        acPath = simulator.calculateTheoricAcousticPaths(...
+                            obj.sourcePositions, obj.radPatFuns, obj.sourceOrientations,...
+                            obj.recPositions, obj.recRadPatFuns, obj.recOrientations,...
+                            obj.freq, obj.c);
+                    case 'time'
+                        acPath = simulator.calculateMonopolesIR(obj.sourcePositions, obj.recPositions, obj.c, obj.Fs, obj.Fs*0.1);
+                end
                 
-                acPath = simulator.calculateTheoricAcousticPaths(...
-                    obj.sourcePositions, obj.radPatFuns, obj.sourceOrientations,...
-                    receiverPositions, recRadPat, recOrient,...
-                    obj.freq, obj.c);
+                
+            else
+                switch obj.domain
+                    case 'frequency'
+                        % The effect of receivers is considered null. This means that they are
+                        % ideal: the radiation pattern is a monopole. This is the
+                        % same as saying that we are measuring directly the value
+                        % of the field.
+                        numRecPos = size(receiverPositions, 1);
+                        recRadPat = repmat({@simulator.monopoleRadPat}, [numRecPos, 1]);
+                        recOrient = repmat([0 0 0 1], [numRecPos, 1]);
+                        
+                        acPath = simulator.calculateTheoricAcousticPaths(...
+                            obj.sourcePositions, obj.radPatFuns, obj.sourceOrientations,...
+                            receiverPositions, recRadPat, recOrient,...
+                            obj.freq, obj.c);
+                    case 'time'
+                        acPath = simulator.calculateMonopolesIR(obj.sourcePositions, receiverPositions, obj.c, obj.Fs, obj.Fs*0.1);
+                        
+                end
             end
         end
         
@@ -553,7 +658,7 @@ classdef simulator < handle
                 end
                 
             end
-            
+                      
             function acPath = memoryLigh(sourcePos, sourceRadPat, sourceOrient, recPos, recRadPat, recOrient, frequencies, propagVeloc)
                 numSour = size(sourcePos, 1);
                 numFreq = numel(frequencies);
@@ -603,27 +708,69 @@ classdef simulator < handle
             
         end
         
-        function U = calculateField(acousticPaths, sourceCoefficients, separatedSources)
+        function acPathIR = calculateMonopolesIR(sourcePos, recPos, propagVeloc, Fs, numSampIR)
+                numSour = size(sourcePos, 1);
+                numRec = size(recPos, 1);
+                
+                acPathIR = zeros(numRec, numSour, numSampIR);
+                for s = 1:numSour
+                    diffVec = recPos - repmat(sourcePos(s, :), numRec, 1);
+                    dist = sqrt(sum(diffVec.^2, 2));
+                    delay = dist/propagVeloc;
+                    indDelta = floor(delay*Fs) + 1;
+                                       
+                    for r = 1:numRec
+                        acPathIR(r, s, indDelta(r)) = 1/dist(r);
+                    end
+                                       
+                end
+                
+            end
+        
+        function U = calculateField(acousticPaths, sourceCoefficients, varargin)
             % Input arguments:
-            % - acousticPaths. (numReceivers x numSources x numFrequencies)
-            % - sourceCoefficients. (numSources x numFrequencies)
+            % - acousticPaths. (numReceivers x numSources x numFrequencies|numSampIR)
+            % - sourceCoefficients. (numSources x numFrequencies|numSamp)
             % - separatedSources. Logical scalar.
             
-            if nargin < 3
-                separatedSources = false;
-            end
+            p = inputParser;
+            addParameter(p, 'separatedSources', false)
+            addParameter(p, 'domain', 'frequency')
+            parse(p, varargin{:})
             
-            [numReceivers, ~, numFrequencies] = size(acousticPaths);
+            separatedSources = p.Results.separatedSources;
+            domain = p.Results.domain;
             
-            if separatedSources
-                U = acousticPaths .* repmat(permute(sourceCoefficients, [3 1 2]), [numReceivers, 1, 1]); % (numReceivers x numSources x numFrequencies)
-            else
-                U = zeros(numReceivers, numFrequencies);
-                for f = 1:numFrequencies
-                    U(:, f) = (acousticPaths(:, :, f) * sourceCoefficients(:, f));
-                end
+            switch domain
+                case 'frequency'
+                    [numReceivers, ~, numFrequencies] = size(acousticPaths);
+                    
+                    if separatedSources
+                        U = acousticPaths .* repmat(permute(sourceCoefficients, [3 1 2]), [numReceivers, 1, 1]); % (numReceivers x numSources x numFrequencies)
+                    else
+                        U = zeros(numReceivers, numFrequencies);
+                        for f = 1:numFrequencies
+                            U(:, f) = (acousticPaths(:, :, f) * sourceCoefficients(:, f));
+                        end
+                    end
+                case 'time'
+                    [numReceivers, numSources, ~] = size(acousticPaths);
+                    [~, numSamples] = size(sourceCoefficients);
+                    
+                    recSignals = zeros(numReceivers, numSamples);
+                    for r = 1:numReceivers 
+                        recSign = zeros(numSources, numSamples);
+                        for s = 1:numSources
+                            h = permute(acousticPaths(r, s, :), [3 1 2]);
+                            y = filter(h, 1, sourceCoefficients(s, :));
+                            recSign(r, :) = y;
+                        end
+                        recSignals(r, :) = sum(recSign, 1);
+                    end
+                    U = recSignals;
             end
         end
+        
     end
     
 end

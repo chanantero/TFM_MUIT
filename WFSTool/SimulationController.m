@@ -77,6 +77,9 @@ classdef SimulationController < handle
         
         % Visualization
         ax
+        
+        % Other
+        Fs
     end
     
     properties(Access = public) % private
@@ -178,7 +181,7 @@ classdef SimulationController < handle
         end
         
         function set.NScoef(obj, value)
-            if numel(value) == 1
+            if size(value, 1) == 1
                 obj.WFSToolObj.noiseSourceCoefficient = [value; value];
             else
                 obj.WFSToolObj.noiseSourceCoefficient = value;
@@ -186,19 +189,19 @@ classdef SimulationController < handle
         end
         
         function NSRcoef = get.NSRcoef(obj)
-            NSRcoef = obj.WFSToolObj.noiseSourceCoefficient(1);
+            NSRcoef = obj.WFSToolObj.noiseSourceCoefficient(1, :);
         end
         
         function set.NSRcoef(obj, value)
-            obj.WFSToolObj.noiseSourceCoefficient(1) = value;
+            obj.WFSToolObj.noiseSourceCoefficient(1, :) = value;
         end
         
         function NSVcoef = get.NSVcoef(obj)
-            NSVcoef = obj.WFSToolObj.noiseSourceCoefficient(2);
+            NSVcoef = obj.WFSToolObj.noiseSourceCoefficient(2, :);
         end
         
         function set.NSVcoef(obj, value)
-            obj.WFSToolObj.noiseSourceCoefficient(2) = value;
+            obj.WFSToolObj.noiseSourceCoefficient(2, :) = value;
         end
         
         function frequency = get.frequency(obj)
@@ -274,6 +277,16 @@ classdef SimulationController < handle
         function numWFS = get.numWFS(obj)
             numWFS = obj.WFSToolObj.numSourcesWFSarray;
         end
+        
+        % Other
+        function Fs = get.Fs(obj)
+            Fs = obj.WFSToolObj.Fs;
+        end
+        
+        function set.Fs(obj, value)
+            obj.WFSToolObj.Fs = value;
+        end
+       
     end
     
     methods
