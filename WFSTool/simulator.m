@@ -756,14 +756,15 @@ classdef simulator < handle
                 case 'time'
                     [numReceivers, numSources, ~] = size(acousticPaths);
                     [~, numSamples] = size(sourceCoefficients);
+                    acousticPaths = permute(acousticPaths, [1, 3, 2]); % Easier to use
                     
                     recSignals = zeros(numReceivers, numSamples);
                     for r = 1:numReceivers 
+                        fprintf('%d/%d\n', r, numReceivers);
                         recSign = zeros(numSources, numSamples);
                         for s = 1:numSources
-                            h = permute(acousticPaths(r, s, :), [3 1 2]);
-                            y = filter(h, 1, sourceCoefficients(s, :));
-                            recSign(r, :) = y;
+%                             fprintf(' %d/%d\n', s, numSources);
+                            recSign(s, :) = filter(acousticPaths(r, :, s), 1, sourceCoefficients(s, :));
                         end
                         recSignals(r, :) = sum(recSign, 1);
                     end

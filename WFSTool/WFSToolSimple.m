@@ -12,10 +12,15 @@ classdef WFSToolSimple < handle
         signalsSpec % String that specifies the coefficient
         amplitude
         phase
+        noiseSourceSignalTime
         
         % WFS Array
         WFSarrayChannelMapping
         WFSarrayAdjacentSeparation = 0.18; % meteres
+        % Time domain
+        filtersWFS_IR
+        indDelay_filtersWFS
+        freqFilter % Impulse response of the frequency filter + hilbert filter combined
         
         % Microphones
         receiverChannelMapping % Active channels of the receiver device
@@ -41,7 +46,6 @@ classdef WFSToolSimple < handle
         expAcPathStruct % Last experimental acoustic path calculated. If it's done well, it is supposed to be updated for the current physical scenario.
         noiseSourceAcPathStruct
         WFSarrayAcPathStruct
-        freqFilter % Impulse response of the frequency filter + hilbert filter combined
         
         % Infrastructure variables
         fig
@@ -165,7 +169,7 @@ classdef WFSToolSimple < handle
                 case 'frequency'
                     noiseSourceCoefficient = obj.amplitude .* exp(1i*obj.phase);
                 case 'time'
-                    noiseSourceCoefficient = obj.simulTheo.sourceCoefficients(obj.noiseSourceIndSimulTheo, :);
+                    noiseSourceCoefficient = obj.noiseSourceSignalTime;
             end
         end
         
@@ -175,13 +179,7 @@ classdef WFSToolSimple < handle
                     obj.amplitude = abs(value);
                     obj.phase = angle(value);
                 case 'time'
-                    if size(value, 2) ~= obj.simulTheo.NsSignals
-                        newSignals = zeros(obj.numSourcesTheo, size(value, 2));
-                        newSignals(obj.noiseSourceIndSimulTheo, :) = value;
-                        obj.simulTheo.sourceCoefficients = newSignals;
-                    else
-                        obj.simulTheo.sourceCoefficients(obj.noiseSourceIndSimulTheo, :) = value;
-                    end
+                    obj.noiseSourceSignalTime = value;
             end
         end
         
@@ -190,7 +188,18 @@ classdef WFSToolSimple < handle
         end
         
         function set.noiseSourceCoefficient_complete(obj, value)
-            obj.simulTheo.sourceCoefficients(obj.noiseSourceIndSimulTheo, :) = value;
+            switch obj.domain
+                case 'frequency'
+                    obj.simulTheo.sourceCoefficients(obj.noiseSourceIndSimulTheo, :) = value;
+                case 'time'
+                    if size(value, 2) ~= obj.simulTheo.NsSignals
+                        newSignals = zeros(obj.numSourcesTheo, size(value, 2));
+                        newSignals(obj.noiseSourceIndSimulTheo, :) = value;
+                        obj.simulTheo.sourceCoefficients = newSignals;
+                    else
+                        obj.simulTheo.sourceCoefficients(obj.noiseSourceIndSimulTheo, :) = value;
+                    end
+            end
         end
         
         function noiseSourceOrientation = get.noiseSourceOrientation(obj)
@@ -256,12 +265,17 @@ classdef WFSToolSimple < handle
         
         function set.WFSarrayCoefficient(obj, value)
             
+            switch obj.domain
+                case 'frequency'
+                    obj.simulTheo.sourceCoefficients(obj.WFSarrayIndSimulTheo, :) = value;
+                case 'time'
             if size(value, 2) ~= obj.simulTheo.NsSignals
                 newSignals = zeros(obj.numSourcesTheo, size(value, 2));
                 newSignals(obj.WFSarrayIndSimulTheo, :) = value;
                 obj.simulTheo.sourceCoefficients = newSignals;
             else
                 obj.simulTheo.sourceCoefficients(obj.WFSarrayIndSimulTheo, :) = value;
+            end
             end
         end
         
@@ -751,39 +765,38 @@ classdef WFSToolSimple < handle
                 
                 case 'time'
                     % Get the filter for each loudspeaker
-                    [filtersIR, freqFilterIndDelay] = obj.getFiltersWFS();
+                    filtersIR = obj.filtersWFS_IR;
+                    
                     filterLength = size(filtersIR, 3);
+                    filtersIR = permute(filtersIR, [1, 3, 2]); % Easier to use
                                         
                     % Filter signals
-                    signalLength = size(obj.noiseSourceCoefficient, 2);
-%                     filtersIR_ext = zeros(obj.numSourcesWFSarray, obj.numNoiseSources, signalLength + filterLength - 1);
-%                     filtersIR_ext(:, :, 1:filterLength) = filtersIR;
-%                     
-%                     wfsSignals = zeros(size(filtersIR_ext));
-%                     for ns = 1:obj.numNoiseSources
-%                         fprintf('%d\n', ns);
-%                         signal = obj.noiseSourceCoefficient(ns, :);
-%                         wfsSignals(:, ns, :) = filter(signal, 1, filtersIR_ext(:, ns, :), [], 3);
-%                     end
-%                     wfsSignals = permute(sum(wfsSignals, 2), [1, 3, 2]);
-                    
+                    signalLength = size(obj.noiseSourceSignalTime, 2);
+                    newSignalLength = signalLength + filterLength - 1;
+                    NSsignalsExtended = [obj.noiseSourceSignalTime, zeros(obj.numNoiseSources, newSignalLength - signalLength)];
+
                     virtNS = find(obj.virtual);
                     numVirtNS = numel(virtNS);
                     
-                    wfsSignals = zeros(obj.numSourcesWFSarray, signalLength + filterLength - 1, numVirtNS);
+                    wfsSignals = zeros(obj.numSourcesWFSarray, newSignalLength, numVirtNS);
+                    disp('WFScalculation')
                     for ns = 1:numVirtNS
-                        signal = [obj.noiseSourceCoefficient(virtNS(ns), :), zeros(1, filterLength - 1)];
                         for ss = 1:obj.numSourcesWFSarray
-                            fprintf('%d %d\n', ns, ss)
-                            h = permute(filtersIR(ss, virtNS(ns), :), [3, 1, 2]);
-                            wfsSignals(ss, :, ns) = filter(h, 1, signal);
+                            fprintf(' %d %d\n', ns, ss)
+                            wfsSignals(ss, :, ns) = filter(filtersIR(ss, :, virtNS(ns)), 1, NSsignalsExtended(virtNS(ns), :));
                         end
                     end
-                    
+                    wfsSignals = sum(wfsSignals, 3);
+                                                            
                     % Compensate for the delay introduced by the frequency
                     % filter
-                    wfsSignals = wfsSignals(:, freqFilterIndDelay + 1:end);
+                    wfsSignals = wfsSignals(:, obj.indDelay_filtersWFS + 1:end);
+                    
                     obj.WFSarrayCoefficient = wfsSignals;
+                    
+                    NSsignalsExtended = NSsignalsExtended(:, 1:end - obj.indDelay_filtersWFS);
+                    NSsignalsExtended(virtNS, :) = 0;
+                    obj.noiseSourceCoefficient_complete = NSsignalsExtended;
             end
             
         end
@@ -936,6 +949,20 @@ classdef WFSToolSimple < handle
             
         end
         
+        function updateFiltersWFS(obj)
+            switch obj.domain
+                case 'frequency'
+                    % It is not necessary the implementation because
+                    % getComplexCoeffWFS already takes in account the
+                    % source coefficient and the WFS processing
+                case 'time'
+                    [filtersIR, indDelay] = obj.getFiltersWFS();
+                    obj.filtersWFS_IR = filtersIR;
+                    obj.indDelay_filtersWFS = indDelay;
+            end
+                           
+        end
+        
         function updateLoudspeakerMappingVariables(obj)
             indReal = find(obj.real);
             noiseSourceChannelMapping_real = obj.noiseSourceChannelMapping(obj.real);
@@ -1019,7 +1046,18 @@ classdef WFSToolSimple < handle
                 
                 obj.simulTheo.updateField(sourceFlags);
             else
-                obj.simulTheo.updateField();
+                % Optimize by selecting only those sources that are
+                % different from 0
+                attenuations = obj.getAttenuationsWFS(1:obj.numNoiseSources);               
+                flags = attenuations ~= 0;
+                flags(:, ~obj.virtual) = 0;
+                WFSflags = any(flags, 2);
+                
+                sourceFlags = false(obj.numSourcesTheo, 1);
+                sourceFlags(obj.WFSarrayIndSimulTheo) = WFSflags;
+                sourceFlags(obj.noiseSourceIndSimulTheo) = obj.real;
+                
+                obj.simulTheo.updateField(sourceFlags);
             end
                
         end
@@ -1573,6 +1611,8 @@ classdef WFSToolSimple < handle
                     end
                 end
             end
+            
+            filtersIR = filtersIR*obj.WFSarrayAdjacentSeparation;
             
             % Apply the filter for frequency dependence and the hilbert
             % filter

@@ -79,7 +79,14 @@ yTotal = filter(hTotal, 1, x);
 yTotal_undelayed = [yTotal(delayFilter1 + delayFilter2 + 1:end, :); zeros(delayFilter1 + delayFilter2, numel(f))];
 plot(t, x, t, yTotal_undelayed)
 
+%% Tests
+b = zeros(1, 10); b(4) = 1;
+x = ones(1, 15);
+zi = ones(1, 9);
+y = filter(b, 1, x, zi);
 
+ax = axes(figure);
+plot(ax, y)
 
 
 

@@ -53,11 +53,199 @@ obj.WFSToolObj.domain = 'time';
 obj.setAcousticPaths('NS', 'theoretical', 'WFS', 'theoretical');
 
 %% Signal to be transmitted by the noise source
-f = 440;
-t = 0:1/obj.WFSToolObj.Fs:2;
-x = cos(2*pi*f*t);
+f = obj.frequency;
+t = 0:1/obj.WFSToolObj.Fs:1;
+x = obj.amplitude(1) * cos(2*pi*f*t + obj.phase);
+x(t > 1) = 0;
 
 obj.NScoef = x;
 obj.NSVcoef = -x;
 
+%% Simulate
+
+% Simulate only the noise source
+obj.WFSToolObj.virtual = [false; false];
 obj.WFSToolObj.WFScalculation();
+obj.WFSToolObj.simulate();
+simulFieldOnlyNoise = obj.WFSToolObj.simulField;
+
+% Simulate all together
+obj.WFSToolObj.virtual = [false; true];
+obj.WFSToolObj.WFScalculation();
+obj.WFSToolObj.simulate();
+simulField = obj.WFSToolObj.simulField;
+
+% save([dataPathName, 'pruebaTiempo', ID, '.mat'], 'simulFieldOnlyNoise', 'simulField')
+
+%%
+ax = axes(figure, 'NextPlot', 'Add');
+lOnlyNoise = plot(ax, simulFieldOnlyNoise(3, :));
+lAll = plot(ax, simulField(1, :));
+lDiff = plot(ax, simulField(1, :) - simulFieldOnlyNoise(1, :));
+
+ax.Children = flip(ax.Children);
+
+indRec = 4;
+lOnlyNoise.YData = simulFieldOnlyNoise(indRec, :);
+lAll.YData = simulField(indRec, :);
+lDiff.YData = simulField(indRec, :) - simulFieldOnlyNoise(indRec, :);
+
+% plot(ax, simulField(1,:)./simulFieldOnlyNoise(1,:))
+plot(ax, simulField(1,:)./simulFieldOnlyNoise(1,:))
+
+%% Compare with the result with frequency responses
+obj.WFSToolObj.domain = 'frequency';
+obj.setAcousticPaths('NS', 'theoretical', 'WFS', 'theoretical');
+
+obj.cancelResults = [];
+
+% Simulate only the noise source
+obj.WFSToolObj.virtual = [false; false];
+obj.WFSToolObj.WFScalculation();
+obj.cancel();
+
+% Simulate all together
+obj.WFSToolObj.virtual = [false; true];
+obj.WFSToolObj.WFScalculation();
+obj.cancel();
+
+s = obj.cancelResults;
+
+%% Visualization: 2D map, case by case
+
+% Format structure
+for p = 1:numel(s)
+    s(p).NScoef = [s(p).NSRcoef; s(p).NSVcoef];
+    s(p).NSposition = [s(p).NSRposition; s(p).NSVposition];
+end
+
+% Create simulationViewer object
+objVis = simulationViewer(obj.ax, s);
+
+%% Try it with a song
+filename = 'C:\Users\Rubén\Music\Salsa\Gente de Zona - Traidora (Salsa Version)[Cover Audio] ft. Marc Anthony.mp3';
+[y, Fs] = audioread(filename);
+numSamp = size(y, 1);
+
+% Filter to avoid aliasing
+Y = fft(y(:, 1));
+df = 1/numSamp;
+freqs = 0:Fs/numSamp:(1-1/numSamp)*Fs;
+
+fcut = 1800;
+Y(freqs > fcut & freqs < Fs - fcut) = 0;
+
+yFilt = ifft(Y);
+% sound(yFilt, Fs)
+
+% Crop it
+tStart = 94; % seconds
+dur = 6; % seconds
+indStart = floor(tStart*Fs);
+indEnd = ceil((tStart + dur)*Fs) - 1;
+x = yFilt(indStart:indEnd)';
+% sound(x, Fs)
+
+% Assign signal
+obj.NScoef = x;
+obj.NSVcoef = -x;
+
+% Simulate in steps so we don't run out of memory
+    % Parameters
+signalLength = length(x);
+frameLength = 44100;
+numFrames = ceil(signalLength/frameLength);
+fillSize = numFrames*frameLength - length(x);
+x = [x, zeros(1, fillSize)];
+
+filterLength = length(obj.WFSToolObj.freqFilter);
+[~, filterDelay] = max(obj.WFSToolObj.freqFilter);
+filterDelay = filterDelay - 1;
+
+acPathFilterLength = size(obj.WFSToolObj.noiseSourceAcousticPath, 3);
+
+    % Initialize
+obj.WFSToolObj.updateFiltersWFS();
+
+previousOnlyNoiseWFSarrayCoef = zeros(obj.numWFS, filterLength - 1);
+previousOnlyNoiseNoiseSourceCoef = zeros(obj.numNS, filterLength - 1);
+previousWFSarrayCoef = zeros(obj.numWFS, filterLength - 1);
+previousNoiseSourceCoef = zeros(obj.numNS, filterLength - 1);
+
+previousOnlyNoise = zeros(obj.numMicro, acPathFilterLength - 1);
+previous = zeros(obj.numMicro, acPathFilterLength - 1);
+
+fieldOnlyNoise = zeros(numFrames, frameLength);
+field = zeros(numFrames, frameLength);
+    
+    % Loop
+for fr = 1:numFrames
+    fprintf('%d/%d\n', fr, numFrames);
+    
+    % Compensate for the delay compensation performed in WFSToolSimple
+    x_frame = [zeros(1, filterDelay),  x((fr-1)*frameLength + 1:frameLength*fr)];
+    
+    obj.NScoef = x_frame;
+    obj.NSVcoef = -x_frame;
+
+        % Simulate only the noise source
+    obj.WFSToolObj.virtual = [false; false];
+    obj.WFSToolObj.WFScalculation();
+    
+    WFSarraySignals = obj.WFSToolObj.WFSarrayCoefficient;
+    noiseSourceSignals = obj.WFSToolObj.noiseSourceCoefficient;
+    
+    WFSarraySignals(:, 1:filterLength - 1) = WFSarraySignals(:, 1:filterLength - 1) + previousOnlyNoiseWFSarrayCoef;
+    previousOnlyNoiseWFSarrayCoef = WFSarraySignals(:, frameLength + 1:end);
+    WFSarraySignals = WFSarraySignals(:, 1:frameLength);
+    disp('a')
+    
+    noiseSourceSignals(:, 1:filterLength - 1) = noiseSourceSignals(:, 1:filterLength - 1) + previousOnlyNoiseNoiseSourceCoef;
+    previousOnlyNoiseNoiseSourceCoef = noiseSourceSignals(:, frameLength + 1:end);
+    noiseSourceSignals = noiseSourceSignals(:, 1:frameLength);
+    
+    % Extend it
+    WFSarraySignals = [WFSarraySignals, zeros(obj.numWFS, acPathFilterLength - 1)];
+    noiseSourceSignals = [noiseSourceSignals, zeros(obj.numNS, acPathFilterLength - 1)];
+    obj.WFSToolObj.WFSarrayCoefficient = WFSarraySignals;
+    obj.WFSToolObj.noiseSourceCoefficient = noiseSourceSignals;
+    
+    obj.WFSToolObj.simulate();
+    fieldOnlyNoise_frame = obj.WFSToolObj.simulField;
+    fieldOnlyNoise_frame(:, 1:acPathFilterLength - 1) = fieldOnlyNoise_frame(:, 1:acPathFilterLength - 1) + previousOnlyNoise;
+    previousOnlyNoise = fieldOnlyNoise_frame(:, frameLength + 1:end);
+    fieldOnlyNoise_frame = fieldOnlyNoise_frame(:, 1:frameLength);
+    
+        % Simulate all together
+        disp('All together')
+    obj.WFSToolObj.virtual = [false; true];
+    obj.WFSToolObj.WFScalculation();
+    
+    WFSarraySignals = obj.WFSToolObj.WFSarrayCoefficient;
+    noiseSourceSignals = obj.WFSToolObj.noiseSourceCoefficient;
+    
+    WFSarraySignals(:, 1:filterLength - 1) = WFSarraySignals(:, 1:filterLength - 1) + previousWFSarrayCoef;
+    previousWFSarrayCoef = WFSarraySignals(:, frameLength + 1:end);
+    WFSarraySignals = WFSarraySignals(:, 1:frameLength);
+    
+    noiseSourceSignals(:, 1:filterLength - 1) = noiseSourceSignals(:, 1:filterLength - 1) + previousNoiseSourceCoef;
+    previousNoiseSourceCoef = noiseSourceSignals(:, frameLength + 1:end);
+    noiseSourceSignals = noiseSourceSignals(:, 1:frameLength);
+    
+    % Extend it
+    WFSarraySignals = [WFSarraySignals, zeros(obj.numWFS, acPathFilterLength - 1)];
+    noiseSourceSignals = [noiseSourceSignals, zeros(obj.numNS, acPathFilterLength - 1)];
+    obj.WFSToolObj.WFSarrayCoefficient = WFSarraySignals;
+    obj.WFSToolObj.noiseSourceCoefficient = noiseSourceSignals;
+    
+    obj.WFSToolObj.simulate();
+    field_frame = obj.WFSToolObj.simulField;
+    field_frame(1:acPathFilterLength - 1) = field_frame(1:acPathFilterLength - 1) + previous;
+    previous = field_frame(frameLength + 1:end);
+    field_frame = field_frame(1:frameLength);
+    
+    fieldOnlyNoise(fr, :) = fieldOnlyNoise_frame;
+    field(fr, :) = field_frame;
+
+end
+
