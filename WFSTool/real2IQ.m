@@ -14,6 +14,7 @@ if nargin == 4
     highFreq = ceil(pitchFreqSamp + filterWidthSamp);
     X(1:lowFreq-1, :) = 0;
     X(highFreq+1:end, :) = 0;
+    X = 2*X;
 else
     % Delete the negative frequencies
     X(ceil(N/2) + 1:end, :) = 0;

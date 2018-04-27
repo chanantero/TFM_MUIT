@@ -315,6 +315,20 @@ classdef WFSToolSimple < handle
         end
         
         function set.WFSarrayAcousticPath(obj, value)
+            switch obj.domain
+                case 'frequency'
+                    obj.simulTheo.acPath(:, obj.WFSarrayIndSimulTheo, :) = value;
+                case 'time'
+                    numSamp = size(value, 3);
+                    if numSamp ~= obj.simulTheo.NsIR
+                        newAcPath = zeros(obj.numReceivers, obj.numSourcesTheo, numSamp);
+                        newAcPath(:, obj.WFSarrayIndSimulTheo, :) = value;
+                        obj.simulTheo.acPath = newAcPath;
+                    else
+                        obj.simulTheo.acPath(:, obj.WFSarrayIndSimulTheo, :) = value;
+                    end
+            end
+            
             obj.simulTheo.acPath(:, obj.WFSarrayIndSimulTheo, :) = value;
         end
         
@@ -323,7 +337,21 @@ classdef WFSToolSimple < handle
         end
         
         function set.noiseSourceAcousticPath(obj, value)
-            obj.simulTheo.acPath(:, obj.noiseSourceIndSimulTheo, :) = value;
+            switch obj.domain
+                case 'frequency'
+                    obj.simulTheo.acPath(:, obj.noiseSourceIndSimulTheo, :) = value;
+                case 'time'
+                    numSamp = size(value, 3);
+                    if numSamp ~= obj.simulTheo.NsIR
+                        newAcPath = zeros(obj.numReceivers, obj.numSourcesTheo, numSamp);
+                        newAcPath(:, obj.noiseSourceIndSimulTheo, :) = value;
+                        obj.simulTheo.acPath = newAcPath;
+                    else
+                        obj.simulTheo.acPath(:, obj.noiseSourceIndSimulTheo, :) = value;
+                    end
+            end
+            
+            
         end
         
         % Loudspeakers
@@ -640,7 +668,12 @@ classdef WFSToolSimple < handle
             uniqueFreq = unique(obj.frequency);
             obj.noiseSourceAcPathStruct = struct('acousticPaths', zeros(obj.numReceivers, obj.numNoiseSources, numel(uniqueFreq)), 'frequencies', uniqueFreq);
             obj.WFSarrayAcPathStruct = struct('acousticPaths', zeros(obj.numReceivers, obj.numSourcesWFSarray, numel(uniqueFreq)), 'frequencies', uniqueFreq);
+            domainOr = obj.domain;
+            obj.domain = 'frequency';
             obj.simulTheo.acPath = zeros(numReceivers, obj.numSourcesTheo, obj.numNoiseSources);
+            obj.domain = 'time';
+            obj.simulTheo.acPath = zeros(numReceivers, obj.numSourcesTheo, 1);
+            obj.domain = domainOr;
             obj.noiseSourceAcousticPath = zeros(numReceivers, obj.numNoiseSources, obj.numNoiseSources);
             obj.WFSarrayAcousticPath = zeros(numReceivers, obj.numSourcesWFSarray, obj.numNoiseSources);
         end
@@ -778,12 +811,18 @@ classdef WFSToolSimple < handle
                     virtNS = find(obj.virtual);
                     numVirtNS = numel(virtNS);
                     
+                    % Optimize by selecting only those sources that are
+                    % different from 0
+                    attenuations = obj.getAttenuationsWFS(virtNS);
+                    WFSflags = attenuations ~= 0;
+                                                          
                     wfsSignals = zeros(obj.numSourcesWFSarray, newSignalLength, numVirtNS);
                     disp('WFScalculation')
                     for ns = 1:numVirtNS
-                        for ss = 1:obj.numSourcesWFSarray
+                        indWFS = find(WFSflags(:, ns));
+                        for ss = 1:numel(indWFS)
                             fprintf(' %d %d\n', ns, ss)
-                            wfsSignals(ss, :, ns) = filter(filtersIR(ss, :, virtNS(ns)), 1, NSsignalsExtended(virtNS(ns), :));
+                            wfsSignals(indWFS(ss), :, ns) = filter(filtersIR(indWFS(ss), :, virtNS(ns)), 1, NSsignalsExtended(virtNS(ns), :));
                         end
                     end
                     wfsSignals = sum(wfsSignals, 3);
