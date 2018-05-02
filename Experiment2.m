@@ -19,7 +19,7 @@ obj.frequency = 440;
 
 % Load information about receiver positions and acoustic paths. The
 % information was generated with the command:
-% [acousticPath, microphonePositions] = ImportImpulseResponseGTAC(frequency)
+% [acousticPath, microphonePositions] = importImpulseResponseGTAC(frequency)
 load([dataPathName, 'acousticPathsGTAC_440.mat'])
 
 % Receivers

@@ -1219,6 +1219,11 @@ classdef WFSToolSimple < handle
             
         end
               
+        function WFSflags = getActiveWFSsources(obj)
+            attenuations = obj.getAttenuationsWFS(obj.virtual);
+            WFSflags = any(attenuations ~= 0, 2);
+        end
+        
     end
     
     methods(Access = private)       
@@ -1234,8 +1239,10 @@ classdef WFSToolSimple < handle
         function setAcousticPaths(obj)
             % Take the acoustic path structures to assign the acoustic path
             % matrices
-            obj.WFSarrayAcousticPath = WFSToolSimple.tuneAcousticPaths(obj.WFSarrayAcPathStruct.acousticPaths, obj.WFSarrayAcPathStruct.frequencies, obj.frequency);
-            obj.noiseSourceAcousticPath = WFSToolSimple.tuneAcousticPaths(obj.noiseSourceAcPathStruct.acousticPaths, obj.noiseSourceAcPathStruct.frequencies, obj.frequency);
+            if obj.domain == 'frequency'
+                obj.WFSarrayAcousticPath = WFSToolSimple.tuneAcousticPaths(obj.WFSarrayAcPathStruct.acousticPaths, obj.WFSarrayAcPathStruct.frequencies, obj.frequency);
+                obj.noiseSourceAcousticPath = WFSToolSimple.tuneAcousticPaths(obj.noiseSourceAcPathStruct.acousticPaths, obj.noiseSourceAcPathStruct.frequencies, obj.frequency);
+            end
         end
         
         function adjustSimulTheoSources(obj, numWFSSour, numNoiseSour, newType, numSour)

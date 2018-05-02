@@ -1,4 +1,5 @@
 %% Experiment 5
+% Time domain
 % Impulse responses for theoretical case
 
 %% Preamble
@@ -102,6 +103,8 @@ recCoef_time = signal2pulseCoefficientMatrix([0.1 0.9], f, 1, simulField', obj.W
 WFScoef_time = signal2pulseCoefficientMatrix([0.1 0.9], f, 1, obj.WFSToolObj.WFSarrayCoefficient(81:96, :)', obj.WFSToolObj.Fs);
 NScoef_time = signal2pulseCoefficientMatrix([0.1 0.9], f, 1, x', obj.WFSToolObj.Fs);
 
+plot(simulField')
+
 s_time = SimulationController.generateExportStructure(...
                 'NSRcoef', NScoef_time,...
                 'NSVcoef', -NScoef_time,...
@@ -164,7 +167,7 @@ end
 % Create simulationViewer object
 objVis = simulationViewer(obj.ax, s);
 
-%% Try it with a song
+%% Import song
 filename = 'C:\Users\Rubén\Music\Salsa\Gente de Zona - Traidora (Salsa Version)[Cover Audio] ft. Marc Anthony.mp3';
 [y, Fs] = audioread(filename);
 numSamp = size(y, 1);
@@ -188,6 +191,8 @@ indEnd = ceil((tStart + dur)*Fs) - 1;
 x = yFilt(indStart:indEnd)';
 % sound(x, Fs)
 
+
+%% Simulate
 % Assign signal
 obj.NScoef = x;
 obj.NSVcoef = -x;
@@ -207,6 +212,8 @@ filterDelay = filterDelay - 1;
 acPathFilterLength = size(obj.WFSToolObj.noiseSourceAcousticPath, 3);
 
     % Initialize
+obj.WFSToolObj.domain = 'time';
+obj.setAcousticPaths('NS', 'theoretical', 'WFS', 'theoretical');
 obj.WFSToolObj.updateFiltersWFS();
 
 previousOnlyNoiseWFSarrayCoef = zeros(obj.numWFS, filterLength - 1);
@@ -296,10 +303,13 @@ ax = axes(figure, 'NextPlot', 'Add');
 % plot(ax, field_frame(1, :))
 % plot(ax, noiseSourceSignals(2,:))
 % plot(ax, WFSarraySignals(90, :))
-lOnlyNoise = plot(ax, fieldOnlyNoise(1,:));
-lAll = plot(ax, field(1,:));
+t = (0:frameLength*numFrames-1)/44100;
+lOnlyNoise = plot(ax, t, fieldOnlyNoise(1,:));
+lAll = plot(ax, t, field(1,:));
+ax.XLabel.String = 'Time (s)';
+ax.YLabel.String = 'Amplitude';
 
-indRec = 4;
+indRec = 3;
 lOnlyNoise.YData = fieldOnlyNoise(indRec, :);
 lAll.YData = field(indRec, :);
 

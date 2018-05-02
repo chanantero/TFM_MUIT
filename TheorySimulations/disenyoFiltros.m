@@ -2,7 +2,7 @@
 
 % Filter 1: Filter for the frequency dependence: sqrt(k)
     % Parameters
-c = 343; % Sound speed
+c = 340; % Sound speed
 loudspeakerSeparation = 0.18;
 Fs = 44100; % Sampling frequency 
 fmaxAliasing = c/(2*loudspeakerSeparation); % Maximum frequency free from aliasing
@@ -88,5 +88,63 @@ y = filter(b, 1, x, zi);
 ax = axes(figure);
 plot(ax, y)
 
+N = length(hTotal);
+Htotal = fft(hTotal);
+df = 1/N;
+f = (0:df:1-df)*44100;
+f_fftshift = (-floor(N/2):floor(N/2))*44100/N;
+ax = axes(figure, 'NextPlot', 'Add');
+plot(ax, f_fftshift, abs(fftshift(Htotal)))
+ax.YLim = [0, 4];
+ax.XLim = [-2500, 2500];
+ax.XLabel.String = 'Frequency (Hz)';
+ax.YLabel.String = '|H(f)|';
+c = 340;
+plot(ax, f_fftshift, sqrt(abs(f_fftshift)/343))
+legend(ax, 'Real', 'Ideal')
+ax.Title.String = 'Frequency response';
 
+t = (0:N-1)/Fs;
+ax = axes(figure);
+plot(ax, t, abs(hTotal))
+ax.XLim = [0, max(t)];
+ax.XLabel.String = 'Time (s)';
+ax.YLabel.String = '|h(t)|';
+ax.Title.String = 'Impulse response';
+ax.YLim = [-0.1, 3];
+
+N = length(hFreqDepend);
+HfreqDepend = fft(hFreqDepend);
+df = 1/N;
+f = (0:df:1-df)*44100;
+f_fftshift = (-floor(N/2):floor(N/2))*44100/N;
+ax = axes(figure, 'NextPlot', 'Add');
+plot(ax, f_fftshift, abs(fftshift(HfreqDepend)))
+ax.YLim = [0, 4];
+ax.XLim = [-2500, 2500];
+ax.XLabel.String = 'Frequency (Hz)';
+ax.YLabel.String = '|H(f)|';
+c = 340;
+plot(ax, f_fftshift, sqrt(f_fftshift/343))
+plot(ax, freqs_aux, abs(magnFilter))
+
+N = length(hHilbert);
+Hhilbert = fft(hHilbert);
+df = 1/N;
+f = (0:df:1-df)*44100;
+f_fftshift = (-floor(N/2):floor(N/2))*44100/N;
+ax = axes(figure, 'NextPlot', 'Add');
+
+plot(ax, f_fftshift, abs(fftshift(Hhilbert)))
+ax.YLim = [0, 4];
+ax.XLim = [-2500, 2500];
+
+yyaxis right
+phase = unwrap(angle(fftshift(Hhilbert)));
+plot(ax, f_fftshift, phase)
+ax.YLim = [-40000, 40000];
+ax.XLim = [-2500, 2500];
+
+ax.XLabel.String = 'Frequency (Hz)';
+ax.YLabel.String = '|H(f)|';
 

@@ -2,8 +2,7 @@
 WFSTool_Rub/images/
 WFSTool/images/
 K-Wave
-WFSTool - 副本
-RIR-Generator-master
+WFSTool - YU Bofei
 Data/
 */image
 *.fig
@@ -14,3 +13,4 @@ Data/
 *.wav
 *.zip
 *.mat
+*.pdf

@@ -80,6 +80,7 @@ classdef SimulationController < handle
         
         % Other
         Fs
+        domain
     end
     
     properties(Access = public) % private
@@ -286,6 +287,14 @@ classdef SimulationController < handle
         function set.Fs(obj, value)
             obj.WFSToolObj.Fs = value;
         end
+        
+        function domain = get.domain(obj)
+            domain = obj.WFSToolObj.domain;
+        end
+        
+        function set.domain(obj, value)
+            obj.WFSToolObj.domain = value;
+        end
        
     end
     
@@ -342,14 +351,24 @@ classdef SimulationController < handle
                                 if ischar(x) && strcmp(x, 'theoretical')
                                     obj.WFSToolObj.theoricWFSacousticPath();
                                 else
-                                    obj.WFSToolObj.WFSarrayAcPathStruct = x;
-                                end                                
+                                    switch obj.domain 
+                                        case 'frequency'
+                                           obj.WFSToolObj.WFSarrayAcPathStruct = x;
+                                        case 'time'
+                                           obj.WFSToolObj.WFSarrayAcousticPath = x;
+                                    end
+                                end
                             case 'NS'
                                 x = p.Results.NS;
                                 if ischar(x) && strcmp(x, 'theoretical')
                                     obj.WFSToolObj.theoricNoiseSourceAcousticPath();
                                 else
-                                    obj.WFSToolObj.noiseSourceAcPathStruct = x;
+                                    switch obj.domain 
+                                        case 'frequency'
+                                           obj.WFSToolObj.noiseSourceAcPathStruct = x;
+                                        case 'time'
+                                           obj.WFSToolObj.noiseSourceAcousticPath = x;
+                                    end
                                 end              
                             case 'loudspeakers'
                                 x = p.Results.loudspeakers;
