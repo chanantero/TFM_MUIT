@@ -219,7 +219,7 @@ classdef simulationViewer < handle
                     xWFS = 10*log10(powWFS);
                     xNS = 10*log10(powNS);
                     
-                    pow = (abs(repCoef).^2)/2;
+                    pow = (abs(repCoef).^2);
                     x = 10*log10(pow);
                     
                     histTitle = 'dB';

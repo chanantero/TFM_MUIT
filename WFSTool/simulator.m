@@ -760,11 +760,12 @@ classdef simulator < handle
                     
                     recSignals = zeros(numReceivers, numSamples);
                     for r = 1:numReceivers 
-                        fprintf('%d/%d\n', r, numReceivers);
+%                         fprintf('%d/%d\n', r, numReceivers);
                         recSign = zeros(numSources, numSamples);
                         for s = 1:numSources
 %                             fprintf(' %d/%d\n', s, numSources);
-                            recSign(s, :) = filter(acousticPaths(r, :, s), 1, sourceCoefficients(s, :));
+%                             recSign(s, :) = filter(acousticPaths(r, :, s), 1, sourceCoefficients(s, :));
+                            recSign(s, :) = fftfilt(acousticPaths(r, :, s), sourceCoefficients(s, :));
                         end
                         recSignals(r, :) = sum(recSign, 1);
                     end

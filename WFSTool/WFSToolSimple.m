@@ -18,10 +18,11 @@ classdef WFSToolSimple < handle
         WFSarrayChannelMapping
         WFSarrayAdjacentSeparation = 0.18; % meteres
         % Time domain
-        filtersWFS_IR
+        filtersWFS_IR % (obj.numSourcesWFSarray x numVirtualNS x numSamp)
+        filterWFS_length % Set by the user (tunnable). If set to empty, the length is authomatic
         indDelay_filtersWFS
         freqFilter % Impulse response of the frequency filter + hilbert filter combined
-        
+               
         % Microphones
         receiverChannelMapping % Active channels of the receiver device
         
@@ -817,11 +818,10 @@ classdef WFSToolSimple < handle
                     WFSflags = attenuations ~= 0;
                                                           
                     wfsSignals = zeros(obj.numSourcesWFSarray, newSignalLength, numVirtNS);
-                    disp('WFScalculation')
                     for ns = 1:numVirtNS
                         indWFS = find(WFSflags(:, ns));
                         for ss = 1:numel(indWFS)
-                            fprintf(' %d %d\n', ns, ss)
+%                             fprintf(' %d %d\n', ns, ss)
                             wfsSignals(indWFS(ss), :, ns) = filter(filtersIR(indWFS(ss), :, virtNS(ns)), 1, NSsignalsExtended(virtNS(ns), :));
                         end
                     end
@@ -1648,7 +1648,11 @@ classdef WFSToolSimple < handle
             indDelta = floor(delays*obj.Fs) + 1;
             
             freqFilterLength = numel(obj.freqFilter);
-            NsFilt = max(floor(delays(:)*obj.Fs)) + 1 + freqFilterLength;
+            if isempty(obj.filterWFS_length)
+                NsFilt = max(floor(delays(:)*obj.Fs)) + 1 + freqFilterLength;
+            else
+                NsFilt = obj.filterWFS_length;
+            end
             filtersIR = zeros(obj.numSourcesWFSarray, obj.numNoiseSources, NsFilt);
             for ns = 1:obj.numNoiseSources
                 for ss = 1:obj.numSourcesWFSarray
@@ -1662,7 +1666,13 @@ classdef WFSToolSimple < handle
             
             % Apply the filter for frequency dependence and the hilbert
             % filter
-            filtersIR = filter(obj.freqFilter, 1, filtersIR, [], 3);
+%             filtersIR = filter(obj.freqFilter, 1, filtersIR, [], 3);
+
+            for wfs = 1:obj.numSourcesWFSarray
+                for ns = 1:obj.numNoiseSources
+                    filtersIR(wfs, ns, :) = fftfilt(obj.freqFilter, filtersIR(wfs, ns, :));
+                end
+            end
             
             [~, indDelay] = max(obj.freqFilter);
             indDelay = indDelay - 1;

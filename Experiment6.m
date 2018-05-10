@@ -14,6 +14,7 @@ obj = SimulationController;
 % Constants
 c = 340; % Sound velocity (m/s)
 fs = 44100; % Sample frequency (samples/s)
+WFSfilterLength = 22050;
 WFSarrayOffset = [0.5, 1.5, 1.5]; % [x, y, z] coordinates
 
 % Noise source coefficient
@@ -26,9 +27,10 @@ obj.NSposition = [3.35 -0.2 0]; % Assumed real position
 obj.frequency = 800;
 obj.Fs = fs;
 
-% Frequency filter for the time WFS filter
+% Filter variables for the time WFS filter
 load('WFSTool/WFSfilter.mat')
 obj.WFSToolObj.freqFilter = hTotal;
+obj.WFSToolObj.filterWFS_length = WFSfilterLength;
 
 % Microphone positions
 % Rectangular grid
@@ -59,8 +61,8 @@ obj.microPos = recPositions;
 
 % Positions of the noise source
 % Circles
-numPointsPerCircle = 20;
-radius = [5 50 5000];
+numPointsPerCircle = 1;
+radius = [5];
 numCircles = numel(radius);
 alpha = linspace(0, 2*pi, numPointsPerCircle + 1); alpha = alpha(1:end-1)';
 xOctagon = obj.WFSposition(:, 1);
@@ -74,103 +76,364 @@ numNSpos = size(NSpositions, 1);
 
 % Frequencies
 fAliasing = 340/0.36;
-numFreqs = 10;
-freqs = linspace(10, fAliasing, numFreqs);
+% numFreqs = 10;
+% freqs = linspace(10, fAliasing, numFreqs);
+freqs = [100, 440, 800]; numFreqs = length(freqs);
 
 %% Pre-calculate impulse responses
 % Since it would take a lot of time to calculate the IR during the
 % simulations, we calculate it previously and save it to a .mat. 
 
 r = recPositions + repmat(WFSarrayOffset, numMicro, 1); % Receiver position [x y z] (m)
-s = [3.35 -0.2 0];              % Source position [x y z] (m)
-roomDim = [3 7 3];                % Room dimensions [x y z] (m)
-numSamp = 4096;                   % Number of samples
+wfsPos = obj.WFSposition + repmat(WFSarrayOffset, obj.numWFS, 1);
+nsPos = NSpositions + repmat(WFSarrayOffset, numNSpos, 1);
+roomDim = [10 10 4];                % Room dimensions [x y z] (m)
+numSampIR = 2^12;                   % Number of samples
 
 % This is the variable that is going to change
-numReverbTime = 1;
-beta = linspace(0, 0.5, numReverbTime);                 % Reverberation time (s)
+numReverbTime = 6;
+beta = linspace(0, 2, numReverbTime);                 % Reverberation time (s)
+Beta = beta' * [0 0 0 0 1 1];
 
-WFS_IR = zeros(obj.numMicro, numSamp, obj.numWFS, numReverbTime);
+% Minimize the number of samples
+dist = zeros(numMicro, numNSpos);
+for ns = 1:numNSpos
+    dist(:, ns) = sqrt(sum((recPositions - repmat(NSpositions(ns, :), [numMicro, 1])).^2, 2));
+end
+maxDist = max(dist(:));
+numSampIR = 2^ceil(log2(maxDist/c*fs));
+
+WFS_IR = zeros(obj.numMicro, numSampIR, obj.numWFS, numReverbTime);
 disp('IR WFS')
 for k = 1:obj.numWFS
     fprintf('%d/%d\n', k, obj.numWFS);
     disp(' Reverberation Time:')
     for rt = 1:numReverbTime
         fprintf(' %d/%d\n', rt, numReverbTime);
-        WFS_IR(:, :, k, rt) = rir_generator(c, fs, r, obj.WFSposition(k, :), roomDim, beta(rt), numSamp);
+        WFS_IR(:, :, k, rt) = rir_generator(c, fs, r, wfsPos(k, :), roomDim, Beta(rt, :), numSampIR);
     end
 end
 
 % Calculate the frequency responses
-WFS_RR = zeros(obj.numMicro, numFreqs, obj.numWFS, numReverbTime);
+WFS_FR = zeros(obj.numMicro, numFreqs, obj.numWFS, numReverbTime);
 disp('FR WFS')
 for k = 1:obj.numWFS
     fprintf('%d/%d\n', k, obj.numWFS);
     disp(' Reverberation Time:')
     for rt = 1:numReverbTime
-        WFS_RR(:, :, k, rt) = DFT_slow(fs*WFS_IR(:, :, k, rt).', fs, freqs).'; % (numFrequencies x numLoudspeakers)
+        WFS_FR(:, :, k, rt) = DFT_slow(fs*WFS_IR(:, :, k, rt).', fs, freqs).'; 
     end
 end
 
-save([dataPathName, 'ImpulseResponsesWFS_', ID, '.mat'], 'r', 'roomDim', 'numSamp', 'obj.WFSposition', 'freqs', 'WFS_IR', 'WFS_RR')
+obj.domain = 'time';
+acPath = simulator.calculateMonopolesIR(obj.WFSposition, recPositions, c, fs, numSampIR);
+WFS_IR = cat(4, permute(acPath, [1 3 2 4]), WFS_IR);
+
+obj.domain = 'frequency';
+acPath = simulator.calculateTheoricAcousticPaths(...
+        obj.WFSToolObj.WFSarrayPosition, obj.WFSToolObj.WFSarrayRadiationPattern, obj.WFSToolObj.WFSarrayOrientation,...
+        recPositions, obj.WFSToolObj.receiverRadiationPattern, obj.WFSToolObj.receiverOrientation, freqs, c);                    
+WFS_FR = cat(4, permute(acPath, [1 3 2 4]), WFS_FR);
+
+% WFSposition = obj.WFSposition;
+% save([dataPathName, 'AcPathResponsesWFS_', ID, '.mat'], 'r', 'roomDim', 'numSamp', 'WFSposition', 'freqs', 'WFS_IR', 'WFS_FR')
 
 % Do the same with the noise source positions
-NS_IR = zeros(obj.numMicro, numSamp, numNSpos, numReverbTime);
+NS_IR = zeros(obj.numMicro, numSampIR, numNSpos, numReverbTime);
 disp('IR NS')
 for k = 1:numNSpos
     fprintf('%d/%d\n', k, numNSpos);
     disp(' Reverberation Time:')
     for rt = 1:numReverbTime
         fprintf(' %d/%d\n', rt, numReverbTime);
-        NS_IR(:, :, k, rt) = rir_generator(c, fs, r, obj.WFSposition(k, :), roomDim, beta(rt), numSamp);
+        NS_IR(:, :, k, rt) = rir_generator(c, fs, r, nsPos(k,:), roomDim, Beta(rt, :), numSampIR);
     end
 end
 
-NS_RR = zeros(obj.numMicro, numFreqs, numNSpos, numReverbTime);
+NS_FR = zeros(obj.numMicro, numFreqs, numNSpos, numReverbTime);
 disp('FR NS')
 for k = 1:numNSpos
     fprintf('%d/%d\n', k, numNSpos);
     disp(' Reverberation Time:')
     for rt = 1:numReverbTime
-        NS_RR(:, :, k, rt) = DFT_slow(fs*NS_IR(:, :, k, rt).', fs, freqs).'; % (numFrequencies x numLoudspeakers)
+        NS_FR(:, :, k, rt) = DFT_slow(fs*NS_IR(:, :, k, rt).', fs, freqs).';
     end
 end
 
-save([dataPathName, 'ImpulseResponsesNS_', ID, '.mat'], 'r', 'roomDim', 'numSamp', 'numNSpos', 'NS_IR', 'freqs', 'NS_RR')
+obj.domain = 'time';
+acPath = simulator.calculateMonopolesIR(NSpositions, recPositions, c, fs, numSampIR);
+NS_IR = cat(4, permute(acPath, [1 3 2 4]), NS_IR);
 
+obj.domain = 'frequency';
+acPath = simulator.calculateTheoricAcousticPaths(...
+        NSpositions, obj.WFSToolObj.noiseSourceRadiationPattern, obj.WFSToolObj.noiseSourceOrientation,...
+        recPositions, obj.WFSToolObj.receiverRadiationPattern, obj.WFSToolObj.receiverOrientation, freqs, c);                    
+NS_FR = cat(4, permute(acPath, [1 3 2 4]), NS_FR);
+
+numReverbTime = numReverbTime + 1;
+
+% save([dataPathName, 'AcPathResponsesNS_', ID, '.mat'], 'r', 'roomDim', 'numSamp', 'NSpositions', 'NS_IR', 'freqs', 'NS_FR')
+
+%% Pre-calculate WFS filters
+
+filtersWFS_IR = zeros(obj.numWFS, WFSfilterLength, numNSpos);
+
+obj.domain = 'time';
+disp('NS positions:')
+for ns = 1:numNSpos
+    fprintf('%d/%d\n', ns, numNSpos);
+    
+    obj.NSposition = NSpositions(ns, :);
+    
+    obj.WFSToolObj.updateFiltersWFS(); % The NS position has changed, so we need to calculate again the WFS filters
+    
+    filtersWFS_IR(:, :, ns) = permute(obj.WFSToolObj.filtersWFS_IR(:, 1, :), [1, 3, 2]);
+end
+
+% save([dataPathName, 'AcPathResponsesNS_', ID, '.mat'], 'r', 'roomDim', 'numSamp', 'numNSpos', 'NS_IR', 'freqs', 'NS_RR')
 %% Simulation
-fprintf('Freqs:\n')
+durSign = 1; % Duration of signal
+t = (0:ceil(durSign*obj.Fs)-1)/obj.Fs;
+signalLength = length(t);
+[~, filterDelay] = max(obj.WFSToolObj.freqFilter);
+filterDelay = filterDelay - 1;
+
+recNScoef_time = zeros(obj.numMicro, numFreqs, numNSpos, numReverbTime);
+recCoef_time = zeros(obj.numMicro, numFreqs, numNSpos, numReverbTime);
+recWFScoef_time = zeros(obj.numMicro, numFreqs, numNSpos, numReverbTime);
+WFScoef_time = zeros(obj.numWFS, numFreqs, numNSpos, numReverbTime);
+
+recNScoef_freq = zeros(obj.numMicro, numFreqs, numNSpos, numReverbTime);
+recCoef_freq = zeros(obj.numMicro, numFreqs, numNSpos, numReverbTime);
+recWFScoef_freq = zeros(obj.numMicro, numFreqs, numNSpos, numReverbTime);
+WFScoef_freq = zeros(obj.numWFS, numFreqs, numNSpos, numReverbTime);
+
+
+maxIterPerLevel = [numReverbTime, numFreqs, numNSpos];
+totalIter = prod(maxIterPerLevel);
+levelWeight = flip([1, cumprod(flip(maxIterPerLevel(2:end)))])';
+% completedIterPerLevel = [0 0 0]; % Completed
+% completedIter = completedIterPerLevel*levelWeight;
+% progress = completedIter/totalIter;
+wb = waitbar(0, 'Progress');
+fprintf('Reverberation time:\n')
 for rt = 1:numReverbTime
+    fprintf('%d/%d\n', rt, numReverbTime);
+    
+    % Set up acoustic paths for the WFS array
+    obj.domain= 'time';
+    WFSacPathIR = permute(WFS_IR(:, :, :, rt), [1, 3, 2]);
+    obj.setAcousticPaths('WFS', WFSacPathIR);
+    
+    obj.domain= 'frequency';
+    WFSacPathFR = permute(WFS_FR(:, :, :, rt), [1 3 2]);
+    WFSacPathFRstruct = struct('acousticPaths', WFSacPathFR, 'frequencies', freqs);
+    obj.setAcousticPaths('WFS', WFSacPathFRstruct); % obj.setAcousticPaths('WFS', 'theoretical');
+    
+    disp(' Frequency')
     for f = 1:numFreqs
-        fprintf('%d/%d\n', f, numFreqs);
-        obj.frequency = freqs(f);
+        fprintf(' %d/%d\n', f, numFreqs);
+        fcurr = freqs(f); % Current frequency
+        obj.frequency = fcurr;
         
-        % Set up acoustic paths for the WFS array
-        obj.domain= 'time';
-        WFSacPathIR = permute(WFS_IR(:, :, :, rt), [1, 3, 2]);
-        obj.setAcousticPaths('WFS', WFSacPathIR);
+        % Generate tone with the propper frequency
+        x = obj.amplitude(1) * cos(2*pi*fcurr*t + obj.phase(1));
+        x = [zeros(1, filterDelay), x, zeros(1, WFSfilterLength - 1 + numSampIR - 1)];
+               
+        obj.domain = 'time';
+        obj.NScoef = x;
+        obj.NSVcoef = -x;
         
-        obj.domain= 'frequency';
-        WFSacPathFR = WFS_RR(:, f, :, rt);
-        
-        
-        disp(' NS positions:')
+        disp('  NS positions:')
         for ns = 1:numNSpos
-            fprintf(' %d/%d\n', ns, numNSpos);
+            fprintf('  %d/%d\n', ns, numNSpos);
             obj.NSposition = NSpositions(ns, :);
             
-            % Calculate the frequency response for the current frequency
-            obj.domain = 'time';
-            NSacPathIR = repmat(permute(NS_IR(:, :, ns, rt), [1, 3, 2]), [1, 2]);
-            obj.setAcousticPaths('WFS', WFSacPathIR);
-            
-            obj.domain = 'frequency';
-            
+            % Set up acoustic paths for the noise source
+            obj.domain= 'time';
+            NSacPathIR = repmat(permute(NS_IR(:, :, ns, rt), [1, 3, 2]), [1, 2, 1]);
+            obj.setAcousticPaths('NS', NSacPathIR);
+
+            obj.domain= 'frequency';
+            NSacPathFR = repmat(permute(NS_FR(:, :, ns, rt), [1 3 2]), [1 2 1]);
+            NSacPathFRstruct = struct('acousticPaths', NSacPathFR, 'frequencies', freqs);
+            obj.setAcousticPaths('NS', NSacPathFRstruct); % obj.setAcousticPaths('NS', 'theoretical');
+
             
             % Simulate for time domain
+            disp('   Simulate for time domain')
+            obj.domain = 'time';
             
+                obj.WFSToolObj.filtersWFS_IR = repmat(permute(filtersWFS_IR(:, :, ns), [1 3 2]), [1 2 1]);
+                            
+                % Simulate only the noise source
+                obj.WFSToolObj.virtual = [false; false];
+                obj.WFSToolObj.WFScalculation();
+                obj.WFSToolObj.simulate();
+                recNS_signal = obj.WFSToolObj.simulField;
+                                                
+                % Simulate all together
+                obj.WFSToolObj.virtual = [false; true];
+                obj.WFSToolObj.WFScalculation();
+                obj.WFSToolObj.simulate();
+                rec_signal = obj.WFSToolObj.simulField;
+                
+                % Identify IQ component
+                recNScoef_time(:, f, ns, rt) = signal2pulseCoefficientMatrix([0 durSign], fcurr, 1, recNS_signal', fs).';
+                recWFScoef_time(:, f, ns, rt) = signal2pulseCoefficientMatrix([0 durSign], fcurr, 1, (rec_signal - recNS_signal)', fs);
+                recCoef_time(:, f, ns, rt) = signal2pulseCoefficientMatrix([0 durSign], fcurr, 1, rec_signal', fs);
+                WFScoef_time(:, f, ns, rt) = signal2pulseCoefficientMatrix([0 durSign], fcurr, 1, obj.WFSToolObj.WFSarrayCoefficient', fs);
+                
             % Simulate for frequency domain
+            disp('   Simulate for frequency domain')
+            obj.domain = 'frequency';
+
+                obj.cancelResults = [];
+
+                % Simulate 
+                obj.WFSToolObj.virtual = [false; true];
+                obj.cancel();
+
+                recNScoef_freq(:, f, ns, rt) = obj.cancelResults.recNScoef;
+                recCoef_freq(:, f, ns, rt) = obj.cancelResults.recCoef;
+                recWFScoef_freq(:, f, ns, rt) = obj.cancelResults.recWFScoef;
+                WFScoef_freq(:, f, ns, rt) = obj.cancelResults.WFScoef;
+                
+                % Progress monitoring
+                completedIterPerLevel = [rt, f, ns]; % Completed
+                resetInd = find(completedIterPerLevel(2:end) == maxIterPerLevel(2:end));
+                completedIterPerLevel(resetInd + 1) = 0;
+                completedIter = completedIterPerLevel*levelWeight;
+                progress = completedIter/totalIter;
+                
+                waitbar(progress, wb);
         end
         
     end
 end
+
+
+%% Formatting of results
+
+% We introduced an initial delay equal to the frequency filter delay, so we
+% must correct the phase of the time coefficients.
+phaseShift = filterDelay/fs * 2*pi*freqs;
+recNScoef_time_correct = recNScoef_time .* exp(1i* repmat(phaseShift, [obj.numMicro, 1, numNSpos, numReverbTime]) );
+recWFScoef_time_correct = recWFScoef_time .* exp(1i* repmat(phaseShift, [obj.numMicro, 1, numNSpos, numReverbTime]) );
+recCoef_time_correct = recCoef_time .* exp(1i* repmat(phaseShift, [obj.numMicro, 1, numNSpos, numReverbTime]) );
+WFScoef_time_correct = WFScoef_time .* exp(1i* repmat(phaseShift, [obj.numWFS, 1, numNSpos, numReverbTime]) );
+
+% rel = recNScoef_time_correct./recNScoef_freq;
+% relAbs = abs(rel);
+% relPhase = angle(rel);
+% relCustom = (recNScoef_time_correct - recNScoef_freq)./abs(recNScoef_freq);
+% 
+% ax = axes(figure);
+% histogram(ax, abs(relCustom(:)))
+% histogram(ax, relPhase(:, 2, :))
+% a = mean(mean(relPhase, 1), 3);
+% diff(a)
+
+% Make structure so we can visualize this
+s_time = repmat(obj.cancelResults(1), [1, numFreqs, numNSpos, numReverbTime]);
+s_freq = repmat(obj.cancelResults(1), [1, numFreqs, numNSpos, numReverbTime]);
+for rt = 1:numReverbTime
+    for f = 1:numFreqs
+        for ns = 1:numNSpos
+            s_time(1, f, ns, rt) = SimulationController.generateExportStructure(...
+                'NSRcoef', 1,...
+                'NSVcoef', -1,...
+                'WFScoef', WFScoef_time_correct(:, f, ns, rt),...
+                'microCoef', recCoef_time_correct(:, f, ns, rt),...
+                'microCoefNS', recNScoef_time_correct(:, f, ns, rt),...
+                'microCoefWFS', recWFScoef_time_correct(:, f, ns, rt),...
+                'NSRpos', NSpositions(ns,:),...
+                'NSVpos', NSpositions(ns,:),...
+                'WFSpos', obj.WFSposition,...
+                'microPos', obj.microPos,...
+                'Frequency', freqs(f)...
+                );
+            
+            s_freq(1, f, ns, rt) = SimulationController.generateExportStructure(...
+                'NSRcoef', 1,...
+                'NSVcoef', -1,...
+                'WFScoef', WFScoef_freq(:, f, ns, rt),...
+                'microCoef', recCoef_freq(:, f, ns, rt),...
+                'microCoefNS', recNScoef_freq(:, f, ns, rt),...
+                'microCoefWFS', recWFScoef_freq(:, f, ns, rt),...
+                'NSRpos', NSpositions(ns,:),...
+                'NSVpos', NSpositions(ns,:),...
+                'WFSpos', obj.WFSposition,...
+                'microPos', obj.microPos,...
+                'Frequency', freqs(f)...
+                );
+        end
+    end
+end
+
+%% Visualization: 2D map, case by case
+
+s = [s_freq; s_time]; 
+
+% Format structure
+for p = 1:numel(s)
+    s(p).NScoef = [s(p).NSRcoef; s(p).NSVcoef];
+    s(p).NSposition = [s(p).NSRposition; s(p).NSVposition];
+end
+
+% Create simulationViewer object
+objVis = simulationViewer(obj.ax, s);
+
+%% Generate information to save
+% dimensionOrder = {'domain', 'frequency', 'NSposition', 'ReverbTime'};
+% 
+% dataStruct = struct();
+% dataStruct.domain = {'frequency', 'time'};
+% dataStruct.frequency = freqs;
+% dataStruct.NSposition = NSpositions;
+% dataStruct.ReverbTime = beta;
+% dataStruct.dimensionOrder = dimensionOrder;
+% dataStruct.data = s;
+
+% % save([dataPathName, 'Experiment6data_', ID, '.mat'], 'dataStruct')
+
+
+%% Global correction factor
+
+Cglobal = zeros(size(s));
+for k = 1:numel(s)
+    Cglobal(k) = sum(abs(s(k).recCoef).^2)./sum(abs(s(k).recNScoef).^2);
+end
+Cg_dB = 10*log10(Cglobal);
+
+% % Visualize. Don't delete just in case I need to use at another time.
+% domain = [0 1];
+% visualObj = animation({domain, freqs, 1:numNSpos, 1:numReverbTime},...
+%     {10*log10(Cglobal)}, {'Domain', 'Frequency', 'NS position index', 'Reverb. Time index'}, {'Cancellation'}, [], []);
+
+% Plot
+% Frequency as discrete
+% Reverberation time in X dimmension
+domain = 1; % 1: frequency. 2: time.
+NSposInd = 1; 
+Cg_dB_plot = permute(Cg_dB(domain, :, NSposInd, 2:end), [4 2 1 3]); % 2:end because the first one uses ideal acoustic paths, not the one generated by the rir-generator.
+ax = axes(figure);
+plot(ax, beta, Cg_dB_plot)
+ax.XLabel.String = '$\beta$';
+ax.XLabel.Interpreter = 'latex';
+ax.YLabel.String = 'Global cancellation (dB)';
+labels = cell(numFreqs, 1);
+for f = 1:numFreqs
+    labels{f} = num2str(freqs(f));
+end
+l = legend(ax, labels);
+l.Title.String = 'Frequency (Hz)';
+
+fontSize_axesWidth_ratio = 0.08;
+fontSize = ax.Position(3) * fontSize_axesWidth_ratio;
+ax.XLabel.FontUnits = 'normalized';
+ax.XLabel.FontSize = fontSize;
+ax.YAxis.Label.FontUnits = 'normalized';
+ax.YAxis.Label.FontSize = fontSize;
+
+% printfig(ax.Parent, imagesPath, 'Experiment5_globalCancDifFreqsAndReverbTime', 'eps');

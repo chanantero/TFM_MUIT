@@ -103,9 +103,13 @@ function shift = findShift(x, maskLimits, firstStep, minLag, maxLag)
 
 step = firstStep;
 
+highLimit = maxLag;
+lowLimit = minLag;
+
 firstIteration = true;
-while step > 1
-    lags = maxLag:-step:minLag;
+while step >= 1
+%     lags = maxLag:-step:minLag;
+    lags = highLimit:-step:lowLimit;
 
     corr = rectangularFilter(x, maskLimits, lags);    
     corr = corr/max(corr); % Normalize the correlation values
@@ -127,7 +131,10 @@ while step > 1
     end
     
     % Set the new step
-    if ind == minLag || ind == maxLag
+    if isempty(ind)
+        shift = 0;
+        return;
+    elseif ind == minLag || ind == maxLag
         break;
     end
     
