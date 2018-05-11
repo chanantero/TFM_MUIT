@@ -17,6 +17,7 @@ classdef WFSToolSimple < handle
         % WFS Array
         WFSarrayChannelMapping
         WFSarrayAdjacentSeparation = 0.18; % meteres
+        frequencyCorrection = true;
         % Time domain
         filtersWFS_IR % (obj.numSourcesWFSarray x numVirtualNS x numSamp)
         filterWFS_length % Set by the user (tunnable). If set to empty, the length is authomatic
@@ -839,7 +840,7 @@ classdef WFSToolSimple < handle
             end
             
         end
-        
+               
         function prepareSimulation(obj)
             % Assign to the correspondent variables of the simulator
             % object, the acoustic paths, adjust coefficients depending on
@@ -1223,7 +1224,7 @@ classdef WFSToolSimple < handle
             attenuations = obj.getAttenuationsWFS(find(obj.virtual));
             WFSflags = any(attenuations ~= 0, 2);
         end
-        
+               
     end
     
     methods(Access = private)       
@@ -1619,10 +1620,12 @@ classdef WFSToolSimple < handle
             attenuations = zeros(obj.numSourcesWFSarray, numel(indices));
             attenuations(:, isActive) = obj.scenarioObj.attenuations(:, indScenario(isActive));
             
-            if obj.domain == 'frequency'
-            % Adjust attenuation according to the 2.5D Rayleigh I integral
-            % coefficient that depends on frequency
-            attenuations = attenuations * obj.WFSarrayAdjacentSeparation ...
+            attenuations = attenuations * obj.WFSarrayAdjacentSeparation;
+
+            if obj.frequencyCorrection
+                % Adjust attenuation according to the 2.5D Rayleigh I integral
+                % coefficient that depends on frequency
+                attenuations = attenuations...
                 .* repmat(sqrt(1i * obj.frequency(indices)'/obj.c ), obj.numSourcesWFSarray, 1);
             end
             
@@ -1641,9 +1644,14 @@ classdef WFSToolSimple < handle
         end
         
         function [filtersIR, indDelay] = getFiltersWFS(obj)
+            % This is intended for the cases when the domain is time.
             
             delays = obj.getDelaysWFS(1:obj.numNoiseSources);
+            
+            prevFreqCorrect = obj.frequencyCorrection;
+            obj.frequencyCorrection = false;
             atten = obj.getAttenuationsWFS(1:obj.numNoiseSources);
+            obj.frequencyCorrection = prevFreqCorrect;
             
             indDelta = floor(delays*obj.Fs) + 1;
             
@@ -1661,17 +1669,15 @@ classdef WFSToolSimple < handle
                     end
                 end
             end
-            
-            filtersIR = filtersIR*obj.WFSarrayAdjacentSeparation;
-            
+                        
+            if obj.frequencyCorrection
             % Apply the filter for frequency dependence and the hilbert
             % filter
-%             filtersIR = filter(obj.freqFilter, 1, filtersIR, [], 3);
-
             for wfs = 1:obj.numSourcesWFSarray
                 for ns = 1:obj.numNoiseSources
-                    filtersIR(wfs, ns, :) = fftfilt(obj.freqFilter, filtersIR(wfs, ns, :));
+                    filtersIR(wfs, ns, :) = fftfilt(obj.freqFilter, filtersIR(wfs, ns, :)); % You can also use filter, but it is slower usually: filtersIR = filter(obj.freqFilter, 1, filtersIR, [], 3);
                 end
+            end
             end
             
             [~, indDelay] = max(obj.freqFilter);

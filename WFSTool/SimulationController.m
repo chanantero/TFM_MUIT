@@ -454,7 +454,7 @@ classdef SimulationController < handle
                         obj.WFSToolObj.WFScalculation('SourceFilter', sourceFilter{k}, 'AcousticPath', acousticPathType{k}, 'Grouping', grouping{k}, 'maxAbsoluteValueConstraint', magConstraint(k), 'zerosFixed', zerosFixed(k), 'testPoints', testPoints);
                     end
                 end
-                
+                               
                 % WFS array coefficients
                 WFScoeff(:, :, k) = obj.WFSToolObj.WFSarrayCoefficient;
                                 
