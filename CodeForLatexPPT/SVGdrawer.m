@@ -210,7 +210,7 @@ classdef SVGdrawer
             strDiag = strjoin(strDiag);
             
             % Read file
-            file = fopen('C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Documentos\Img\WFSarrayScheme_Template.svg');
+            file = fopen('C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Documentos\TFM\Img\WFSarrayScheme_Template.svg');
             svgText = fread(file, Inf, '*char')';
             fclose(file);
             

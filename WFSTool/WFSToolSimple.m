@@ -1220,7 +1220,7 @@ classdef WFSToolSimple < handle
         end
               
         function WFSflags = getActiveWFSsources(obj)
-            attenuations = obj.getAttenuationsWFS(obj.virtual);
+            attenuations = obj.getAttenuationsWFS(find(obj.virtual));
             WFSflags = any(attenuations ~= 0, 2);
         end
         

@@ -113,7 +113,7 @@ ax4.XLim = [0 1000];
 
 h = 1; d = 2;
 sourcePos = [1 1 h];
-recPos = [sourePos(1) + d 1 h];
+recPos = [sourcePos(1) + d 1 h];
 c = 340;
 fs = 44100;
 roomDim = [300 200 2*h];
@@ -132,8 +132,20 @@ numRebot = 1:4;
 distReb = sqrt((2*h*numRebot).^2 + d^2);
 distReb/c
 
+h = rir_generator(c, fs, recPos, sourcePos, roomDim, zeros(1,6), numSampIR);
+plot(ax, t, h)
 
-[h, betaHat] = rir_generator(c, fs, recPos, sourcePos, roomDim, 0.16, numSampIR);
+[h, betaHat] = rir_generator(c, fs, recPos, sourcePos, roomDim, 0.1, numSampIR);
 h2 = rir_generator(c, fs, recPos, sourcePos, roomDim, betaHat*ones(1,6), numSampIR);
 ax = axes(figure);
 plot(ax, t, h, t, h2)
+
+numRevTime = 100;
+reverberationTime = logspace(log10(0.16), log10(10), numRevTime);
+meanReflectCoef = zeros(size(reverberationTime));
+for k = 1:numRevTime
+    [~, meanReflectCoef(k)] = rir_generator(c, fs, recPos, sourcePos, roomDim, reverberationTime(k), numSampIR);
+end
+
+ax = axes(figure);
+plot(ax, reverberationTime, meanReflectCoef)
