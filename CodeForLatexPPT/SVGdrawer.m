@@ -96,9 +96,9 @@ classdef SVGdrawer
             addParameter(p, 'WFSsymbol', 'loudspeaker');
             addParameter(p, 'microSymbol', 'microphone');
             addParameter(p, 'microSize', 0.8);
-            addParameter(p, 'microColor', {'000000'});
-            addParameter(p, 'WFScolor', {'000000'});
-            addParameter(p, 'NScolor', {'000000'});
+            addParameter(p, 'microColor', {'#000000'});
+            addParameter(p, 'WFScolor', {'#000000'});
+            addParameter(p, 'NScolor', {'#000000'});
             
             parse(p, varargin{:});
             

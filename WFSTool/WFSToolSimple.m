@@ -1664,7 +1664,7 @@ classdef WFSToolSimple < handle
             filtersIR = zeros(obj.numSourcesWFSarray, obj.numNoiseSources, NsFilt);
             for ns = 1:obj.numNoiseSources
                 for ss = 1:obj.numSourcesWFSarray
-                    if atten(ss, ns) ~= 0
+                    if atten(ss, ns) ~= 0 && indDelta(ss, ns) <= NsFilt
                         filtersIR(ss, ns, indDelta(ss, ns)) = atten(ss, ns);
                     end
                 end

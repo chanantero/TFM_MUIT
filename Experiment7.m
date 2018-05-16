@@ -1,7 +1,7 @@
 %% Experiment 7.
 
 % Find the correction factor needed for different frequencies, noise source
-% positions, reverberation times, and reference points.
+% positions, reverberation times, and receiving points.
 
 % The code is very similar to Experiment1.m, but it will be updated with
 % the demands of my tutors made on 11th May of 2018. For doing that, I will
@@ -40,7 +40,7 @@ obj.Fs = fs;
 % frequency correction, in this case must have no effect. So, it should be
 % a delta, without any delay.
 obj.WFSToolObj.freqFilter = 1;
-obj.WFSToolObj.filterWFS_length = 1;
+obj.WFSToolObj.filterWFS_length = WFSfilterLength;
 
 % Microphone positions
 % Rectangular grid
@@ -70,24 +70,21 @@ numMicro = size(recPositions, 1);
 obj.microPos = recPositions;
 
 % Positions of the noise source
-% Circles
-numPointsPerCircle = 20;
+% Quarter of a circle
+numPointsPerQuarter = 5;
 radius = [5 10];
 numCircles = numel(radius);
-alpha = linspace(0, 2*pi, numPointsPerCircle + 1); alpha = alpha(1:end-1)';
+alpha = linspace(0, pi/2, numPointsPerQuarter)';
 xOctagon = obj.WFSposition(:, 1);
 yOctagon = obj.WFSposition(:, 2);
 centreX = (max(xOctagon) + min(xOctagon))/2;
 centreY = (max(yOctagon) + min(yOctagon))/2;
-x = centreX + repmat(radius, numPointsPerCircle, 1).*repmat(cos(alpha), 1, numCircles);
-y = centreY + repmat(radius, numPointsPerCircle, 1).*repmat(sin(alpha), 1, numCircles);
+x = centreX + repmat(radius, numPointsPerQuarter, 1).*repmat(cos(alpha), 1, numCircles);
+y = centreY + repmat(radius, numPointsPerQuarter, 1).*repmat(sin(alpha), 1, numCircles);
 NSpositions = [x(:), y(:), zeros(numel(x), 1)];
 numNSpos = size(NSpositions, 1);
 
 % Frequencies
-fAliasing = 340/0.36;
-% numFreqs = 10;
-% freqs = linspace(10, fAliasing, numFreqs);
 freqs = 100:200:900; numFreqs = length(freqs);
 
 %% Pre-calculate impulse responses
@@ -97,11 +94,12 @@ freqs = 100:200:900; numFreqs = length(freqs);
 r = recPositions + repmat(WFSarrayOffset, numMicro, 1); % Receiver position [x y z] (m)
 wfsPos = obj.WFSposition + repmat(WFSarrayOffset, obj.numWFS, 1);
 nsPos = NSpositions + repmat(WFSarrayOffset, numNSpos, 1);
-roomDim = [8 10 4];                % Room dimensions [x y z] (m)
-numSampIR = 2^12;                   % Number of samples
+maxX = max([nsPos(:, 1); wfsPos(:, 1)]);
+maxY = max([nsPos(:, 2); wfsPos(:, 2)]);
+roomDim = [maxX+1 maxY+1 4];                % Room dimensions [x y z] (m)
 
 % This is the variable that is going to change
-numReverbTime = 20;
+numReverbTime = 5;
 beta = linspace(0, 1, numReverbTime);                 % Reverberation time (s)
 Beta = beta' * [1 1 1 1 1 1];
 % Beta = 0 * ones(1,6); numReverbTime = 1; % Test it.
@@ -112,7 +110,10 @@ for ns = 1:numNSpos
     dist(:, ns) = sqrt(sum((recPositions - repmat(NSpositions(ns, :), [numMicro, 1])).^2, 2));
 end
 maxDist = max(dist(:));
-numSampIR = 2^ceil(log2(maxDist/c*fs));
+numSampIR = 2^ceil(log2(maxDist/c*fs)); % Number of samples
+
+WFSfilterLength = numSampIR*2;
+obj.WFSToolObj.filterWFS_length = WFSfilterLength;
 
 WFS_AcPath_previously_calculated = false;
 NS_AcPath_previously_calculated = true;
@@ -230,6 +231,7 @@ obj.WFSToolObj.frequencyCorrection = false; % Very important! We want to see wha
 
 % Progress bar variables
 maxIterPerLevel = [numReverbTime, numFreqs, numNSpos];
+numLevels = length(maxIterPerLevel);
 totalIter = prod(maxIterPerLevel);
 levelWeight = flip([1, cumprod(flip(maxIterPerLevel(2:end)))])';
 % completedIterPerLevel = [0 0 0]; % Completed
@@ -351,7 +353,12 @@ for rt = 1:numReverbTime
                 completedIter = completedIterPerLevel*levelWeight;
                 progress = completedIter/totalIter;
                 
-                waitbar(progress, wb);
+                aux = [completedIterPerLevel; maxIterPerLevel];
+                msg = ['[', sprintf(' %d/%d ', aux), ']'];
+                
+                waitbar(progress, wb, msg);
+                
+                
         end
         
     end
@@ -405,8 +412,6 @@ for rt = 1:numReverbTime
     end
 end
 
-%% Visualization: 2D map, case by case
-
 s = s_freq; 
 
 % Format structure
@@ -415,85 +420,178 @@ for p = 1:numel(s)
     s(p).NSposition = [s(p).NSRposition; s(p).NSVposition];
 end
 
+%% Generate information to save
+% dimensionOrder = {'domain', 'frequency', 'NSposition', 'ReverbTime'};
+% 
+% dataStruct = struct();
+% dataStruct.domain = {'frequency', 'time'};
+% dataStruct.frequency = freqs;
+% dataStruct.NSposition = NSpositions;
+% dataStruct.ReverbTime = beta;
+% dataStruct.dimensionOrder = dimensionOrder;
+% dataStruct.data = s;
+
+% save([dataPathName, 'Experiment7data_', ID, '.mat'], 'dataStruct')
+
+%% Load saved information
+% s = dataStruct.data;
+% beta = dataStruct.ReverbTime;
+
+
+%% Visualization: 2D map, case by case
+
 % Create simulationViewer object
 objVis = simulationViewer(obj.ax, s);
 
-%% Global correction factor
-
-for k = 1:numel(s)
-    s(k).Cancellation = abs(s(k).recCoef./s(k).recNScoef).^2;
-end
-
-Cglobal = zeros(size(s));
-for k = 1:numel(s)
-    Cglobal(k) = sum(abs(s(k).recCoef).^2)./sum(abs(s(k).recNScoef).^2);
-end
-Cg_dB = 10*log10(Cglobal);
-
-% % Visualize. Don't delete just in case I need to use at another time.
-visualObj = animation({1, freqs, 1:numNSpos, 1:numReverbTime},...
-    {Cg_dB}, {'Domain', 'Frequency', 'NS position index', 'Reverb. Time index'}, {'Cancellation'}, [], []);
-
-% Plot
-% Frequency as discrete
-% Reverberation time in X dimmension
-domain = 1; % 1: frequency. 2: time.
-NSposInd = 1; 
-indFreqs = 1:2:10;
-represFreq = freqs(indFreqs);
-Cg_dB_plot = permute(Cg_dB(domain, indFreqs, NSposInd, 1:end), [4 2 1 3]); % 2:end because the first one uses ideal acoustic paths, not the one generated by the rir-generator.
-ax = axes(figure);
-plot(ax, beta, Cg_dB_plot)
-ax.XLabel.String = '$\beta$';
-ax.XLabel.Interpreter = 'latex';
-ax.YLabel.String = 'Global cancellation (dB)';
-ax.YLim = [-15, 0];
-labels = cell(numel(indFreqs), 1);
-for f = 1:numel(indFreqs)
-    labels{f} = num2str(freqs(indFreqs(f)));
-end
-l = legend(ax, labels);
-l.Title.String = 'Frequency (Hz)';
-
-fontSize_axesWidth_ratio = 0.08;
-fontSize = ax.Position(3) * fontSize_axesWidth_ratio;
-ax.XLabel.FontUnits = 'normalized';
-ax.XLabel.FontSize = fontSize;
-ax.YAxis.Label.FontUnits = 'normalized';
-ax.YAxis.Label.FontSize = fontSize;
-
-% printfig(ax.Parent, imagesPath, 'Experiment6_globalCancDifFreqsAndReverbTime', 'eps');
 %% Visualization: correction factor AllTogether
-% To be modified to fit this case
+% Calculate individual and global correction factors
+corrFactInd = zeros([size(s), numMicro]); % Individual correction factor
+numDims = ndims(s);
+subinds_s = cell(numDims, 1);
+subinds_ext = cell(numDims + 1, 1);
 for k = 1:numel(s)
     s(k).corrFactIndividual = -s(k).recNScoef./s(k).recWFScoef;
     s(k).corrFactGlobal = -s(k).recWFScoef\s(k).recNScoef;
+    
+    [subinds_s{:}] = ind2sub(size(s), k);
+    for d = 1:numDims
+        subinds_ext{d} = subinds_s{d}*ones(numMicro, 1);
+    end
+    subinds_ext{end} = (1:numMicro)';
+    inds = sub2ind(size(corrFactInd), subinds_ext{:})';
+    
+    corrFactInd(inds) = s(k).corrFactIndividual;
 end
+corrFactGlobal = zeros(size(s)); % Individual correction factor
+corrFactGlobal(:) = [s.corrFactGlobal];
 
-ax = axes(figure);
-ax.Title.Interpreter = 'latex';
-hold on
-data = s(1).corrFactIndividual;
-cmap = colormap('lines');
-for k = 1:size(data, 2)
-xData = real(data(:, k));
-yData = imag(data(:, k));
-scat = scatter(ax, xData, yData, 10, cmap(k, :), 'filled');
-end
-maxAbs = max(abs(data(:)));
-ax.XLim = [-maxAbs, maxAbs]; ax.YLim = [-maxAbs, maxAbs];
-ax.DataAspectRatio = [1 1 3];
+% Represent
+% Graph 1
+% ax = axes(figure);
+% ax.Title.Interpreter = 'latex';
+% hold on
+% data = s(1).corrFactIndividual;
+% cmap = colormap('lines');
+% for k = 1:size(data, 2)
+% xData = real(data(:, k));
+% yData = imag(data(:, k));
+% scat = scatter(ax, xData, yData, 10, cmap(k, :), 'filled');
+% end
+% maxAbs = max(abs(data(:)));
+% ax.XLim = [-maxAbs, maxAbs]; ax.YLim = [-maxAbs, maxAbs];
+% ax.DataAspectRatio = [1 1 3];
+% 
+% % Remember that mean and std are performed over the first dimension
+% meanData = mean(data);
+% stdData = std(data);
+% normStd = stdData./abs(meanData);
+% 
+% meanAbs = mean(abs(data));
+% stdAbs = std(abs(data));
+% normStdAbs = stdAbs./meanAbs;
+% 
+% [meanPhase, ~, stdPhase] = circularDistributionParameters(angle(data));
+% stdPhase = rad2deg(stdPhase);
+% meanPhase = rad2deg(meanPhase);
+% normStdPhase = stdPhase./meanPhase;
 
-% Remember that mean and std are performed over the first dimension
-meanData = mean(data);
-stdData = std(data);
-normStd = stdData./abs(meanData);
+% Check the evolution of the individual correction factor with frequency.
+% It should be similar for all points
+[ ~, corrFactIndFirstFreq ] = pointWiseExtend( corrFactInd, corrFactInd(:, 1, :, :, :) );
+relCorrFactInd = corrFactInd./corrFactIndFirstFreq;
 
-meanAbs = mean(abs(data));
-stdAbs = std(abs(data));
-normStdAbs = stdAbs./meanAbs;
+% Graph 2
+% Visualize. Don't delete just in case I need to use at another time.
+domain = [0];
+visualObj = animation({domain, freqs, 1:numNSpos, 1:numReverbTime, 1:numMicro},...
+    {abs(relCorrFactInd)}, {'Domain', 'Frequency', 'NS position index', 'Reverb. Time index', 'Micro Index'}, ...
+    {'Relative individual correction factor'}, [], []);
 
-[meanPhase, ~, stdPhase] = circularDistributionParameters(angle(data));
-stdPhase = rad2deg(stdPhase);
-meanPhase = rad2deg(meanPhase);
-normStdPhase = stdPhase./meanPhase;
+visualObj = animation({domain, freqs, 1:numNSpos, 1:numReverbTime, 1:numMicro},...
+    {abs(corrFactInd)}, {'Domain', 'Frequency', 'NS position index', 'Reverb. Time index', 'Micro Index'}, ...
+    {'Individual correction factor'}, [], []);
+
+visualObj = animation({domain, freqs, 1:numNSpos, 1:numReverbTime},...
+    {abs(corrFactGlobal)}, {'Domain', 'Frequency', 'NS position index', 'Reverb. Time index'}, {'Cancellation'}, [], []);
+
+% Graph 3
+% How disperse are the individual correction factors for different NS
+% positions and microphone positions?
+% Note: you can use histogram2 instead of pcolor for visualizing, but the
+% flexibility is smaller
+freqs_aux = 0:1000;
+correctFactTheo = sqrt(1i * freqs_aux/c);
+
+corrFactInd_zeroReverb = corrFactInd(1, :, :, 1, :);
+corrFactGlobal_zeroReverb = corrFactGlobal(1, :, :, 1);
+freqMat_ind = pointWiseExtend(freqs, corrFactInd_zeroReverb);
+freqMat_glob = pointWiseExtend(freqs, corrFactGlobal_zeroReverb);
+[N_abs, Xedges_abs, Yedges_abs] = histcounts2(freqMat_ind, abs(corrFactInd_zeroReverb), 'BinWidth', [freqs(2) - freqs(1), 0.1]);
+[N_phase, Xedges_phase, Yedges_phase] = histcounts2(freqMat_ind, rad2deg(angle(corrFactInd_zeroReverb)), 'BinWidth', [freqs(2) - freqs(1), 1]);
+[N_abs_glob, Xedges_abs_glob, Yedges_abs_glob] = ...
+    histcounts2(freqMat_glob, abs(corrFactGlobal_zeroReverb), 'BinWidth', [freqs(2) - freqs(1), 0.1]);
+[N_phase_glob, Xedges_phase_glob, Yedges_phase_glob] = ...
+    histcounts2(freqMat_glob, rad2deg(angle(corrFactGlobal_zeroReverb)), 'BinWidth', [freqs(2) - freqs(1), 1]);
+
+Nnorm_abs = N_abs./repmat(sum(N_abs, 2), [1, size(N_abs, 2)]);
+Nnorm_phase = N_phase./repmat(sum(N_phase, 2), [1, size(N_phase, 2)]);
+Nnorm_abs_glob = N_abs_glob./repmat(sum(N_abs_glob, 2), [1, size(N_abs_glob, 2)]);
+Nnorm_phase_glob = N_phase_glob./repmat(sum(N_phase_glob, 2), [1, size(N_phase_glob, 2)]);
+
+ax1 = axes(figure);
+C = zeros(length(Xedges_abs), length(Yedges_abs));
+C(1:end-1, 1:end-1) = Nnorm_abs;
+pcolor(ax1, Xedges_abs, Yedges_abs, C');
+ax1.Title.String = '|\Psi| for individual cancellation';
+ax1.XLabel.String = 'Frequency (Hz)';
+ax1.YLabel.String = '|\Psi|';
+colorbar
+ax1.NextPlot = 'Add';
+plot(ax1, freqs_aux, abs(correctFactTheo), 'r', 'LineWidth', 4);
+
+ax2 = axes(figure);
+C = zeros(length(Xedges_phase), length(Yedges_phase));
+C(1:end-1, 1:end-1) = Nnorm_phase;
+pcolor(ax2, Xedges_phase, Yedges_phase, C');
+ax2.Title.String = 'phase(\Psi) for individual cancellation';
+ax2.XLabel.String = 'Frequency (Hz)';
+ax2.YLabel.String = 'phase(\Psi)';
+colorbar
+
+ax3 = axes(figure);
+C = zeros(length(Xedges_abs_glob), length(Yedges_abs_glob));
+C(1:end-1, 1:end-1) = Nnorm_abs_glob;
+pcolor(ax3, Xedges_abs_glob, Yedges_abs_glob, C');
+ax3.Title.String = '|\Psi| for global cancellation';
+ax3.XLabel.String = 'Frequency (Hz)';
+ax3.YLabel.String = '|\Psi|';
+colorbar
+ax3.NextPlot = 'Add';
+plot(ax3, freqs_aux, abs(correctFactTheo), 'r', 'LineWidth', 4);
+
+ax4 = axes(figure);
+C = zeros(length(Xedges_phase_glob), length(Yedges_phase_glob));
+C(1:end-1, 1:end-1) = Nnorm_phase_glob;
+pcolor(ax4, Xedges_phase_glob, Yedges_phase_glob, C');
+ax4.Title.String = 'phase(\Psi) for global cancellation';
+ax4.XLabel.String = 'Frequency (Hz)';
+ax4.YLabel.String = 'phase(\Psi)';
+colorbar
+
+%% SVG scenario
+viewBox = [-WFSarrayOffset(1) -WFSarrayOffset(2) roomDim(1) roomDim(2)];
+NSangles = atan2d(centreY - NSpositions(:,2), centreX - NSpositions(:,1));
+
+objSVG = SVGdrawer('viewBox', viewBox, 'NSpositions', NSpositions,...
+    'NSangles', NSangles, 'microSymbol', 'dot', 'microSize', 0.05,...
+    'microPositions', recPositions);
+
+name = 'Experiment7_scheme';
+objSVG.drawSVG([imagesPath, name, '.svg']);
+
+currentFolder = pwd;
+cd(imagesPath); % Needed for inkscape to link svg files properly
+system(['inkscape -z "', imagesPath, name, '.svg" --export-pdf="', imagesPath, name, '.pdf"'])
+cd(currentFolder)
+
+
