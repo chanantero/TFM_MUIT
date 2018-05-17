@@ -822,8 +822,8 @@ classdef WFSToolSimple < handle
                     for ns = 1:numVirtNS
                         indWFS = find(WFSflags(:, ns));
                         for ss = 1:numel(indWFS)
-%                             fprintf(' %d %d\n', ns, ss)
-                            wfsSignals(indWFS(ss), :, ns) = filter(filtersIR(indWFS(ss), :, virtNS(ns)), 1, NSsignalsExtended(virtNS(ns), :));
+%                             wfsSignals(indWFS(ss), :, ns) = filter(filtersIR(indWFS(ss), :, virtNS(ns)), 1, NSsignalsExtended(virtNS(ns), :));
+                            wfsSignals(indWFS(ss), :, ns) = fftfilt(filtersIR(indWFS(ss), :, virtNS(ns)), NSsignalsExtended(virtNS(ns), :));
                         end
                     end
                     wfsSignals = sum(wfsSignals, 3);
@@ -1678,10 +1678,14 @@ classdef WFSToolSimple < handle
                     filtersIR(wfs, ns, :) = fftfilt(obj.freqFilter, filtersIR(wfs, ns, :)); % You can also use filter, but it is slower usually: filtersIR = filter(obj.freqFilter, 1, filtersIR, [], 3);
                 end
             end
+            
+                [~, indDelay] = max(obj.freqFilter);
+                indDelay = indDelay - 1;
+            else
+                indDelay = 0;
             end
             
-            [~, indDelay] = max(obj.freqFilter);
-            indDelay = indDelay - 1;
+            
             
         end
         

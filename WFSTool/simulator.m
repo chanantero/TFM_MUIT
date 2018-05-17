@@ -632,7 +632,7 @@ classdef simulator < handle
                 sourceRadPatCoefs = zeros(numRec, numSour, numFreq);
                 for s = 1:numSour
                     diffVec = recPos - repmat(sourcePos(s, :), numRec, 1);
-                    relDir = quatrotate_custom( quat_source(s, :), diffVec );  % Quatrotate no va incluído en el matlab del laboratorio. relDir = quatrotate(quat, diffVec); Usar quatrotate_custom.
+                    relDir = quatrotate_custom( quat_source(s, :), diffVec);  % Quatrotate no va incluído en el matlab del laboratorio. relDir = quatrotate(quat, diffVec); Usar quatrotate_custom.
                     sourceRadPatCoefs(:, s, :) = permute(sourceRadPat{s}(relDir, frequencies), [1 3 2]);
                 end
                 
@@ -759,6 +759,7 @@ classdef simulator < handle
                     acousticPaths = permute(acousticPaths, [1, 3, 2]); % Easier to use
                     
                     recSignals = zeros(numReceivers, numSamples);
+                    tic
                     for r = 1:numReceivers 
 %                         fprintf('%d/%d\n', r, numReceivers);
                         recSign = zeros(numSources, numSamples);
@@ -769,6 +770,7 @@ classdef simulator < handle
                         end
                         recSignals(r, :) = sum(recSign, 1);
                     end
+                    toc
                     U = recSignals;
             end
         end
