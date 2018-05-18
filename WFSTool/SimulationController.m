@@ -461,7 +461,7 @@ classdef SimulationController < handle
                 % Simulate
                 obj.WFSToolObj.simulate();
                 
-                % Cancellation level (noise source 1 is real, noise source 2 is virtual)
+                % Field (noise source 1 is real, noise source 2 is virtual)
                 simulField(:, :, k) = obj.WFSToolObj.simulField;
             end
             

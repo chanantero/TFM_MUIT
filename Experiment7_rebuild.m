@@ -234,7 +234,6 @@ end
 %% Simulation
 durSign = 1; % Duration of signal
 t = (0:ceil(durSign*obj.Fs)-1)/obj.Fs;
-signalLength = length(t);
 [~, filterDelay] = max(obj.WFSToolObj.freqFilter);
 filterDelay = filterDelay - 1;
 
@@ -247,11 +246,6 @@ recNScoef_freq = zeros(obj.numMicro, numFreqs, numNSpos, numReverbTime);
 recCoef_freq = zeros(obj.numMicro, numFreqs, numNSpos, numReverbTime);
 recWFScoef_freq = zeros(obj.numMicro, numFreqs, numNSpos, numReverbTime);
 WFScoef_freq = zeros(obj.numWFS, numFreqs, numNSpos, numReverbTime);
-
-timeDomainActive = false;
-frequencyDomainActive = true;
-
-obj.WFSToolObj.frequencyCorrection = false; % Very important! We want to see what happens without correction
 
 % Progress bar variables
 maxIterPerLevel = [numReverbTime, numFreqs, numNSpos];
@@ -359,7 +353,6 @@ for rt = 1:numReverbTime
             end
             
                 % Progress monitoring
-                if ns == numNSpos
                 completedIterPerLevel = [rt-1, f-1, ns]; % Completed
                 for k = numLevels:-1:2
                     if completedIterPerLevel(k) == maxIterPerLevel(k)
@@ -374,7 +367,7 @@ for rt = 1:numReverbTime
                 msg = ['[', sprintf(' %d/%d ', aux), ']'];
                 
                 waitbar(progress, wb, msg);
-                end
+                
                 
         end
         
@@ -748,8 +741,8 @@ colorbar(ax2)
 %% Continuation of previous section: simulation of full correction factor in time domain
 
 % Creation of frequency filters with different orders
-magnFiltOrder = 2.^(9:12);
-hilbertFiltOrder = 2.^(9:12);
+magnFiltOrder = 512;
+hilbertFiltOrder = 1024;
 numFreqFilters = length(magnFiltOrder);
 
 freqFilters = cell(numFreqFilters, 1);
@@ -828,7 +821,15 @@ for rt = 1:numReverbTime
         fcurr = freqs(f); % Current frequency
         obj.frequency = fcurr;
         
-        for ns = 1:numNSpos
+        % Generate tone with the propper frequency
+        x = obj.amplitude(1) * cos(2*pi*fcurr*t + obj.phase(1));
+        x = [zeros(1, filterDelay), x, zeros(1, numSampIR - 1)];
+               
+        obj.domain = 'time';
+        obj.NScoef = x;
+        obj.NSVcoef = -x;
+        
+        for ns = 1:numNSpos         
             obj.NSposition = NSpositions(ns, :);
             
             % Set up acoustic paths for the noise source
@@ -844,7 +845,30 @@ for rt = 1:numReverbTime
             % Time domain calculation. FAKE TIME PROCESSING.
             if timeDomainActive
                 % Simulate for time domain
-
+%                 obj.domain = 'time';
+%             
+%                 obj.WFSToolObj.filtersWFS_IR = repmat(permute(filtersWFS_IR(:, :, ns), [1 3 2]), [1 2 1]);
+%                             
+%                 % Simulate only the noise source
+%                 obj.WFSToolObj.virtual = [false; false];
+%                 obj.WFSToolObj.WFScalculation();
+%                 obj.WFSToolObj.simulate();
+%                 recNS_signal = obj.WFSToolObj.simulField;
+%                 
+%                 % Simulate all together
+%                 obj.WFSToolObj.virtual = [false; true];
+%                 obj.WFSToolObj.WFScalculation();
+%                 obj.WFSToolObj.simulate();
+%                 rec_signal = obj.WFSToolObj.simulField;
+%                 
+%                 % Identify IQ component
+%                 recNScoef_time(:, f, ns, rt) = signal2pulseCoefficientMatrix([0 durSign], fcurr, 1, recNS_signal', fs).';
+%                 recWFScoef_time(:, f, ns, rt) = signal2pulseCoefficientMatrix([0 durSign], fcurr, 1, (rec_signal - recNS_signal)', fs);
+%                 recCoef_time(:, f, ns, rt) = signal2pulseCoefficientMatrix([0 durSign], fcurr, 1, rec_signal', fs);
+%                 WFScoef_time(:, f, ns, rt) = signal2pulseCoefficientMatrix([0 durSign], fcurr, 1, obj.WFSToolObj.WFSarrayCoefficient', fs);
+                
+                % We introduce a modification because previous code is
+                % innefficient.
                 % We know that the only difference between the processing
                 % in frequency and time is, besides the fact that the time signals
                 % are finite and hence there will be truncatin errors, that
@@ -857,11 +881,10 @@ for rt = 1:numReverbTime
                 
                 obj.WFSToolObj.frequencyCorrection = false;
                 obj.WFSToolObj.WFScalculation();
-                WFScoef = obj.WFSToolObj.WFSarrayCoefficient;
                 obj.WFSToolObj.frequencyCorrection = true;
-
+                
                 for filt = 1:numFreqFilters
-                    obj.WFSToolObj.WFSarrayCoefficient = WFScoef * freqFiltFR(filt, f) * exp(-1i*phaseShifts(filt, f));
+                    obj.WFSToolObj.WFSarrayCoefficient = obj.WFSToolObj.WFSarrayCoefficient * freqFilterFR(f) * exp(-1i*phaseShift(f));
                     obj.WFSToolObj.simulate();
                     
                     WFScoef_time(:, f, ns, rt, filt) = obj.WFScoef;
@@ -869,7 +892,10 @@ for rt = 1:numReverbTime
                     recWFScoef_time(:, f, ns, rt, filt) = obj.microCoefWFS;
                     recNScoef_time(:, f, ns, rt, filt) = obj.microCoefNS;
                 end
-
+                
+                                
+                
+                
             end
                 
             % Frequency domain calculation
@@ -889,7 +915,6 @@ for rt = 1:numReverbTime
                 WFScoef_freq(:, f, ns, rt) = obj.cancelResults.WFScoef;
             end
             
-            if ns == numNSpos
                 % Progress monitoring
                 completedIterPerLevel = [rt-1, f-1, ns]; % Completed
                 for k = numLevels:-1:2
@@ -905,7 +930,7 @@ for rt = 1:numReverbTime
                 msg = ['[', sprintf(' %d/%d ', aux), ']'];
                 
                 waitbar(progress, wb, msg);
-            end
+                
                 
         end
         
@@ -915,26 +940,24 @@ end
 %% Formatting of results
 
 % Make structure so we can visualize this
-s_time = repmat(obj.cancelResults(1), [numFreqFilters, numFreqs, numNSpos, numReverbTime]);
+s_time = repmat(obj.cancelResults(1), [1, numFreqs, numNSpos, numReverbTime]);
 s_freq = repmat(obj.cancelResults(1), [1, numFreqs, numNSpos, numReverbTime]);
 for rt = 1:numReverbTime
     for f = 1:numFreqs
         for ns = 1:numNSpos
-            for filt = 1:numFreqFilters
-                s_time(filt, f, ns, rt) = SimulationController.generateExportStructure(...
-                    'NSRcoef', 1,...
-                    'NSVcoef', -1,...
-                    'WFScoef', WFScoef_time(:, f, ns, rt, filt),...
-                    'microCoef', recCoef_time(:, f, ns, rt, filt),...
-                    'microCoefNS', recNScoef_time(:, f, ns, rt, filt),...
-                    'microCoefWFS', recWFScoef_time(:, f, ns, rt, filt),...
-                    'NSRpos', NSpositions(ns,:),...
-                    'NSVpos', NSpositions(ns,:),...
-                    'WFSpos', obj.WFSposition,...
-                    'microPos', obj.microPos,...
-                    'Frequency', freqs(f)...
-                    );
-            end
+            s_time(1, f, ns, rt) = SimulationController.generateExportStructure(...
+                'NSRcoef', 1,...
+                'NSVcoef', -1,...
+                'WFScoef', WFScoef_time(:, f, ns, rt),...
+                'microCoef', recCoef_time(:, f, ns, rt),...
+                'microCoefNS', recNScoef_time(:, f, ns, rt),...
+                'microCoefWFS', recWFScoef_time(:, f, ns, rt),...
+                'NSRpos', NSpositions(ns,:),...
+                'NSVpos', NSpositions(ns,:),...
+                'WFSpos', obj.WFSposition,...
+                'microPos', obj.microPos,...
+                'Frequency', freqs(f)...
+                );
             
             s_freq(1, f, ns, rt) = SimulationController.generateExportStructure(...
                 'NSRcoef', 1,...
@@ -972,77 +995,59 @@ Cg_dB = 10*log10(Cg);
 % Visualize
 freqMat_FS = pointWiseExtend(freqs, s(1, :, :, 1));
 
+Cg_dB_FS_time = Cg_dB(1, :, :, 1); % Time domain. FS: Free Space
+Cg_dB_FS_freq = Cg_dB(2, :, :, 1); % Frequency domain. FS: Free Space
+
 freqStep = freqs(2) - freqs(1);
 freqEdges = [(freqs(1:end-1) + freqs(2:end))/2, freqs(end) + freqStep/2];
 CancEdges = -20:10;
 
-% Cg_dB_FS_time = Cg_dB(1, :, :, 1); % Time domain. FS: Free Space
-% Cg_dB_FS_freq = Cg_dB(2, :, :, 1); % Frequency domain. FS: Free Space
-% 
-% N_time = histcounts2(freqMat_FS, Cg_dB_FS_time, freqEdges, CancEdges);
-% Nnorm_time = N_time./repmat(sum(N_time, 2), [1, size(N_time, 2)]); Nnorm_time(isnan(Nnorm_time)) = 0;
-% 
-% N_freq = histcounts2(freqMat_FS, Cg_dB_FS_freq, freqEdges, CancEdges);
-% Nnorm_freq = N_freq./repmat(sum(N_freq, 2), [1, size(N_freq, 2)]); Nnorm_freq(isnan(Nnorm_freq)) = 0;
-% 
-% penaltyEdges = -10:10;
-% [N_diff, freqAux, DifCancEdges] = histcounts2(freqMat_FS, Cg_dB_FS_time - Cg_dB_FS_freq, freqEdges, penaltyEdges);
-% Nnorm_diff = N_diff./repmat(sum(N_diff, 2), [1, size(N_diff, 2)]);
+N_time = histcounts2(freqMat_FS, Cg_dB_FS_time, freqEdges, CancEdges);
+Nnorm_time = N_time./repmat(sum(N_time, 2), [1, size(N_time, 2)]); Nnorm_time(isnan(Nnorm_time)) = 0;
+
+N_freq = histcounts2(freqMat_FS, Cg_dB_FS_freq, freqEdges, CancEdges);
+Nnorm_freq = N_freq./repmat(sum(N_freq, 2), [1, size(N_freq, 2)]); Nnorm_freq(isnan(Nnorm_freq)) = 0;
+
+penaltyEdges = -10:10;
+[N_diff, freqAux, DifCancEdges] = histcounts2(freqMat_FS, Cg_dB_FS_time - Cg_dB_FS_freq, freqEdges, penaltyEdges);
+Nnorm_diff = N_diff./repmat(sum(N_diff, 2), [1, size(N_diff, 2)]);
 
 
-% ax1 = axes(figure);
-% C = zeros(length(freqEdges), length(CancEdges));
-% C(1:end-1, 1:end-1) = Nnorm_time;
-% pcolor(ax1, freqEdges, CancEdges, C');
-% ax1.Title.String = ['$C_{global}$ for time processing'];
-% ax1.Title.Interpreter = 'latex';
-% ax1.XLabel.String = 'Frequency (Hz)';
-% ax1.YLabel.String = '$C_{global}$';
-% ax1.YLabel.Interpreter = 'latex';
-% colorbar(ax1)
-% % printfig(ax1.Parent, imagesPath, 'Experiment7_CancGlobTheoCorrFactTime', 'eps');
+ax1 = axes(figure);
+C = zeros(length(freqEdges), length(CancEdges));
+C(1:end-1, 1:end-1) = Nnorm_time;
+pcolor(ax1, freqEdges, CancEdges, C');
+ax1.Title.String = ['$C_{global}$ for time processing'];
+ax1.Title.Interpreter = 'latex';
+ax1.XLabel.String = 'Frequency (Hz)';
+ax1.YLabel.String = '$C_{global}$';
+ax1.YLabel.Interpreter = 'latex';
+colorbar(ax1)
+% printfig(ax1.Parent, imagesPath, 'Experiment7_CancGlobTheoCorrFactTime', 'eps');
 
-% ax2 = axes(figure);
-% C = zeros(length(freqEdges), length(CancEdges));
-% C(1:end-1, 1:end-1) = Nnorm_freq;
-% pcolor(ax2, freqEdges, CancEdges, C');
-% ax2.Title.String = ['$C_{global}$ for frequency processing'];
-% ax2.Title.Interpreter = 'latex';
-% ax2.XLabel.String = 'Frequency (Hz)';
-% ax2.YLabel.String = '$C_{global}$';
-% ax2.YLabel.Interpreter = 'latex';
-% colorbar(ax2)
-% % printfig(ax2.Parent, imagesPath, 'Experiment7_CancGlobTheoCorrFactFreq', 'eps');
-% 
-% ax3 = axes(figure);
-% C = zeros(length(freqEdges), length(penaltyEdges));
-% C(1:end-1, 1:end-1) = Nnorm_diff;
-% pcolor(ax3, freqEdges, penaltyEdges, C');
-% ax3.Title.String = ['Cancellation Penalty'];
-% ax3.Title.Interpreter = 'latex';
-% ax3.XLabel.String = 'Frequency (Hz)';
-% ax3.YLabel.String = '$10\log_{10}(C_{global,time}) - 10\log_{10}(C_{global,ideal})$';
-% ax3.YLabel.Interpreter = 'latex';
-% colorbar(ax3)
+ax2 = axes(figure);
+C = zeros(length(freqEdges), length(CancEdges));
+C(1:end-1, 1:end-1) = Nnorm_freq;
+pcolor(ax2, freqEdges, CancEdges, C');
+ax2.Title.String = ['$C_{global}$ for frequency processing'];
+ax2.Title.Interpreter = 'latex';
+ax2.XLabel.String = 'Frequency (Hz)';
+ax2.YLabel.String = '$C_{global}$';
+ax2.YLabel.Interpreter = 'latex';
+colorbar(ax2)
+% printfig(ax2.Parent, imagesPath, 'Experiment7_CancGlobTheoCorrFactFreq', 'eps');
 
-axs = gobjects(numFreqFilters + 1, 1);
-for filt = 1:numFreqFilters + 1
-    Cg_dB_FS = Cg_dB(filt, :, :, 1); % FS: Free Space
-    N = histcounts2(freqMat_FS, Cg_dB_FS, freqEdges, CancEdges);
-    Nnorm = N./repmat(sum(N, 2), [1, size(N, 2)]); Nnorm(isnan(Nnorm)) = 0;
-    
-    ax = axes(figure);
-    axs(filt) = ax;
-    C = zeros(length(freqEdges), length(CancEdges));
-    C(1:end-1, 1:end-1) = Nnorm;
-    pcolor(ax, freqEdges, CancEdges, C');
-    ax.Title.String = 'Global Cancellation';
-    ax.Title.Interpreter = 'latex';
-    ax.XLabel.String = 'Frequency (Hz)';
-    ax.YLabel.String = '$C_{global}$';
-    ax.YLabel.Interpreter = 'latex';
-    colorbar(ax)
-end
+ax3 = axes(figure);
+C = zeros(length(freqEdges), length(penaltyEdges));
+C(1:end-1, 1:end-1) = Nnorm_diff;
+pcolor(ax3, freqEdges, penaltyEdges, C');
+ax3.Title.String = ['Cancellation Penalty'];
+ax3.Title.Interpreter = 'latex';
+ax3.XLabel.String = 'Frequency (Hz)';
+ax3.YLabel.String = '$10\log_{10}(C_{global,time}) - 10\log_{10}(C_{global,ideal})$';
+ax3.YLabel.Interpreter = 'latex';
+colorbar(ax3)
+
 
 %% SVG scenario
 viewBox = [-WFSarrayOffset(1) -WFSarrayOffset(2) roomDim(1) roomDim(2)];

@@ -148,3 +148,32 @@ ax.XLim = [-2500, 2500];
 ax.XLabel.String = 'Frequency (Hz)';
 ax.YLabel.String = '|H(f)|';
 
+%% Test function getFrequencyFilter
+[hTotal, delay] = getFrequencyFilter(512, 2^14, 44100);
+
+hTotal = freqFilters{4};
+N = length(hTotal);
+Htotal = fft(hTotal); % fft(freqFilters{1});
+df = 1/N;
+f = (0:df:1-df)*44100;
+f_fftshift = (-floor(N/2):floor(N/2))*44100/N;
+ax = axes(figure, 'NextPlot', 'Add');
+plot(ax, f_fftshift, abs(fftshift(Htotal)))
+ax.YLim = [0, 4];
+ax.XLim = [-2500, 2500];
+ax.XLabel.String = 'Frequency (Hz)';
+ax.YLabel.String = '|H(f)|';
+c = 340;
+plot(ax, f_fftshift, sqrt(abs(f_fftshift)/343))
+legend(ax, 'Real', 'Ideal')
+ax.Title.String = 'Frequency response';
+
+delay = freqFiltDelays(4);
+phaseShift = -delay/fs * 2*pi*f;
+Htotal_compensated = Htotal.*exp(-1i*phaseShift);
+ax2 = axes(figure);
+plot(f_fftshift, rad2deg(angle(fftshift(Htotal_compensated))))
+ax2.XLim = [-1000, 1000];
+
+
+

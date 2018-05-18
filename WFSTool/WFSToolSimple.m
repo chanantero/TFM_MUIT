@@ -21,7 +21,7 @@ classdef WFSToolSimple < handle
         % Time domain
         filtersWFS_IR % (obj.numSourcesWFSarray x numVirtualNS x numSamp)
         filterWFS_length % Set by the user (tunnable). If set to empty, the length is authomatic
-        indDelay_filtersWFS
+        indDelay_filtersWFS % It is determined by the freqFilter
         freqFilter % Impulse response of the frequency filter + hilbert filter combined
                
         % Microphones
