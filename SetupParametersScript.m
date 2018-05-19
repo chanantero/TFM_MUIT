@@ -11,7 +11,8 @@ obj.frequency = 800;
 obj.Fs = fs;
 
 % Frequency filter
-obj.WFSToolObj.freqFilter = hTotal;
+% obj.WFSToolObj.freqFilter = hTotal;
+numFreqFilters = numel(freqFilters);
 obj.WFSToolObj.filterWFS_length = WFSfilterLength;
 
 % Microphone positions

@@ -89,6 +89,9 @@ frequencyCorrection = true;
 timeDomainActive = false;
 frequencyDomainActive = true;
 
+% Duration of tone for time processing
+durSign = 1;
+
 %% Setup first parameters
 SetupParametersScript
 
@@ -97,7 +100,6 @@ SetupParametersScript
 % simulations, we calculate it previously and save it to a .mat. 
 
 AcousticPathCalculationScript
-
 % WFSposition = obj.WFSposition;
 % save([dataPathName, 'AcPathResponsesWFS_', ID, '.mat'], 'r', 'roomDim', 'numSamp', 'WFSposition', 'freqs', 'WFS_IR', 'WFS_FR')
 % save([dataPathName, 'AcPathResponsesNS_', ID, '.mat'], 'r', 'roomDim', 'numSamp', 'NSpositions', 'NS_IR', 'freqs', 'NS_FR')
