@@ -19,11 +19,13 @@ classdef WFSToolSimple < handle
         WFSarrayAdjacentSeparation = 0.18; % meteres
         frequencyCorrection = true;
         % Time domain
-        filtersWFS_IR % (obj.numSourcesWFSarray x numVirtualNS x numSamp)
+        filtersWFS_IR % (obj.numSourcesWFSarray x numVirtualNS x numSamp). Users don't need to use it
         filterWFS_length % Set by the user (tunnable). If set to empty, the length is authomatic
-        indDelay_filtersWFS % It is determined by the freqFilter
         freqFilter % Impulse response of the frequency filter + hilbert filter combined
                
+        % Simulation
+        automaticLengthModification = true;
+        
         % Microphones
         receiverChannelMapping % Active channels of the receiver device
         
@@ -80,6 +82,7 @@ classdef WFSToolSimple < handle
         WFSarrayRadiationPattern
         WFSarrayCoefficient
         WFSarrayIndSimulTheo
+        indDelayFreqFilter % It is determined by the freqFilter. Users don't need to use it        
         
         % Microphones
         receiverPosition
@@ -284,6 +287,11 @@ classdef WFSToolSimple < handle
         function WFSarrayIndSimulTheo = get.WFSarrayIndSimulTheo(obj)
             WFSarrayIndSimulTheo = 1:obj.numSourcesWFSarray;
         end
+        
+        function indDelayFreqFilter = get.indDelayFreqFilter(obj)
+            [~, indDelay] = max(obj.freqFilter);
+            indDelayFreqFilter = indDelay - 1;
+        end        
         
         % Microphones
         function receiverPosition = get.receiverPosition(obj)
@@ -798,17 +806,21 @@ classdef WFSToolSimple < handle
                     obj.noiseSourceCoefficient_complete(:, ~obj.real) = 0;
                     obj.WFSarrayCoefficient(:, ~obj.virtual) = 0;
                 
-                case 'time'
+                case 'time'                    
                     % Get the filter for each loudspeaker
-                    filtersIR = obj.filtersWFS_IR;
+                    filtersIR = permute(obj.filtersWFS_IR, [1, 3, 2]); % Permute to make it easier to use
+                    signalLength = size(obj.noiseSourceSignalTime, 2);    
                     
-                    filterLength = size(filtersIR, 3);
-                    filtersIR = permute(filtersIR, [1, 3, 2]); % Easier to use
-                                        
-                    % Filter signals
-                    signalLength = size(obj.noiseSourceSignalTime, 2);
-                    newSignalLength = signalLength + filterLength - 1;
-                    NSsignalsExtended = [obj.noiseSourceSignalTime, zeros(obj.numNoiseSources, newSignalLength - signalLength)];
+                    if obj.automaticLengthModification
+                        % Extend noise source signal in the end
+                        filterLength = size(filtersIR, 2);                        
+                        newSignalLength = signalLength + filterLength - 1;
+                        NSsignalsExtended = [obj.noiseSourceSignalTime, zeros(obj.numNoiseSources, newSignalLength - signalLength)];
+                        NSsignals = NSsignalsExtended;
+                        signalLength = newSignalLength;
+                    else
+                        NSsignals = obj.noiseSourceSignalTime;
+                    end
 
                     virtNS = find(obj.virtual);
                     numVirtNS = numel(virtNS);
@@ -818,25 +830,35 @@ classdef WFSToolSimple < handle
                     attenuations = obj.getAttenuationsWFS(virtNS);
                     WFSflags = attenuations ~= 0;
                                                           
-                    wfsSignals = zeros(obj.numSourcesWFSarray, newSignalLength, numVirtNS);
+                    wfsSignals = zeros(obj.numSourcesWFSarray, signalLength, numVirtNS);
                     for ns = 1:numVirtNS
                         indWFS = find(WFSflags(:, ns));
                         for ss = 1:numel(indWFS)
 %                             wfsSignals(indWFS(ss), :, ns) = filter(filtersIR(indWFS(ss), :, virtNS(ns)), 1, NSsignalsExtended(virtNS(ns), :));
-                            wfsSignals(indWFS(ss), :, ns) = fftfilt(filtersIR(indWFS(ss), :, virtNS(ns)), NSsignalsExtended(virtNS(ns), :));
+                            wfsSignals(indWFS(ss), :, ns) = fftfilt(filtersIR(indWFS(ss), :, virtNS(ns)), NSsignals(virtNS(ns), :));
                         end
                     end
                     wfsSignals = sum(wfsSignals, 3);
                                                             
                     % Compensate for the delay introduced by the frequency
                     % filter
-                    wfsSignals = wfsSignals(:, obj.indDelay_filtersWFS + 1:end);
+                    wfsSignals = wfsSignals(:, obj.indDelayFreqFilter + 1:end);
                     
+                    if obj.automaticLengthModification    
+                        if obj.frequencyCorrection
+                            delayFilter = obj.indDelayFreqFilter; % If it is empty it is because the freqFilter is empty.
+                        else
+                            delayFilter = 0;
+                        end
+                        
+                        NSsignals = NSsignals(:, 1:end - delayFilter);
+                    else
+                        wfsSignals = [wfsSignals, zeros(obj.numSourcesWFSarray, obj.indDelayFreqFilter)];
+                    end
+       
                     obj.WFSarrayCoefficient = wfsSignals;
-                    
-                    NSsignalsExtended = NSsignalsExtended(:, 1:end - obj.indDelay_filtersWFS);
-                    NSsignalsExtended(virtNS, :) = 0;
-                    obj.noiseSourceCoefficient_complete = NSsignalsExtended;
+                    NSsignals(virtNS, :) = 0;
+                    obj.noiseSourceCoefficient_complete = NSsignals;
             end
             
         end
@@ -996,9 +1018,7 @@ classdef WFSToolSimple < handle
                     % getComplexCoeffWFS already takes in account the
                     % source coefficient and the WFS processing
                 case 'time'
-                    [filtersIR, indDelay] = obj.getFiltersWFS();
-                    obj.filtersWFS_IR = filtersIR;
-                    obj.indDelay_filtersWFS = indDelay;
+                    obj.filtersWFS_IR = obj.getFiltersWFS();
             end
                            
         end
@@ -1643,7 +1663,7 @@ classdef WFSToolSimple < handle
             end
         end
         
-        function [filtersIR, indDelay] = getFiltersWFS(obj)
+        function filtersIR = getFiltersWFS(obj)
             % This is intended for the cases when the domain is time.
             
             delays = obj.getDelaysWFS(1:obj.numNoiseSources);
@@ -1656,10 +1676,12 @@ classdef WFSToolSimple < handle
             indDelta = floor(delays*obj.Fs) + 1;
             
             freqFilterLength = numel(obj.freqFilter);
+            minNsFilt = max(floor(delays(:)*obj.Fs)) + 1 + freqFilterLength;
             if isempty(obj.filterWFS_length)
-                NsFilt = max(floor(delays(:)*obj.Fs)) + 1 + freqFilterLength;
+                NsFilt = minNsFilt;
             else
-                NsFilt = obj.filterWFS_length;
+                NsFilt = max(obj.filterWFS_length, minNsFilt);
+                
             end
             filtersIR = zeros(obj.numSourcesWFSarray, obj.numNoiseSources, NsFilt);
             for ns = 1:obj.numNoiseSources
@@ -1678,14 +1700,7 @@ classdef WFSToolSimple < handle
                     filtersIR(wfs, ns, :) = fftfilt(obj.freqFilter, filtersIR(wfs, ns, :)); % You can also use filter, but it is slower usually: filtersIR = filter(obj.freqFilter, 1, filtersIR, [], 3);
                 end
             end
-            
-                [~, indDelay] = max(obj.freqFilter);
-                indDelay = indDelay - 1;
-            else
-                indDelay = 0;
-            end
-            
-            
+            end          
             
         end
         

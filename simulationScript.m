@@ -9,8 +9,9 @@ phaseShifts = -freqFiltDelays/fs * 2*pi*freqs;
 %
 t = (0:ceil(durSign*obj.Fs)-1)/obj.Fs;
 preDelay = max(freqFiltDelays);
+postDelay = numSampIR - 1 + max(freqFiltDelays) - 1;
 
-recNScoef_time = zeros(numMicro, numFreqs, numNSpos, numReverbTime, numFreqFilters);
+recNScoef_time = zeros(numMicro, numFreqs, numNSpos, numReverbTime);
 recCoef_time = zeros(numMicro, numFreqs, numNSpos, numReverbTime, numFreqFilters);
 recWFScoef_time = zeros(numMicro, numFreqs, numNSpos, numReverbTime, numFreqFilters);
 WFScoef_time = zeros(obj.numWFS, numFreqs, numNSpos, numReverbTime, numFreqFilters);
@@ -26,7 +27,10 @@ numLevels = length(maxIterPerLevel);
 totalIter = prod(maxIterPerLevel);
 levelWeight = flip([1, cumprod(flip(maxIterPerLevel(2:end)))])';
 wb = waitbar(0, 'Progress');
-
+descMsg = '';
+aux = [zeros(1, numLevels); maxIterPerLevel];
+numMsg = ['[', sprintf(' %d/%d ', aux), ']'];
+progress = 0;
 for rt = 1:numReverbTime
     
     % Set up acoustic paths for the WFS array
@@ -59,10 +63,11 @@ for rt = 1:numReverbTime
     for f = 1:numFreqs
         fcurr = freqs(f); % Current frequency
         obj.frequency = fcurr;
+        preDelayPhaseShift = preDelay/fs*2*pi*fcurr;
         
         % Generate tone with the propper frequency
         x = obj.amplitude(1) * cos(2*pi*fcurr*t + obj.phase(1));
-        x = [zeros(1, preDelay), x, zeros(1, numSampIR - 1)];
+        x = [zeros(1, preDelay), x, zeros(1, postDelay)];
         
         obj.domain = 'time';
         obj.NScoef = x;
@@ -82,15 +87,19 @@ for rt = 1:numReverbTime
             obj.setAcousticPaths('NS', NSacPathFRstruct); % obj.setAcousticPaths('NS', 'theoretical');
             
             if timeDomainActive
+%                 
                 if ~fakeTimeProcessing
                     % Simulate for time domain
                     obj.domain = 'time';
                                         
                     % Simulate only the noise source
                     obj.WFSToolObj.virtual = [false; false];
+                    obj.WFSToolObj.freqFilter = 1; % This line (¿and next line?) is necessary for technical issues.
+%                     obj.WFSToolObj.updateFiltersWFS();
                     obj.WFSToolObj.WFScalculation();
                     obj.WFSToolObj.simulate();
                     recNS_signal = obj.WFSToolObj.simulField;
+                    recNScoef_time(:, f, ns, rt) = exp(1i*preDelayPhaseShift) * signal2pulseCoefficientMatrix([0 durSign], fcurr, 1, recNS_signal', fs).';
                     
                     obj.WFSToolObj.virtual = [false; true];
                     for filt = 1:numFreqFilters
@@ -102,10 +111,9 @@ for rt = 1:numReverbTime
                         rec_signal = obj.WFSToolObj.simulField;
                         
                         % Identify IQ component
-                        recNScoef_time(:, f, ns, rt, filt) = exp(-1i*preDelay*fcurr) * signal2pulseCoefficientMatrix([0 durSign], fcurr, 1, recNS_signal', fs).';
-                        recWFScoef_time(:, f, ns, rt, filt) = exp(-1i*preDelay*fcurr) * signal2pulseCoefficientMatrix([0 durSign], fcurr, 1, (rec_signal - recNS_signal)', fs);
-                        recCoef_time(:, f, ns, rt, filt) = exp(-1i*preDelay*fcurr) * signal2pulseCoefficientMatrix([0 durSign], fcurr, 1, rec_signal', fs);
-                        WFScoef_time(:, f, ns, rt, filt) = exp(-1i*preDelay*fcurr) * signal2pulseCoefficientMatrix([0 durSign], fcurr, 1, obj.WFSToolObj.WFSarrayCoefficient', fs);
+                        recWFScoef_time(:, f, ns, rt, filt) = exp(1i*preDelayPhaseShift) * signal2pulseCoefficientMatrix([0 durSign], fcurr, 1, (rec_signal - recNS_signal)', fs);
+                        recCoef_time(:, f, ns, rt, filt) = exp(1i*preDelayPhaseShift) * signal2pulseCoefficientMatrix([0 durSign], fcurr, 1, rec_signal', fs);
+                        WFScoef_time(:, f, ns, rt, filt) = exp(1i*preDelayPhaseShift) * signal2pulseCoefficientMatrix([0 durSign], fcurr, 1, obj.WFSToolObj.WFSarrayCoefficient', fs);
                         
                     end
                 else
@@ -139,6 +147,7 @@ for rt = 1:numReverbTime
             end
             
             if frequencyDomainActive
+                
                 % Simulate for frequency domain
                 obj.domain = 'frequency';
                 
@@ -155,7 +164,7 @@ for rt = 1:numReverbTime
             end
             
             % Progress monitoring
-            if ns == numNSpos
+            if true % ns == numNSpos
                 completedIterPerLevel = [rt-1, f-1, ns]; % Completed
                 for k = numLevels:-1:2
                     if completedIterPerLevel(k) == maxIterPerLevel(k)
@@ -167,7 +176,8 @@ for rt = 1:numReverbTime
                 progress = completedIter/totalIter;
                 
                 aux = [completedIterPerLevel; maxIterPerLevel];
-                msg = ['[', sprintf(' %d/%d ', aux), ']'];
+                numMsg = ['[', sprintf(' %d/%d ', aux), ']'];
+                msg = [numMsg, descMsg];
                 
                 waitbar(progress, wb, msg);
             end
@@ -192,7 +202,7 @@ for rt = 1:numReverbTime
                     'NSVcoef', -1,...
                     'WFScoef', WFScoef_time(:, f, ns, rt, filt),...
                     'microCoef', recCoef_time(:, f, ns, rt, filt),...
-                    'microCoefNS', recNScoef_time(:, f, ns, rt, filt),...
+                    'microCoefNS', recNScoef_time(:, f, ns, rt),...
                     'microCoefWFS', recWFScoef_time(:, f, ns, rt, filt),...
                     'NSRpos', NSpositions(ns,:),...
                     'NSVpos', NSpositions(ns,:),...

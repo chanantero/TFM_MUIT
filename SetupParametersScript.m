@@ -28,3 +28,6 @@ numReverbTime = length(beta);
 
 % WFS options
 obj.WFSToolObj.frequencyCorrection = frequencyCorrection; % Very important! We want to see what happens without correction
+
+% Simulation options
+obj.WFSToolObj.automaticLengthModification = automaticLengthModification;
