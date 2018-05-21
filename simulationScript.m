@@ -6,15 +6,28 @@ for k = 1:numFreqFilters
 end
 phaseShifts = -freqFiltDelays/fs * 2*pi*freqs;
 
-%
-t = (0:ceil(durSign*obj.Fs)-1)/obj.Fs;
+% Signals
+if ~predefSignals
+    t = (0:ceil(durSign*obj.Fs)-1)/obj.Fs;   
+    x = obj.amplitude(1) * cos(2*pi*freqs(:)*t + obj.phase(1));
+else
+    x = NSsignal;
+end
+
 preDelay = max(freqFiltDelays);
 postDelay = numSampIR - 1 + max(freqFiltDelays) - 1;
+x = [zeros(numFreqs, preDelay), x, zeros(numFreqs, postDelay)];
+numSampSign = size(x, 2);
 
 recNScoef_time = zeros(numMicro, numFreqs, numNSpos, numReverbTime);
 recCoef_time = zeros(numMicro, numFreqs, numNSpos, numReverbTime, numFreqFilters);
 recWFScoef_time = zeros(numMicro, numFreqs, numNSpos, numReverbTime, numFreqFilters);
 WFScoef_time = zeros(obj.numWFS, numFreqs, numNSpos, numReverbTime, numFreqFilters);
+
+if saveSignals
+    recNS_signals = zeros(numMicro, numSampSign, numFreqs, numNSpos, numReverbTime);
+    rec_signals = zeros(numMicro, numSampSign, numFreqs, numNSpos, numReverbTime, numFreqFilters);
+end
 
 recNScoef_freq = zeros(numMicro, numFreqs, numNSpos, numReverbTime);
 recCoef_freq = zeros(numMicro, numFreqs, numNSpos, numReverbTime);
@@ -66,12 +79,12 @@ for rt = 1:numReverbTime
         preDelayPhaseShift = preDelay/fs*2*pi*fcurr;
         
         % Generate tone with the propper frequency
-        x = obj.amplitude(1) * cos(2*pi*fcurr*t + obj.phase(1));
-        x = [zeros(1, preDelay), x, zeros(1, postDelay)];
+%         x = obj.amplitude(1) * cos(2*pi*fcurr*t + obj.phase(1));
+%         x = [zeros(1, preDelay), x, zeros(1, postDelay)];
         
         obj.domain = 'time';
-        obj.NScoef = x;
-        obj.NSVcoef = -x;
+        obj.NScoef = x(f, :);
+        obj.NSVcoef = -x(f, :);
         
         for ns = 1:numNSpos
             obj.NSposition = NSpositions(ns, :);
@@ -101,6 +114,10 @@ for rt = 1:numReverbTime
                     recNS_signal = obj.WFSToolObj.simulField;
                     recNScoef_time(:, f, ns, rt) = exp(1i*preDelayPhaseShift) * signal2pulseCoefficientMatrix([0 durSign], fcurr, 1, recNS_signal', fs).';
                     
+                    if saveSignals
+                        recNS_signals(:, :, f, ns, rt) = recNS_signal;
+                    end                 
+                    
                     obj.WFSToolObj.virtual = [false; true];
                     for filt = 1:numFreqFilters
                         % Simulate all together
@@ -114,6 +131,10 @@ for rt = 1:numReverbTime
                         recWFScoef_time(:, f, ns, rt, filt) = exp(1i*preDelayPhaseShift) * signal2pulseCoefficientMatrix([0 durSign], fcurr, 1, (rec_signal - recNS_signal)', fs);
                         recCoef_time(:, f, ns, rt, filt) = exp(1i*preDelayPhaseShift) * signal2pulseCoefficientMatrix([0 durSign], fcurr, 1, rec_signal', fs);
                         WFScoef_time(:, f, ns, rt, filt) = exp(1i*preDelayPhaseShift) * signal2pulseCoefficientMatrix([0 durSign], fcurr, 1, obj.WFSToolObj.WFSarrayCoefficient', fs);
+                        
+                        if saveSignals
+                            rec_signals(:, :, f, ns, rt, filt) = rec_signal;
+                        end
                         
                     end
                 else

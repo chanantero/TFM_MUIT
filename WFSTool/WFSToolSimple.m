@@ -82,7 +82,8 @@ classdef WFSToolSimple < handle
         WFSarrayRadiationPattern
         WFSarrayCoefficient
         WFSarrayIndSimulTheo
-        indDelayFreqFilter % It is determined by the freqFilter. Users don't need to use it        
+        indDelayFreqFilter % It is determined by the freqFilter. Users don't need to use it
+        indDelayWFSFilters
         
         % Microphones
         receiverPosition
@@ -292,6 +293,14 @@ classdef WFSToolSimple < handle
             [~, indDelay] = max(obj.freqFilter);
             indDelayFreqFilter = indDelay - 1;
         end        
+        
+        function indDelayWFSFilters = get.indDelayWFSFilters(obj)
+            if obj.frequencyCorrection
+                indDelayWFSFilters = obj.indDelayFreqFilter;
+            else
+                indDelayWFSFilters = 0;
+            end
+        end
         
         % Microphones
         function receiverPosition = get.receiverPosition(obj)
@@ -842,18 +851,12 @@ classdef WFSToolSimple < handle
                                                             
                     % Compensate for the delay introduced by the frequency
                     % filter
-                    wfsSignals = wfsSignals(:, obj.indDelayFreqFilter + 1:end);
+                    wfsSignals = wfsSignals(:, obj.indDelayWFSFilters + 1:end);
                     
-                    if obj.automaticLengthModification    
-                        if obj.frequencyCorrection
-                            delayFilter = obj.indDelayFreqFilter; % If it is empty it is because the freqFilter is empty.
-                        else
-                            delayFilter = 0;
-                        end
-                        
-                        NSsignals = NSsignals(:, 1:end - delayFilter);
+                    if obj.automaticLengthModification                        
+                        NSsignals = NSsignals(:, 1:end - obj.indDelayWFSFilters);
                     else
-                        wfsSignals = [wfsSignals, zeros(obj.numSourcesWFSarray, obj.indDelayFreqFilter)];
+                        wfsSignals = [wfsSignals, zeros(obj.numSourcesWFSarray, obj.indDelayWFSFilters)];
                     end
        
                     obj.WFSarrayCoefficient = wfsSignals;

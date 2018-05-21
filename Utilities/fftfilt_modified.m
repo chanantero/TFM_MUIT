@@ -3,7 +3,7 @@ function y = fftfilt_modified(b, x, nfft)
 % better in the MUIT TFM at UPV.
 % Its functionality is extended to be able to filter multiple signals
 % - x. Signals. (nx, numSignals)
-% - b. Filters. (nb, numFilters or 1, N)
+% - b. Filters. (nb, numFilters or 1, numOutputSignals)
 % The result is the signals filtered by the filters, and summing the
 % contributions of all signals:
 % - y. Resulting sigals. (nx, N). 
@@ -136,36 +136,52 @@ end
 
 B = fft(b,nfft,1);
 if numFilters == 1
-    B = B(:, ones(1, numSignals));  % replicate the column B 
+    B = repmat(B, [1, numSignals, 1]);
 end
 if numSignals == 1
-    x = x(:, ones(1, numFilters));  % replicate the column x 
+    x = repmat(x, [1, numFilters, 1]);
 end
 y = zeros(nx, numOutputSignals);
 
-% for
+% % Too much memory requested
+% Xs = zeros(nfft, numSignals, L);
+% numLoops = ceil(nx./L);
+% istart = 1;
+% for k = 1:numLoops
+%     iend = min(istart+L-1,nx);
+%     if (iend - istart) == 0
+%         X = x(istart(ones(nfft,1)),:);  % need to fft a scalar
+%     else
+%         X = fft(x(istart:iend,:),nfft);
+%     end
+%     Xs(:, :, k) = X;
+%     istart = istart + L;
 % end
 
-istart = 1;
-while istart <= nx
+numLoops = ceil(nx./L);
+for k = 1:numLoops
+    istart = (k-1)*L + 1;
+    
     iend = min(istart+L-1,nx);
     if (iend - istart) == 0
         X = x(istart(ones(nfft,1)),:);  % need to fft a scalar
     else
         X = fft(x(istart:iend,:),nfft);
     end
-    Y = ifft(X.*B);
-    yend = min(nx,istart+nfft-1);
-    y(istart:yend,:) = y(istart:yend,:) + Y(1:(yend-istart+1),:);
-    istart = istart + L;
+%     Xs(:, :, k) = X;
+    
+    Xblock = X; %Xs(:, :, k);
+    aux = repmat(Xblock, [1, 1, numOutputSignals]).*B;
+    aux = permute(sum(aux, 2), [1 3 2]);
+    Y = ifft(aux);
+    yend = min(nx, istart+nfft-1);
+    y(istart:yend, :) = y(istart:yend, :) + Y(1:(yend-istart+1),:);
 end
 
 if ~(any(imag(b(:))) || any(imag(x(:))))
 	y = real(y);
 end
 
-if (m == 1)&&(size(y,2) == 1)
-    y = y(:).';    % turn column back into a row
 end
 
 function y = fftfilt_original(b,x,nfft)
@@ -344,4 +360,4 @@ end
 if (m == 1)&&(size(y,2) == 1)
     y = y(:).';    % turn column back into a row
 end
-
+end

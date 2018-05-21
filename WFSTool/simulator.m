@@ -754,9 +754,13 @@ classdef simulator < handle
                         end
                     end
                 case 'time'
-                    [numReceivers, numSources, ~] = size(acousticPaths);
-                    [~, numSamples] = size(sourceCoefficients);
-                    acousticPaths = permute(acousticPaths, [1, 3, 2]); % Easier to use
+                    % These 3 lines are useful for the 1st and 2nd way, but
+                    % are not necessary for the 3rd way. The 3rd line is
+                    % not only not necessary, but also INCOMPATIBLE with
+                    % the 3rd way.
+%                     [numReceivers, numSources, ~] = size(acousticPaths);
+%                     [~, numSamples] = size(sourceCoefficients);
+%                     acousticPaths = permute(acousticPaths, [1, 3, 2]); % Easier to use
                     
 %                     % 1st way
 %                     t = tic;
@@ -771,24 +775,20 @@ classdef simulator < handle
 %                     end
 %                     t1 = toc(t);
                     
-                    % 2nd way.
-                    % It takes advantage of the fact that one source signal
-                    % serves for multiple receiver points. It's slightly
-                    % more efficient
-                    recSignals = zeros(numReceivers, numSamples);
-                    for s = 1:numSources
-                        recSignals = recSignals + fftfilt(acousticPaths(:, :, s)', sourceCoefficients(s, :)')'; % (numReceivers, numSamples)
-                    end
-                    
-%                     % 3rd way
+%                     % 2nd way.
+%                     % It takes advantage of the fact that one source signal
+%                     % serves for multiple receiver points. It's slightly
+%                     % more efficient
 %                     t = tic;
-%                     recSignals1 = zeros(numReceivers, numSamples);
-%                     for r = 1:numReceivers
-%                         recSign = zeros(numSources, numSamples);
-%                         recSign(s, :) = fftfilt(permue(acousticPaths(r, :, :), []), sourceCoefficients(s, :));
-%                         recSignals1(r, :) = sum(recSign, 1);
+%                     recSignals = zeros(numReceivers, numSamples);
+%                     for s = 1:numSources
+%                         recSignals = recSignals + fftfilt(acousticPaths(:, :, s)', sourceCoefficients(s, :)')'; % (numReceivers, numSamples)
 %                     end
 %                     t1 = toc(t);
+                    
+                    % 3rd way
+                    % The fastest way
+                    recSignals = fftfilt_modified(permute(acousticPaths, [3 2 1]), sourceCoefficients')';                         
                     
                     U = recSignals;
             end
