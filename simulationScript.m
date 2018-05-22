@@ -107,7 +107,7 @@ for rt = 1:numReverbTime
                                         
                     % Simulate only the noise source
                     obj.WFSToolObj.virtual = [false; false];
-                    obj.WFSToolObj.freqFilter = 1; % This line (¿and next line?) is necessary for technical issues.
+                    obj.WFSToolObj.freqFilter = 1; % This line (¿and next line?) is necessary for technical issues. ¿Is it?
 %                     obj.WFSToolObj.updateFiltersWFS();
                     obj.WFSToolObj.WFScalculation();
                     obj.WFSToolObj.simulate();
