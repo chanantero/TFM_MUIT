@@ -133,20 +133,12 @@ axWFS.YLabel.String = 'Signal (arbitrary units)';
 axWFS.Title.String = 'Received signal from the WFS array';
 
 
-% Why is the received signal from WFS different? The one received from the NS
+% Why is the received signal from WFS slightly different? The one received from the NS
 % is the same!
-wfsInd = 1;
-recInd = 1;
-[xInd, yInd] = ind2sub([length(mallado_x), length(mallado_y)], recInd);
-
-tAcPath = (0:numSampIR - 1)/fs;
-ax = axes(figure);
-plot(ax, tAcPath, h_array(:, wfsInd, xInd, yInd), tAcPath, permute(WFSacPathIR(recInd, wfsInd, :), [3 1 2]))
-plot(ax, tAcPath, h_array(:, wfsInd, xInd, yInd), tAcPath, permute(WFS_IR(recInd, :, wfsInd), [2 1 3]))
-
-h_array_reshape = mergeAndPermute( h_array, {[3 4], 2 1});
-isequal(WFSacPathIR, h_array_reshape) 
-% Los caminos acústicos son iguales!! Muy bien :D
+% Answer: the WFS filters are different. Some of your deltas are delayed
+% with respect the deltas of Miguel's code. This happens because I use the
+% function floor and he uses round to calculate the sample where de delta
+% will be located
 
 % Compare WFS filters
 tWFSfilt = (0:WFSfilterLength - 1)/fs;
@@ -164,114 +156,15 @@ obj.WFSToolObj.simulate();
 rec_signal2 = obj.WFSToolObj.simulField;
 recWFS_signals2 = rec_signal2 - recNS_signals;
 
-ax = axes(figure);
-plot(ax, t, d*recWFS_signals2(1,:), t, recWFS_signals(1,:))
-% La diferencia es muy poca, como era de esperar
-
 axWFS = axes(figure);
 plot(axWFS, t, recWFS_signals2(1,:), t, recWFS_signals_Miguel(1,:))
 axWFS.XLabel.String = 'Time (s)';
 axWFS.YLabel.String = 'Signal (arbitrary units)';
 axWFS.Title.String = 'Received signal from the WFS array';
 
-% Siguen sin ser iguales!!!
+% Conclussion: my way of doing it and Miguel's way are the same.
+% Hence, it is confirmed that the only difference between my code and his
+% code is that he uses another r0 and doesn't multiply by the loudspeaker
+% spearation.
 
-% [obj.WFSToolObj.scenarioObj.attenuations, an'] % The attenuations are the same
-
-% Extraigo parte del código de generamapa.m
-xsignal = -NSsignal';
-POT_ar=zeros(length(NSsignal), numMicro);
-WFSsignals = zeros(length(NSsignal), 96);
-nx = size(h_array, 3);
-ny = size(h_array, 4);
-for altavoz=1:length(activo_array)
-    cont=1;
-    xfsignal=filter(filtros_array(:,activo_array(altavoz)),1,xsignal);
-    WFSsignals(:, activo_array(altavoz)) = xfsignal;
-    for yy=1:ny
-        for xx=1:nx
-        POT_ar(:,cont)=POT_ar(:,cont)+filter(h_array(:,activo_array(altavoz),xx,yy),1,xfsignal);
-        cont=cont+1;
-        end
-    end
-end
-WFSsignals_ = [WFSsignals; zeros(length(x) - size(POT_ar, 1), 96)]';
-size(WFSsignals_)
-size(obj.WFSToolObj.WFSarrayCoefficient)
-
-ax = axes(figure);
-wfsInd = 96;
-plot(ax, t, WFSsignals_(wfsInd, :), t, obj.WFSToolObj.WFSarrayCoefficient(wfsInd, :))
-
-differ = WFSsignals' - obj.WFSToolObj.WFSarrayCoefficient(:, 1:44100);
-max(abs(differ(:)))
-% Las señales reproducidas por el WFS array son iguales!! ¿Por qué es el
-% resultado diferente entonces?
-
-obj.WFSToolObj.real = [false; false];
-obj.WFSToolObj.WFScalculation();
-obj.WFSToolObj.simulate();
-recWFS_signal_special = obj.WFSToolObj.simulField;
-
-axWFS = axes(figure);
-plot(axWFS, t, recWFS_signal_special(1,:), t, recWFS_signals_Miguel(1,:))
-axWFS.XLabel.String = 'Time (s)';
-axWFS.YLabel.String = 'Signal (arbitrary units)';
-axWFS.Title.String = 'Received signal from the WFS array';
-
-max(abs(recWFS_signal_special(:) - recWFS_signals(:)))
-% Son casi iguales, como debería de ser.
-% Sigo sin entender por qué el resultado es diferente
-
-% Voy a calcular la contribución de un solo altavoz a un solo micrófono
-% Extraigo parte del código de generamapa.m
-xsignal = -NSsignal';
-POT_ar_red = zeros(length(NSsignal), 96);
-nx = size(h_array, 3);
-ny = size(h_array, 4);
-for altavoz=1:length(activo_array)
-    xfsignal = filter(filtros_array(:,activo_array(altavoz)), 1, xsignal);
-    % max(abs(xfsignal' - obj.WFSToolObj.WFSarrayCoefficient(1, 1:44100)))
-
-    POT_ar_red(:, activo_array(altavoz)) = filter(h_array(:,activo_array(altavoz),1,1),1,xfsignal);
-end
-
-recSignals_red = fftfilt_modified(permute(WFSacPathIR(1, :, :), [3 2 1]), obj.WFSToolObj.WFSarrayCoefficient')';
-
-
-ax = axes(figure);
-plot(ax, t, recSignals_red, t, [sum(POT_ar_red, 2); zeros(length(t) - length(NSsignal), 1)])
-% Sí que da lo mismo así!!!!!!! No lo entiendo. ¿Cuál es la diferencia
-% respecto al bucle original?
-xsignal = -NSsignal';
-POT_ar2 = zeros(length(NSsignal), numMicro);
-nx = size(h_array, 3);
-ny = size(h_array, 4);
-for altavoz=1:length(activo_array)
-    cont=1;
-    xfsignal=filter(filtros_array(:,activo_array(altavoz)),1,xsignal);
-    for yy=1:ny
-        for xx=1:nx
-            POT_ar2(:,cont)=POT_ar2(:,cont)+filter(h_array(:,activo_array(altavoz),xx,yy),1,xfsignal);
-            cont=cont+1;
-        end
-    end
-end
-POT_ar2_ = [POT_ar2; zeros(length(t) - length(xsignal), numMicro)];
-
-isequal(POT_ar2, POT_ar)
-
-recSignals_lowLevel = fftfilt_modified(permute(WFSacPathIR, [3 2 1]), obj.WFSToolObj.WFSarrayCoefficient')';
-
-% s = whos;
-% bytes = [s.bytes];
-% names = {s.name};
-% [bytesSort, ind] = sort(bytes, 'descend');
-% bytesSort(1:10)
-
-ax = axes(figure);
-plot(ax, t, recSignals_lowLevel, t, [sum(POT_ar_red, 2); zeros(length(t) - length(NSsignal), 1)])
-plot(ax, t(1:44100), recWFS_signals2(1,1:44100), t(1:44100), POT_ar(:, 1))
-plot(axWFS, t, recWFS_signals2(1,:), t, recWFS_signals_Miguel(1,:))
-
-
+%% Analysis of the two attenuation calculations: mine and Miguel's
