@@ -134,12 +134,13 @@ while step >= 1
     if isempty(ind)
         shift = 0;
         return;
-    elseif ind == minLag || ind == maxLag
+    elseif ind == 1 || ind == length(lags)
         break;
     end
     
     lowLimit = lags(ind + 1);
     highLimit = lags(ind - 1);
+    
     step = floor((highLimit - lowLimit)*0.1);
 end
 

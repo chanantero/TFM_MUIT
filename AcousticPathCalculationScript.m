@@ -5,20 +5,27 @@
 r = recPositions + repmat(WFSarrayOffset, numMicro, 1); % Receiver position [x y z] (m)
 wfsPos = obj.WFSposition + repmat(WFSarrayOffset, obj.numWFS, 1);
 nsPos = NSpositions + repmat(WFSarrayOffset, numNSpos, 1);
-maxX = max([nsPos(:, 1); wfsPos(:, 1)]);
-maxY = max([nsPos(:, 2); wfsPos(:, 2)]);
-roomDim = [maxX+1 maxY+1 4];                % Room dimensions [x y z] (m)
 
-% Minimize the number of samples
-dist = zeros(numMicro, numNSpos);
-for ns = 1:numNSpos
-    dist(:, ns) = sqrt(sum((recPositions - repmat(NSpositions(ns, :), [numMicro, 1])).^2, 2));
+if ~predefRoomDim
+    maxX = max([nsPos(:, 1); wfsPos(:, 1)]);
+    maxY = max([nsPos(:, 2); wfsPos(:, 2)]);
+    roomDim = [maxX+1 maxY+1 4];                % Room dimensions [x y z] (m)
 end
-maxDist = max(dist(:));
-numSampIR = 2^ceil(log2(maxDist/c*fs)); % Number of samples
 
-WFSfilterLength = numSampIR*2;
-obj.WFSToolObj.filterWFS_length = WFSfilterLength;
+if ~predefNumSampIR
+    % Minimize the number of samples
+    dist = zeros(numMicro, numNSpos);
+    for ns = 1:numNSpos
+        dist(:, ns) = sqrt(sum((recPositions - repmat(NSpositions(ns, :), [numMicro, 1])).^2, 2));
+    end
+    maxDist = max(dist(:));
+    numSampIR = 2^ceil(log2(maxDist/c*fs)); % Number of samples
+end
+
+if ~predefWFSfilterLength
+    WFSfilterLength = numSampIR*2;
+    obj.WFSToolObj.filterWFS_length = WFSfilterLength;
+end
 
 if WFS_AcPath_previously_calculated
     WFS_IR = zeros(obj.numMicro, numSampIR, obj.numWFS, numReverbTime);

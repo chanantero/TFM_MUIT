@@ -11,7 +11,7 @@ if numQuat > 1 && numVec == 1
 
         M = quat2LinearTransformation(q(k, :));
         
-        n(k, :) = (M * r)';
+        n(k, :) = (M * r')';
         
     end
 

@@ -15,7 +15,7 @@ else
 end
 
 preDelay = max(freqFiltDelays);
-postDelay = numSampIR - 1 + max(freqFiltDelays) - 1;
+postDelay = numSampIR - 1 + max(freqFiltDelays);
 x = [zeros(numFreqs, preDelay), x, zeros(numFreqs, postDelay)];
 numSampSign = size(x, 2);
 
@@ -211,6 +211,7 @@ end
 
 %% Formatting of results
 
+if frequencyDomainActive
 % Make structure so we can visualize this
 s_time = repmat(obj.cancelResults(1), [numFreqFilters, numFreqs, numNSpos, numReverbTime]);
 s_freq = repmat(obj.cancelResults(1), [1, numFreqs, numNSpos, numReverbTime]);
@@ -256,4 +257,5 @@ s = [s_time; s_freq];
 for p = 1:numel(s)
     s(p).NScoef = [s(p).NSRcoef; s(p).NSVcoef];
     s(p).NSposition = [s(p).NSRposition; s(p).NSVposition];
+end
 end

@@ -35,7 +35,8 @@ centerY = (max(y) + min(y))/2;
 recPosition = [centerX, centerY, 0];
 
 % Positions of the noise source
-NSposition = [centerX + 5, centerY, 0];        
+NSposition = [centerX + 5, centerY, 0];    
+% NSposition = [2.3 0.1 1.5];
 
 durSign = 1; % Duration of signal
 t = (0:ceil(durSign*fs)-1)/fs;

@@ -13,11 +13,19 @@ obj.Fs = fs;
 % Frequency filter
 % obj.WFSToolObj.freqFilter = hTotal;
 numFreqFilters = numel(freqFilters);
-obj.WFSToolObj.filterWFS_length = WFSfilterLength;
+if ~exist('WFSfilterLength', 'var')
+    predefWFSfilterLength = false;
+else
+    obj.WFSToolObj.filterWFS_length = WFSfilterLength;
+end
 
 % Microphone positions
 obj.microPos = recPositions;
 numMicro = size(recPositions, 1);
+
+% WFS options
+obj.WFSToolObj.frequencyCorrection = frequencyCorrection; % Very important! We want to see what happens without correction
+obj.WFSToolObj.attenuationType = attenuationType;
 
 % NS positions
 numNSpos = size(NSpositions, 1);
@@ -25,9 +33,6 @@ numNSpos = size(NSpositions, 1);
 % Room characteristics and impulse responses
 Beta = beta(:) * [1 1 1 1 1 1];
 numReverbTime = length(beta);
-
-% WFS options
-obj.WFSToolObj.frequencyCorrection = frequencyCorrection; % Very important! We want to see what happens without correction
 
 % Simulation options
 if exist('automaticLengthModification', 'var')
@@ -40,6 +45,15 @@ if ~exist('predefSignals', 'var')
     predefSignals = false;
 end
 
+if ~exist('predefRoomDim', 'var')
+    predefSignals = false;
+end
+
+if ~exist('predefNumSampIR', 'var')
+    predefSignals = false;
+end
 if ~exist('saveSignals', 'var')
     saveSignals = false;
 end
+
+predefWFSfilterLength

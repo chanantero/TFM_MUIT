@@ -1,0 +1,64 @@
+Hola Rubén.
+
+Te adjunto los códigos que he venido usando yo para simular el WFS para ANC.
+
+El script ejemplocarwfs es un ejemplo de la configuración del sistema 
+para realizar todos los pasos de la simulación.
+
+Tienes que definir la frecuencia de muestreo y la velocidad de 
+propagación del sonido. A parte de eso, las tres coordenadas de las 
+fuentes de ruido que quieras simular (la referencia (0,0,0) sería la 
+esquina del suelo de la parte donde está la puerta en la sala).
+
+El script llama a una función que calcula todas las respuestas al 
+impulso dentro de un mallado de puntos y a una altura determinada, tanto 
+de los altavoces del array como de las fuentes de ruido. Esta función se 
+llama SalaGtac. Esta función hace uso del mex rir_generator y está 
+comentada (no creo que tengas problema en entenderla).
+
+Con la geometría del array (que devuelve la función anterior), se invoca 
+al código que genera las funciones o filtros (o simplemente amplitudes y 
+retardos) que sintetizan el WFS (y que se llama WFS_DrivingSignals), y 
+que ya conoces porque es la función que en su momento manejó Boefi.
+
+Después se calcula la potencia de la señal (bueno, en realidad es el 
+valor instantáneo del campo acústico) en cada punto de monitorización, 
+sumando las señales reales (definidas en el código en la variable x) y 
+las virtuales (definidas en código por la variable xv). En teoría, si no 
+hubiera que hacer correcciones de ningún tipo, la una debería ser la 
+otra con un cambio de signo para realizar la cancelación.  Esta función 
+se llama generamapa.
+
+Por último, se representa la evolución temporal de la potencia de la 
+presión acústica realizando un enventanado en el tiempo con un solape 
+definido en las variables dv y desp. Esto se hace en la función dibujapot.
+
+
+Puedes usar las funciones por separado, pero creo que lo más cómodo es 
+que uses la plantilla del archivo ejemplocarwfs y la modifiques para 
+llamar a todas las funciones de forma ordenada. Como lo que más cuesta 
+es el cálculo de las respuestas al impulso, si vas a realizar diferentes 
+experimentos sobre una misma distribución de altavoces, lo mejor es que 
+almacenes las respuestas al impulso en alguna variable de matlab y 
+luego, en vez de volver a llamara a la función SalaGtac, las cargues 
+directamente en memoria.
+
+Mira a ver cual es la diferencia entre lo que hay en estos códigos y los 
+tuyos, con objeto a entender por qué nos salen cosas diferentes.
+
+Si quieres introducir algún filtrado adicional, puedes hacerlo en la 
+función WFS_DrivingSignals (de hecho, está implementado el cálculo del 
+filtro teórico pero luego no se aplica, ya que se sustituye por un 
+retardo con la amplitud correspondiente).
+
+Ya me dices algo.
+
+Ánimo!!
+
+Un saludo.
+
+
+
+
+
+

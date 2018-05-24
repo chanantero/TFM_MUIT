@@ -85,6 +85,9 @@ classdef WFSToolSimple < handle
         indDelayFreqFilter % It is determined by the freqFilter. Users don't need to use it
         indDelayWFSFilters
         
+        % WFS calculation options
+        attenuationType
+        
         % Microphones
         receiverPosition
         receiverOrientation
@@ -248,7 +251,7 @@ classdef WFSToolSimple < handle
         end
         
         function set.WFSarrayOrientation(obj, value)
-            obj.scenarioObj.loudspeakersOrientation = simulator.rotVec2BroadsideVec(value);
+            obj.scenarioObj.setLoudspeakerOrientation(simulator.rotVec2BroadsideVec(value));
             obj.simulTheo.sourceOrientations(obj.WFSarrayIndSimulTheo, :) = value;
         end
         
@@ -300,6 +303,15 @@ classdef WFSToolSimple < handle
             else
                 indDelayWFSFilters = 0;
             end
+        end
+        
+        % WFS calculation options
+        function attenuationType = get.attenuationType(obj)
+            attenuationType = obj.scenarioObj.attenuationType;
+        end
+        
+        function set.attenuationType(obj, value)
+            obj.scenarioObj.attenuationType = value;
         end
         
         % Microphones
@@ -1636,7 +1648,6 @@ classdef WFSToolSimple < handle
         end
         
         function attenuations = getAttenuationsWFS(obj, indices)
-            
             activeSources = find(obj.virtual | obj.real);
             [isActive, indScenario] = ismember(indices, activeSources);
             
@@ -1644,12 +1655,12 @@ classdef WFSToolSimple < handle
             attenuations(:, isActive) = obj.scenarioObj.attenuations(:, indScenario(isActive));
             
             attenuations = attenuations * obj.WFSarrayAdjacentSeparation;
-
+            
             if obj.frequencyCorrection
                 % Adjust attenuation according to the 2.5D Rayleigh I integral
                 % coefficient that depends on frequency
                 attenuations = attenuations...
-                .* repmat(sqrt(1i * obj.frequency(indices)'/obj.c ), obj.numSourcesWFSarray, 1);
+                    .* repmat(sqrt(1i * obj.frequency(indices)'/obj.c ), obj.numSourcesWFSarray, 1);
             end
             
         end
@@ -1679,7 +1690,7 @@ classdef WFSToolSimple < handle
             indDelta = floor(delays*obj.Fs) + 1;
             
             freqFilterLength = numel(obj.freqFilter);
-            minNsFilt = max(floor(delays(:)*obj.Fs)) + 1 + freqFilterLength;
+            minNsFilt = max(floor(delays(atten ~= 0)*obj.Fs)) + 1 + freqFilterLength;
             if isempty(obj.filterWFS_length)
                 NsFilt = minNsFilt;
             else

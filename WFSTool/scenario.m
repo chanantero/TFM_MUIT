@@ -21,6 +21,13 @@ classdef scenario < handle
         
         delays
         attenuations
+        
+    end
+    
+    properties
+               
+        % Options
+        attenuationType = categorical({'Ruben'}, {'Ruben', 'Miguel'}, {'Ruben', 'Miguel'}, 'Protected', true); % Defines what algorithm will be use to calculate the attenuations
     end
     
     properties(Dependent)
@@ -51,6 +58,10 @@ classdef scenario < handle
                 
         function numLoudspeakers = get.numLoudspeakers(obj)
             numLoudspeakers = size(obj.loudspeakersPosition, 1);
+        end
+        
+        function set.attenuationType(obj, value)
+            obj.attenuationType(1) = value;
         end
     end
     
@@ -182,6 +193,15 @@ classdef scenario < handle
             
             obj.updateDelaysAndAttenuations();
 
+        end
+        
+        function setLoudspeakerOrientation(obj, loudspeakerOrientation, indices)
+            if nargin < 3
+                indices = 1:obj.numLoudspeakers;
+            end
+            
+            obj.loudspeakersOrientation(indices, :) = loudspeakerOrientation;
+            obj.updateDelaysAndAttenuations();
         end
         
         function setScenario(obj, sourcesPosition, receiversPosition, loudspeakersPosition, loudspeakersOrientation, roomPosition)
@@ -435,7 +455,11 @@ classdef scenario < handle
         
         function attenuation = calcPhysicalAttenuation(obj, distances, cosAlfa)
             if obj.numLoudspeakers == 96
-                r0 = 1.44*(0.5+cosd(45));
+                if obj.attenuationType == 'Ruben'
+                    r0 = 1.44*(0.5+cosd(45));
+                elseif obj.attenuationType == 'Miguel'
+                    r0 = 1.28*2;
+                end
                 A = sqrt(r0./(r0+distances));
                 attenuation = A.*cosAlfa./sqrt(distances);
             else
