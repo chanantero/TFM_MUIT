@@ -1694,8 +1694,7 @@ classdef WFSToolSimple < handle
             if isempty(obj.filterWFS_length)
                 NsFilt = minNsFilt;
             else
-                NsFilt = max(obj.filterWFS_length, minNsFilt);
-                
+                NsFilt = max(obj.filterWFS_length, minNsFilt);                
             end
             filtersIR = zeros(obj.numSourcesWFSarray, obj.numNoiseSources, NsFilt);
             for ns = 1:obj.numNoiseSources

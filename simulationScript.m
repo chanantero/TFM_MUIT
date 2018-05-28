@@ -211,10 +211,12 @@ end
 
 %% Formatting of results
 
-if frequencyDomainActive
+obj.domain = 'frequency';
+sbase = obj.generateBasicExportStructure();
+
 % Make structure so we can visualize this
-s_time = repmat(obj.cancelResults(1), [numFreqFilters, numFreqs, numNSpos, numReverbTime]);
-s_freq = repmat(obj.cancelResults(1), [1, numFreqs, numNSpos, numReverbTime]);
+s_time = repmat(sbase, [numFreqFilters, numFreqs, numNSpos, numReverbTime]);
+s_freq = repmat(sbase, [1, numFreqs, numNSpos, numReverbTime]);
 for rt = 1:numReverbTime
     for f = 1:numFreqs
         for ns = 1:numNSpos
@@ -249,7 +251,7 @@ for rt = 1:numReverbTime
                 );
         end
     end
-end
+    
 
 s = [s_time; s_freq]; 
 

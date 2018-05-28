@@ -26,6 +26,7 @@ disp('Calculando la configuración del array...')
 % Definimoa la señal de ruido
 x=sin(2*pi*0.01*[0:1999])';
 %x=randn(2000,1);
+realFreq = 0.01*fs;
 
 % Definimos la señal de la fuente virtual;
 xv=-0.0957*x;
@@ -46,3 +47,9 @@ disp('Calculando las señales en los puntos de control...')
 
 disp('Dibujando el mapa de potencias');
 dibujapot(POT_ad+POT_ar ,L, alt, fte(fuente_ruido,:), mallado_x, mallado_y,dv,despv);
+
+% 
+numSamp = size(POT_ad, 1);
+t = (0:numSamp - 1)/fs;
+ax = axes(figure);
+plot(ax, t, POT_ad(:, 1), t, POT_ar(:, 1))
