@@ -40,13 +40,13 @@ xv(1:999)=0; % empieza a actuar en la muestra 1000;
 disp('Calculando las señales en los puntos de control...')
 [POT_ad,POT_ar]=generamapa(xv,h_array,filtros_array,activo_array,x,h_ad_sources(:,fuente_ruido,:,:));
 
-% Representamos el mapa de presiones
- dv=50; % Duración de la ventana para promediar al potencia
- despv=25;  % Desplazamiento del enventanado para realizar el calculo de la
-% potencia
-
-disp('Dibujando el mapa de potencias');
-dibujapot(POT_ad+POT_ar ,L, alt, fte(fuente_ruido,:), mallado_x, mallado_y,dv,despv);
+% % Representamos el mapa de presiones
+%  dv=50; % Duración de la ventana para promediar al potencia
+%  despv=25;  % Desplazamiento del enventanado para realizar el calculo de la
+% % potencia
+% 
+% disp('Dibujando el mapa de potencias');
+% dibujapot(POT_ad+POT_ar ,L, alt, fte(fuente_ruido,:), mallado_x, mallado_y,dv,despv);
 
 % 
 numSamp = size(POT_ad, 1);

@@ -55,5 +55,3 @@ end
 if ~exist('saveSignals', 'var')
     saveSignals = false;
 end
-
-predefWFSfilterLength

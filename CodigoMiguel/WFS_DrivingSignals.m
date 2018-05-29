@@ -145,7 +145,9 @@ tmax=round(abs(max(tn(parray_act))));
 sn=1;
 paux_sign=conv(sn,H_1); %length=length(sn)+length(h)-1
 delta=zeros(512-ord,1);
-pout_sign_aux=zeros(512,nalt);
+maxDist = max(r);
+order = 2^nextpow2(ceil(maxDist/c*fs));
+pout_sign_aux=zeros(order,nalt);
 for i=parray_act
     paux_out=paux_sign*an(i);
     delta=zeros(512-ord,1);
