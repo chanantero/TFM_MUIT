@@ -18,6 +18,7 @@ if ~exist('WFSfilterLength', 'var')
 else
     obj.WFSToolObj.filterWFS_length = WFSfilterLength;
 end
+numFreqs = numel(freqs);
 
 % Microphone positions
 obj.microPos = recPositions;

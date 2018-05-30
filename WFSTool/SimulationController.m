@@ -680,6 +680,7 @@ classdef SimulationController < handle
                 'Frequency', obj.frequency...
                 );
         end
+        
     end
     
     methods(Static)
@@ -716,6 +717,13 @@ classdef SimulationController < handle
             s.Frequency = p.Results.Frequency;
             s.Type = p.Results.OptimType;
             s.OptimizationOptions = p.Results.OptimOptions;
+        end
+        
+        function s = addCancellationParametersToStructure(s)
+            for k = 1:numel(s)
+                s(k).corrFactIndividual = -s(k).recNScoef./s(k).recWFScoef;
+                s(k).corrFactGlobal = -s(k).recWFScoef\s(k).recNScoef;          
+            end
         end
     end
     

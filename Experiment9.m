@@ -225,8 +225,8 @@ y2 = roomDim(2) - centreY;
 alphaMax = pi + asin(y1/max(radius)) - deg2rad(1);
 alphaMin = pi - asin(y2/max(radius)) + deg2rad(1);
 alpha = linspace(alphaMin, alphaMax, numPointsPerArc)';
-x = centreX + repmat(radius, numPointsPerQuarter, 1).*repmat(cos(alpha), 1, numArcs);
-y = centreY + repmat(radius, numPointsPerQuarter, 1).*repmat(sin(alpha), 1, numArcs);
+x = centreX + repmat(radius, numPointsPerArc, 1).*repmat(cos(alpha), 1, numArcs);
+y = centreY + repmat(radius, numPointsPerArc, 1).*repmat(sin(alpha), 1, numArcs);
 NSpositions = [x(:), y(:), zPos*ones(numel(x), 1)];
 
 WFS_AcPath_previously_calculated = true;
@@ -249,165 +249,22 @@ recNS_signals_Rub = recNS_signals;
 assert(isequal(recNS_signals_Mig, recNS_signals_Rub), 'Signals from NS should be the same')
 recNS_time = recNS_signals_Mig;
 
-numSamp = size(recNS_time, 2);
-t = (0:numSamp-1)/fs;
-f = (0:numSamp-1)*fs/numSamp;
-ind = f >= 0 & f <= 1000;
-fsel = f(ind);
-
-% Perform FFT
-recNS_freq = fft(permute(recNS_time, [2 1 3 4]));
-recNS_freq = recNS_freq(ind, :, :, :);
-
     % Rubén attenuation
 recWFS_time_Rub = rec_signals_Rub - recNS_time;
-recWFS_freq_Rub = fft(permute(recWFS_time_Rub, [2 1 3 4])); %/fs;
-recWFS_freq_Rub = recWFS_freq_Rub(ind, :, :, :);
-corrFact_Rub = -recNS_freq./recWFS_freq_Rub;
+[corrFact_Rub, corrFactGlob_Rub, axAbsIndRub, axPhaseIndRub, axAbsGlobRub, axPhaseGlobRub] = calculateTransferFunction(recWFS_time_Rub, -recNS_time, fs, {'minimizDim', 'time', 'reverb', 'NSpos'});
 
     % Miguel's attenuation
 recWFS_time_Mig = rec_signals_Mig - recNS_time;
-recWFS_freq_Mig = fft(permute(recWFS_time_Mig, [2 1 3 4])); %/fs;
-recWFS_freq_Mig = recWFS_freq_Mig(ind, :, :, :);
-corrFact_Mig = -recNS_freq./recWFS_freq_Mig;
+[corrFact_Mig, corrFactGlob_Mig, axAbsIndMig, axPhaseIndMig, axAbsGlobMig, axPhaseGlobMib] = calculateTransferFunction(recWFS_time_Mig, -recNS_time, fs, {'minimizDim', 'time', 'reverb', 'NSpos'});
 
 % Graphs
-% Histograms
-freqEdges = 10:10:1000;
-absCorrFactEdges = 0:0.1:4;
-phaseCorrFactEdges = -10:90;
+domain = [0 1];
+visualObj = animation({fsel, 1:numMicro, 1:numReverbTime, 1:numNSpos},...
+    {abs(corrFact_Rub)}, {'Frequency', 'Microphone', 'Reverb. Time index', 'NS position index'}, {'Cancellation'}, [], []);
 
-freqMat_ind = pointWiseExtend(fsel', corrFact_Rub);
-N_abs_Rub = histcounts2(freqMat_ind, abs(corrFact_Rub), freqEdges, absCorrFactEdges);
-N_phase_Rub = histcounts2(freqMat_ind, rad2deg(angle(corrFact_Rub)), freqEdges, phaseCorrFactEdges);
-N_abs_Mig = histcounts2(freqMat_ind, abs(corrFact_Mig), freqEdges, absCorrFactEdges);
-N_phase_Mig = histcounts2(freqMat_ind, rad2deg(angle(corrFact_Mig)), freqEdges, phaseCorrFactEdges);
-
-Nnorm_abs_Rub = N_abs_Rub./repmat(sum(N_abs_Rub, 2), [1, size(N_abs_Rub, 2)]);
-Nnorm_phase_Rub = N_phase_Rub./repmat(sum(N_phase_Rub, 2), [1, size(N_phase_Rub, 2)]);
-Nnorm_abs_Mig = N_abs_Mig./repmat(sum(N_abs_Mig, 2), [1, size(N_abs_Mig, 2)]);
-Nnorm_phase_Mig = N_phase_Mig./repmat(sum(N_phase_Mig, 2), [1, size(N_phase_Mig, 2)]);
-
-freqs_aux = 0:1000;
-correctFactTheo = sqrt(1i * freqs_aux/c);
-
-axAbsIndRub = axes(figure);
-C = zeros(length(freqEdges), length(absCorrFactEdges));
-C(1:end-1, 1:end-1) = Nnorm_abs_Rub;
-pcolor(axAbsIndRub, freqEdges, absCorrFactEdges, C');
-axAbsIndRub.Title.String = '|\Psi_{ind}| for individual cancellation. (A).';
-axAbsIndRub.XLabel.String = 'Frequency (Hz)';
-axAbsIndRub.YLabel.String = '|\Psi_{ind}|';
-colorbar
-axAbsIndRub.NextPlot = 'Add';
-plot(axAbsIndRub, freqs_aux, abs(correctFactTheo), 'r', 'LineWidth', 4);
-
-axPhaseIndRub = axes(figure);
-C = zeros(length(freqEdges), length(phaseCorrFactEdges));
-C(1:end-1, 1:end-1) = Nnorm_phase_Rub;
-pcolor(axPhaseIndRub, freqEdges, phaseCorrFactEdges, C');
-axPhaseIndRub.Title.String = 'angle(\Psi_{ind}) for individual cancellation. (A).';
-axPhaseIndRub.XLabel.String = 'Frequency (Hz)';
-axPhaseIndRub.YLabel.String = 'angle(\Psi_{ind}) (º)';
-colorbar
-axPhaseIndRub.NextPlot = 'Add';
-plot(axPhaseIndRub, freqs_aux, rad2deg(angle(correctFactTheo)), 'r', 'LineWidth', 4);
-
-axAbsIndMig = axes(figure);
-C = zeros(length(freqEdges), length(absCorrFactEdges));
-C(1:end-1, 1:end-1) = Nnorm_abs_Mig;
-pcolor(axAbsIndMig, freqEdges, absCorrFactEdges, C');
-axAbsIndMig.Title.String = '|\Psi_{ind}| for individual cancellation. (B).';
-axAbsIndMig.XLabel.String = 'Frequency (Hz)';
-axAbsIndMig.YLabel.String = '|\Psi_{ind}|';
-colorbar
-axAbsIndMig.NextPlot = 'Add';
-plot(axAbsIndMig, freqs_aux, abs(correctFactTheo), 'r', 'LineWidth', 4);
-
-axPhaseIndMig = axes(figure);
-C = zeros(length(freqEdges), length(phaseCorrFactEdges));
-C(1:end-1, 1:end-1) = Nnorm_phase_Mig;
-pcolor(axPhaseIndMig, freqEdges, phaseCorrFactEdges, C');
-axPhaseIndMig.Title.String = 'angle(\Psi_{ind}) for individual cancellation. (B).';
-axPhaseIndMig.XLabel.String = 'Frequency (Hz)';
-axPhaseIndMig.YLabel.String = 'angle(\Psi_{ind}) (º)';
-colorbar
-axPhaseIndMig.NextPlot = 'Add';
-plot(axPhaseIndMig, freqs_aux, rad2deg(angle(correctFactTheo)), 'r', 'LineWidth', 4);
-
-% Global cancellation
-corrFactGlob_Rub = zeros(length(fsel), numNSpos);
-corrFactGlob_Mig = zeros(length(fsel), numNSpos);
-for f_ind = 1:length(fsel)
-for ns = 1:numNSpos
-    nscoef = permute(recNS_freq(f_ind, :, 1, ns), [2, 1]);
-    
-    wfscoefRub = permute(recWFS_freq_Rub(f_ind, :, 1, ns), [2 1]);
-    corrFactGlob_Rub(f_ind, ns) = wfscoefRub\(-nscoef);
-    
-    wfscoefMig = permute(recWFS_freq_Mig(f_ind, :, 1, ns), [2 1]);
-    corrFactGlob_Mig(f_ind, ns) = wfscoefMig\(-nscoef);
-end
-end
-
-freqMat_ind = pointWiseExtend(fsel', corrFactGlob_Rub);
-N_abs_Glob_Rub = histcounts2(freqMat_ind, abs(corrFactGlob_Rub), freqEdges, absCorrFactEdges);
-N_phase_Glob_Rub = histcounts2(freqMat_ind, rad2deg(angle(corrFactGlob_Rub)), freqEdges, phaseCorrFactEdges);
-N_abs_Glob_Mig = histcounts2(freqMat_ind, abs(corrFactGlob_Mig), freqEdges, absCorrFactEdges);
-N_phase_Glob_Mig = histcounts2(freqMat_ind, rad2deg(angle(corrFactGlob_Mig)), freqEdges, phaseCorrFactEdges);
-
-Nnorm_abs_Glob_Rub = N_abs_Glob_Rub./repmat(sum(N_abs_Glob_Rub, 2), [1, size(N_abs_Glob_Rub, 2)]);
-Nnorm_phase_Glob_Rub = N_phase_Glob_Rub./repmat(sum(N_phase_Glob_Rub, 2), [1, size(N_phase_Glob_Rub, 2)]);
-Nnorm_abs_Glob_Mig = N_abs_Glob_Mig./repmat(sum(N_abs_Glob_Mig, 2), [1, size(N_abs_Glob_Mig, 2)]);
-Nnorm_phase_Glob_Mig = N_phase_Glob_Mig./repmat(sum(N_phase_Glob_Mig, 2), [1, size(N_phase_Glob_Mig, 2)]);
-
-axAbsIndRubGlob = axes(figure);
-C = zeros(length(freqEdges), length(absCorrFactEdges));
-C(1:end-1, 1:end-1) = Nnorm_abs_Glob_Rub;
-pcolor(axAbsIndRubGlob, freqEdges, absCorrFactEdges, C');
-axAbsIndRubGlob.Title.String = '|\Psi_{ind}| for global cancellation. (A).';
-axAbsIndRubGlob.XLabel.String = 'Frequency (Hz)';
-axAbsIndRubGlob.YLabel.String = '|\Psi_{ind}|';
-colorbar
-axAbsIndRubGlob.NextPlot = 'Add';
-plot(axAbsIndRubGlob, freqs_aux, abs(correctFactTheo), 'r', 'LineWidth', 4);
-
-axPhaseIndRub = axes(figure);
-C = zeros(length(freqEdges), length(phaseCorrFactEdges));
-C(1:end-1, 1:end-1) = Nnorm_phase_Glob_Rub;
-pcolor(axPhaseIndRub, freqEdges, phaseCorrFactEdges, C');
-axPhaseIndRub.Title.String = 'angle(\Psi_{ind}) for global cancellation. (A).';
-axPhaseIndRub.XLabel.String = 'Frequency (Hz)';
-axPhaseIndRub.YLabel.String = 'angle(\Psi_{ind}) (º)';
-colorbar
-axPhaseIndRub.NextPlot = 'Add';
-plot(axPhaseIndRub, freqs_aux, rad2deg(angle(correctFactTheo)), 'r', 'LineWidth', 4);
-
-axAbsIndMig = axes(figure);
-C = zeros(length(freqEdges), length(absCorrFactEdges));
-C(1:end-1, 1:end-1) = Nnorm_abs_Glob_Mig;
-pcolor(axAbsIndMig, freqEdges, absCorrFactEdges, C');
-axAbsIndMig.Title.String = '|\Psi_{ind}| for global cancellation. (B).';
-axAbsIndMig.XLabel.String = 'Frequency (Hz)';
-axAbsIndMig.YLabel.String = '|\Psi_{ind}|';
-colorbar
-axAbsIndMig.NextPlot = 'Add';
-plot(axAbsIndMig, freqs_aux, abs(correctFactTheo), 'r', 'LineWidth', 4);
-
-axPhaseIndMig = axes(figure);
-C = zeros(length(freqEdges), length(phaseCorrFactEdges));
-C(1:end-1, 1:end-1) = Nnorm_phase_Glob_Mig;
-pcolor(axPhaseIndMig, freqEdges, phaseCorrFactEdges, C');
-axPhaseIndMig.Title.String = 'angle(\Psi_{ind}) for global cancellation. (B).';
-axPhaseIndMig.XLabel.String = 'Frequency (Hz)';
-axPhaseIndMig.YLabel.String = 'angle(\Psi_{ind}) (º)';
-colorbar
-axPhaseIndMig.NextPlot = 'Add';
-plot(axPhaseIndMig, freqs_aux, rad2deg(angle(correctFactTheo)), 'r', 'LineWidth', 4);
-
-%% D) Multiple NS positions not limited by room dimension, time and frequency processing
+%% D) Multiple NS positions not limited by room dimension. Use time and frequency processing
 % Positions of the noise source
-% Quarter of a circle
+% Arc of circle
 numPointsPerArc = 6;
 radius = [5 7.5 10];
 numArcs = numel(radius);
@@ -418,8 +275,8 @@ centreY = (max(yOctagon) + min(yOctagon))/2;
 alphaMax = pi/2;
 alphaMin = 0;
 alpha = linspace(alphaMin, alphaMax, numPointsPerArc)';
-x = centreX + repmat(radius, numPointsPerQuarter, 1).*repmat(cos(alpha), 1, numArcs);
-y = centreY + repmat(radius, numPointsPerQuarter, 1).*repmat(sin(alpha), 1, numArcs);
+x = centreX + repmat(radius, numPointsPerArc, 1).*repmat(cos(alpha), 1, numArcs);
+y = centreY + repmat(radius, numPointsPerArc, 1).*repmat(sin(alpha), 1, numArcs);
 NSpositions = [x(:), y(:), zPos*ones(numel(x), 1)];
 
 WFS_AcPath_previously_calculated = true;
@@ -437,6 +294,130 @@ SetupParametersScript;
 simulationScript;
 rec_signals_Rub = rec_signals;
 recNS_signals_Rub = recNS_signals;
+
+% Analysis
+assert(isequal(recNS_signals_Mig, recNS_signals_Rub), 'Signals from NS should be the same')
+recNS_time = recNS_signals_Mig;
+
+    % Rubén attenuation
+recWFS_time_Rub = rec_signals_Rub - recNS_time;
+[corrFact_Rub, corrFactGlob_Rub, fsel, axAbsIndRub, axPhaseIndRub, axAbsGlobRub, axPhaseGlobRub] = calculateTransferFunction(recWFS_time_Rub, -recNS_time, fs, {'minimizDim', 'time', 'reverb', 'NSpos'});
+axAbsIndRub.Parent.Name = 'CorrFact Ind Rub Abs. Chirp.';
+axPhaseIndRub.Parent.Name = 'CorrFact Ind Rub Phase. Chirp';
+axAbsGlobRub.Parent.Name = 'CorrFact Glob Rub Abs. Chirp';
+axPhaseGlobRub.Parent.Name = 'CorrFact Glob Rub Phase. Chirp';
+axPhaseIndRub.YLim = [0 50];
+axPhaseGlobRub.YLim = [0 50];
+
+    % Miguel's attenuation
+recWFS_time_Mig = rec_signals_Mig - recNS_time;
+[corrFact_Mig, corrFactGlob_Mig, ~, axAbsIndMig, axPhaseIndMig, axAbsGlobMig, axPhaseGlobMib] = calculateTransferFunction(recWFS_time_Mig, -recNS_time, fs, {'minimizDim', 'time', 'reverb', 'NSpos'});
+axAbsIndMig.Parent.Name = 'CorrFact Ind Mig Abs. Chirp';
+axPhaseIndMig.Parent.Name = 'CorrFact Ind Mig Phase. Chirp';
+axAbsGlobMig.Parent.Name = 'CorrFact Glob Mig Abs. Chirp';
+axPhaseGlobMig.Parent.Name = 'CorrFact Glob Mig Phase. Chirp';
+axPhaseIndMig.YLim = [0 50];
+axPhaseGlobMig.YLim = [0 50];
+
+% Now simulate in the frequency domain
+timeDomainActive = false;
+fakeTimeProcessing = false;
+frequencyDomainActive = true;
+saveSignals = false;
+freqs = fsel;
+
+SetupParametersScript
+AcousticPathCalculationScript
+
+attenuationType = 'Miguel';
+SetupParametersScript
+simulationScript;
+sMig = s;
+
+% dimensionOrder = {'domain', 'frequency', 'NSposition', 'ReverbTime'};
+% dataStruct = struct();
+% dataStruct.domain = {'frequency', 'time'};
+% dataStruct.frequency = freqs;
+% dataStruct.NSposition = NSpositions;
+% dataStruct.ReverbTime = beta;
+% dataStruct.dimensionOrder = dimensionOrder;
+% dataStruct.data = sMig;
+% dataStruct.recPositions = recPositions;
+% 
+% save([dataPathName, 'Experiment9sMig', ID, '.mat'], 'dataStruct')
+
+
+attenuationType = 'Ruben';
+SetupParametersScript;
+simulationScript;
+sRub = s;
+
+% dimensionOrder = {'domain', 'frequency', 'NSposition', 'ReverbTime'};
+% dataStruct = struct();
+% dataStruct.domain = {'frequency', 'time'};
+% dataStruct.frequency = freqs;
+% dataStruct.NSposition = NSpositions;
+% dataStruct.ReverbTime = beta;
+% dataStruct.dimensionOrder = dimensionOrder;
+% dataStruct.data = sMig;
+% dataStruct.recPositions = recPositions;
+% 
+% save([dataPathName, 'Experiment9sRub', ID, '.mat'], 'dataStruct')
+
+% Calculate individual and global correction factors
+sMigFreq = sMig(2, :, :, :);
+sMigFreq = SimulationController.addCancellationParametersToStructure(sMigFreq);
+
+corrFactGlobalMig = zeros(size(sMigFreq)); % Individual correction factor
+corrFactGlobalMig(:) = [sMigFreq.corrFactGlobal];
+
+corrFactIndMig = zeros([numMicro, size(sMigFreq)]); % Individual correction factor
+corrFactIndMig(:) = [sMigFreq.corrFactIndividual];
+corrFactIndMig = permute(corrFactIndMig, [2:ndims(s) + 1, 1]);
+
+sRubFreq = sRub(2, :, :, :);
+sRubFreq = SimulationController.addCancellationParametersToStructure(sRubFreq);
+
+corrFactGlobalRub = zeros(size(sMigFreq)); % Individual correction factor
+corrFactGlobalRub(:) = [sMigFreq.corrFactGlobal];
+
+corrFactIndRub = zeros([numMicro, size(sMigFreq)]); % Individual correction factor
+corrFactIndRub(:) = [sMigFreq.corrFactIndividual];
+corrFactIndRub = permute(corrFactIndRub, [2:ndims(s) + 1, 1]);
+
+% % Or your can do 
+% corrFactInd2 = [sMigFreq.corrFactIndividual];
+% corrFactInd2 = mergeAndPermute(corrFactInd2, {4, 1:ndims(sMigFreq)}, true, [size(s), numMicro]);
+
+% Hisgoram
+absCorrFactEdges = 0:0.1:4;
+phaseCorrFactEdges = -10:90;
+
+axAbsIndMig = histogram2D( abs(corrFactIndMig), 2, freqs, [], absCorrFactEdges );
+axPhaseIndMig = histogram2D( rad2deg(angle(corrFactIndMig)), 2, freqs, [], phaseCorrFactEdges );
+axPhaseIndMig.YLim = [0 50];
+
+axAbsGlobMig = histogram2D( abs(corrFactGlobalMig), 2, freqs, [], absCorrFactEdges );
+axPhaseGlobMig = histogram2D( rad2deg(angle(corrFactGlobalMig)), 2, freqs, [], phaseCorrFactEdges );
+axPhaseGlobMig.YLim = [0 50];
+
+axAbsIndMig.Parent.Name = 'CorrFact Ind Mig Abs. Freq processing.';
+axPhaseIndMig.Parent.Name = 'CorrFact Ind Mig Phase. Freq processing.';
+axAbsGlobMig.Parent.Name = 'CorrFact Glob Mig Abs. Freq processing.';
+axPhaseGlobMig.Parent.Name = 'CorrFact Glob Mig Phase. Freq processing.';
+
+axAbsIndRub = histogram2D( abs(corrFactIndRub), 2, freqs, [], absCorrFactEdges );
+axPhaseIndRub = histogram2D( rad2deg(angle(corrFactIndRub)), 2, freqs, [], phaseCorrFactEdges );
+axPhaseInd.YLim = [0 50];
+
+axAbsGlobRub = histogram2D( abs(corrFactGlobalRub), 2, freqs, [], absCorrFactEdges );
+axPhaseGlobRub = histogram2D( rad2deg(angle(corrFactGlobalRub)), 2, freqs, [], phaseCorrFactEdges );
+axPhaseGlob.YLim = [0 50];
+
+axAbsIndRub.Parent.Name = 'CorrFact Ind Rub Abs. Freq processing.';
+axPhaseIndRub.Parent.Name = 'CorrFact Ind Rub Phase. Freq processing.';
+axAbsGlobRub.Parent.Name = 'CorrFact Glob Rub Abs. Freq processing.';
+axPhaseGlobRub.Parent.Name = 'CorrFact Glob Rub Phase. Freq processing.';
 
 
 %% E) Use even Miguel's script parameters and processing, but with a chirp signal

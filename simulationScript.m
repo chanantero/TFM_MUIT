@@ -7,17 +7,19 @@ end
 phaseShifts = -freqFiltDelays/fs * 2*pi*freqs;
 
 % Signals
-if ~predefSignals
-    t = (0:ceil(durSign*obj.Fs)-1)/obj.Fs;   
-    x = obj.amplitude(1) * cos(2*pi*freqs(:)*t + obj.phase(1));
-else
-    x = NSsignal;
+if timeDomainActive && ~fakeTimeProcessing
+    if ~predefSignals
+        t = (0:ceil(durSign*obj.Fs)-1)/obj.Fs;
+        x = obj.amplitude(1) * cos(2*pi*freqs(:)*t + obj.phase(1));
+    else
+        x = NSsignal;
+    end
+    
+    preDelay = max(freqFiltDelays);
+    postDelay = numSampIR - 1 + max(freqFiltDelays);
+    x = [zeros(numFreqs, preDelay), x, zeros(numFreqs, postDelay)];
+    numSampSign = size(x, 2);
 end
-
-preDelay = max(freqFiltDelays);
-postDelay = numSampIR - 1 + max(freqFiltDelays);
-x = [zeros(numFreqs, preDelay), x, zeros(numFreqs, postDelay)];
-numSampSign = size(x, 2);
 
 recNScoef_time = zeros(numMicro, numFreqs, numNSpos, numReverbTime);
 recCoef_time = zeros(numMicro, numFreqs, numNSpos, numReverbTime, numFreqFilters);
@@ -82,9 +84,11 @@ for rt = 1:numReverbTime
 %         x = obj.amplitude(1) * cos(2*pi*fcurr*t + obj.phase(1));
 %         x = [zeros(1, preDelay), x, zeros(1, postDelay)];
         
-        obj.domain = 'time';
-        obj.NScoef = x(f, :);
-        obj.NSVcoef = -x(f, :);
+        if timeDomainActive && ~fakeTimeProcessing
+            obj.domain = 'time';
+            obj.NScoef = x(f, :);
+            obj.NSVcoef = -x(f, :);
+        end
         
         for ns = 1:numNSpos
             obj.NSposition = NSpositions(ns, :);
