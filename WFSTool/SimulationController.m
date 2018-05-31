@@ -719,11 +719,25 @@ classdef SimulationController < handle
             s.OptimizationOptions = p.Results.OptimOptions;
         end
         
-        function s = addCancellationParametersToStructure(s)
+        function [s, corrFactInd, corrFactGlobal] = addCancellationParametersToStructure(s)
             for k = 1:numel(s)
                 s(k).corrFactIndividual = -s(k).recNScoef./s(k).recWFScoef;
-                s(k).corrFactGlobal = -s(k).recWFScoef\s(k).recNScoef;          
+                s(k).corrFactGlobal = -s(k).recWFScoef\s(k).recNScoef;
+%                 s(k).cancellationIndividual = -s(k).
+%                 s(k).cancellationGlobal
             end
+            
+            numMicro = numel(s(1).recCoef);
+            corrFactInd = zeros([numMicro, size(s)]); % Individual correction factor
+            corrFactInd(:) = [s.corrFactIndividual];
+            corrFactInd = permute(corrFactInd, [2:ndims(s) + 1, 1]);
+            
+            % % Or your can do
+            % corrFactInd = [s.corrFactIndividual];
+            % corrFactInd = mergeAndPermute(corrFactInd, {4, 1:ndims(s)}, true, [size(s), numMicro]);
+
+            corrFactGlobal = zeros(size(s)); % Global correction factor
+            corrFactGlobal(:) = [s.corrFactGlobal];
         end
     end
     

@@ -1688,6 +1688,7 @@ classdef WFSToolSimple < handle
             obj.frequencyCorrection = prevFreqCorrect;
             
             indDelta = floor(delays*obj.Fs) + 1;
+%             indDelta = round(delays*obj.Fs); % ejemplocar.wfs (Miguel's script) uses this method
             
             freqFilterLength = numel(obj.freqFilter);
             minNsFilt = max(floor(delays(atten ~= 0)*obj.Fs)) + 1 + freqFilterLength;

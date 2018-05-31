@@ -119,10 +119,13 @@ numSamp = size(recNS_signals, 2);
 t = (0:numSamp-1)/fs;
 
 axNS = axes(figure);
-plot(axNS, t, recNS_signals(1,:), t, recNS_signals_Miguel(1,:))
+plot(axNS, t, recNS_signals(15,:), t, recNS_signals_Miguel(15,:))
 axNS.XLabel.String = 'Time (s)';
 axNS.YLabel.String = 'Signal (arbitrary units)';
 axNS.Title.String = 'Received signal from the noise source';
+
+dif = recNS_signals(:, 1:size(POT_ad, 1)) - recNS_signals_Miguel(:, 1:size(POT_ad, 1));
+max(abs(dif), [], 2)
 
 axWFS = axes(figure);
 plot(axWFS, t, recWFS_signals_RubScript(1,:), t, d*recWFS_signals_Miguel(1,:), t, recNS_signals_Miguel(1,:))
@@ -249,18 +252,131 @@ recNS_signals_Rub = recNS_signals;
 assert(isequal(recNS_signals_Mig, recNS_signals_Rub), 'Signals from NS should be the same')
 recNS_time = recNS_signals_Mig;
 
+corrFactTheo = sqrt(1i*fsel/c);
+
     % Rubén attenuation
 recWFS_time_Rub = rec_signals_Rub - recNS_time;
-[corrFact_Rub, corrFactGlob_Rub, axAbsIndRub, axPhaseIndRub, axAbsGlobRub, axPhaseGlobRub] = calculateTransferFunction(recWFS_time_Rub, -recNS_time, fs, {'minimizDim', 'time', 'reverb', 'NSpos'});
+[corrFact_Rub, corrFactGlob_Rub, fsel, axAbsIndRub, axPhaseIndRub, axAbsGlobRub, axPhaseGlobRub] = calculateTransferFunction(recWFS_time_Rub, -recNS_time, fs, {'minimizDim', 'time', 'reverb', 'NSpos'});
+
+axAbsIndRub.NextPlot = 'Add';
+plot(axAbsIndRub, fsel, abs(corrFactTheo), 'r', 'LineWidth', 3);
+axAbsGlobRub.NextPlot = 'Add';
+plot(axAbsGlobRub, fsel, abs(corrFactTheo), 'r', 'LineWidth', 3);
+
+% printfig(axAbsIndRub.Parent, imagesPath, 'Experiment9_CorrFactAbsIndChirpRubAtten', 'eps');
+% printfig(axPhaseIndRub.Parent, imagesPath, 'Experiment9_CorrFactAbsIndChirpRubAtten', 'eps');
 
     % Miguel's attenuation
 recWFS_time_Mig = rec_signals_Mig - recNS_time;
-[corrFact_Mig, corrFactGlob_Mig, axAbsIndMig, axPhaseIndMig, axAbsGlobMig, axPhaseGlobMib] = calculateTransferFunction(recWFS_time_Mig, -recNS_time, fs, {'minimizDim', 'time', 'reverb', 'NSpos'});
+[~, ~, ~, axAbsIndMig, axPhaseIndMig, axAbsGlobMig, axPhaseGlobMib] = calculateTransferFunction(recWFS_time_Mig, -recNS_time, fs, {'minimizDim', 'time', 'reverb', 'NSpos'});
 
-% Graphs
-domain = [0 1];
-visualObj = animation({fsel, 1:numMicro, 1:numReverbTime, 1:numNSpos},...
-    {abs(corrFact_Rub)}, {'Frequency', 'Microphone', 'Reverb. Time index', 'NS position index'}, {'Cancellation'}, [], []);
+axPhaseIndMig.YLim = [0 50];
+axPhaseGlobMib.YLim = [0 50];
+axAbsIndMig.YLim = [0 3];
+axAbsGlobMig.YLim = [0 3];
+
+axAbsIndMig.NextPlot = 'Add';
+plot(axAbsIndMig, fsel, abs(corrFactTheo), 'r', 'LineWidth', 3);
+axAbsGlobMig.NextPlot = 'Add';
+plot(axAbsGlobMig, fsel, abs(corrFactTheo), 'r', 'LineWidth', 3);
+
+printfig(axAbsIndMig.Parent, imagesPath, 'Experiment9_CorrFactAbsIndChirpMigAtten', 'eps');
+printfig(axPhaseIndMig.Parent, imagesPath, 'Experiment9_CorrFactPhaseIndChirpMigAtten', 'eps');
+
+% % Graphs
+% domain = [0 1];
+% visualObj = animation({fsel, 1:numMicro, 1:numReverbTime, 1:numNSpos},...
+%     {abs(corrFact_Rub)}, {'Frequency', 'Microphone', 'Reverb. Time index', 'NS position index'}, {'Cancellation'}, [], []);
+
+% Now simulate in the frequency domain
+timeDomainActive = false;
+fakeTimeProcessing = false;
+frequencyDomainActive = true;
+saveSignals = false;
+freqs = fsel(1:4:end);
+
+SetupParametersScript
+AcousticPathCalculationScript
+
+attenuationType = 'Miguel';
+SetupParametersScript
+simulationScript;
+sMig = s;
+
+attenuationType = 'Ruben';
+SetupParametersScript;
+simulationScript;
+sRub = s;
+
+% Calculate individual and global correction factors
+sMigFreq = sMig(2, :, :, :);
+[sMigFreq, corrFactIndMig, corrFactGlobalMig] = SimulationController.addCancellationParametersToStructure(sMigFreq);
+
+sRubFreq = sRub(2, :, :, :);
+[sRubFreq, corrFactIndRub, corrFactGlobalRub] = SimulationController.addCancellationParametersToStructure(sRubFreq);
+
+% Hisgoram
+absCorrFactEdges = 0:0.1:4;
+phaseCorrFactEdges = -10:90;
+
+% Miguel
+axAbsIndMigFreq = histogram2D( abs(corrFactIndMig), 2, freqs, [], absCorrFactEdges );
+axPhaseIndMigFreq = histogram2D( rad2deg(angle(corrFactIndMig)), 2, freqs, [], phaseCorrFactEdges );
+axPhaseIndMigFreq.YLim = [0 50];
+
+axAbsGlobMigFreq = histogram2D( abs(corrFactGlobalMig), 2, freqs, [], absCorrFactEdges );
+axPhaseGlobMigFreq = histogram2D( rad2deg(angle(corrFactGlobalMig)), 2, freqs, [], phaseCorrFactEdges );
+axPhaseGlobMigFreq.YLim = [0 50];
+
+axAbsIndMigFreq.Parent.Name = 'CorrFact Ind Mig Abs. Freq processing.';
+axPhaseIndMigFreq.Parent.Name = 'CorrFact Ind Mig Phase. Freq processing.';
+axAbsGlobMigFreq.Parent.Name = 'CorrFact Glob Mig Abs. Freq processing.';
+axPhaseGlobMigFreq.Parent.Name = 'CorrFact Glob Mig Phase. Freq processing.';
+
+axAbsIndMigFreq.NextPlot = 'Add';
+plot(axAbsIndMigFreq, fsel, abs(corrFactTheo), 'r', 'LineWidth', 3);
+axAbsGlobMigFreq.NextPlot = 'Add';
+plot(axAbsGlobMigFreq, fsel, abs(corrFactTheo), 'r', 'LineWidth', 3);
+
+% printfig(axAbsIndMigFreq.Parent, imagesPath, 'Experiment9_CorrFactAbsIndFreqMigAtten', 'eps');
+% printfig(axPhaseIndMigFreq.Parent, imagesPath, 'Experiment9_CorrFactAbsIndFreqMigAtten', 'eps');
+
+% Rubén
+axAbsIndRubFreq = histogram2D( abs(corrFactIndRub), 2, freqs, [], absCorrFactEdges );
+axPhaseIndRubFreq = histogram2D( rad2deg(angle(corrFactIndRub)), 2, freqs, [], phaseCorrFactEdges );
+axPhaseIndRubFreq.YLim = [0 50];
+
+axAbsGlobRubFreq = histogram2D( abs(corrFactGlobalRub), 2, freqs, [], absCorrFactEdges );
+axPhaseGlobRubFreq = histogram2D( rad2deg(angle(corrFactGlobalRub)), 2, freqs, [], phaseCorrFactEdges );
+axPhaseGlobRubFreq.YLim = [0 50];
+
+axAbsIndRubFreq.Parent.Name = 'CorrFact Ind Rub Abs. Freq processing.';
+axPhaseIndRubFreq.Parent.Name = 'CorrFact Ind Rub Phase. Freq processing.';
+axAbsGlobRubFreq.Parent.Name = 'CorrFact Glob Rub Abs. Freq processing.';
+axPhaseGlobRubFreq.Parent.Name = 'CorrFact Glob Rub Phase. Freq processing.';
+
+axAbsGlobRubFreq.NextPlot = 'Add';
+plot(axAbsGlobRubFreq, fsel, abs(corrFactTheo), 'r', 'LineWidth', 3);
+axAbsIndRubFreq.NextPlot = 'Add';
+plot(axAbsIndRubFreq, fsel, abs(corrFactTheo), 'r', 'LineWidth', 3);
+
+% SVG scenario
+viewBox = [-WFSarrayOffset(1) -WFSarrayOffset(2) roomDim(1) roomDim(2)];
+centreX = (max(obj.WFSposition(:, 1)) + min(obj.WFSposition(:, 1)))/2;
+centreY = (max(obj.WFSposition(:, 2)) + min(obj.WFSposition(:, 2)))/2;
+NSangles = atan2d(centreY - NSpositions(:,2), centreX - NSpositions(:,1));
+
+objSVG = SVGdrawer('viewBox', viewBox, 'NSpositions', NSpositions,...
+    'NSangles', NSangles, 'microSymbol', 'dot', 'microSize', 0.05,...
+    'microPositions', recPositions, 'WFSpositions', obj.WFSposition(:, [1 2]), 'WFSangles', tecta - 90);
+
+name = 'Experiment9_NSinsideChamberScheme';
+objSVG.drawSVG([imagesPath, name, '.svg']);
+
+currentFolder = pwd;
+cd(imagesPath); % Needed for inkscape to link svg files properly
+system(['inkscape -z "', imagesPath, name, '.svg" --export-pdf="', imagesPath, name, '.pdf"'])
+cd(currentFolder)
 
 %% D) Multiple NS positions not limited by room dimension. Use time and frequency processing
 % Positions of the noise source
@@ -366,28 +482,10 @@ sRub = s;
 
 % Calculate individual and global correction factors
 sMigFreq = sMig(2, :, :, :);
-sMigFreq = SimulationController.addCancellationParametersToStructure(sMigFreq);
-
-corrFactGlobalMig = zeros(size(sMigFreq)); % Individual correction factor
-corrFactGlobalMig(:) = [sMigFreq.corrFactGlobal];
-
-corrFactIndMig = zeros([numMicro, size(sMigFreq)]); % Individual correction factor
-corrFactIndMig(:) = [sMigFreq.corrFactIndividual];
-corrFactIndMig = permute(corrFactIndMig, [2:ndims(s) + 1, 1]);
+[sMigFreq, corrFactIndMig, corrFactGlobalMig] = SimulationController.addCancellationParametersToStructure(sMigFreq);
 
 sRubFreq = sRub(2, :, :, :);
-sRubFreq = SimulationController.addCancellationParametersToStructure(sRubFreq);
-
-corrFactGlobalRub = zeros(size(sMigFreq)); % Individual correction factor
-corrFactGlobalRub(:) = [sMigFreq.corrFactGlobal];
-
-corrFactIndRub = zeros([numMicro, size(sMigFreq)]); % Individual correction factor
-corrFactIndRub(:) = [sMigFreq.corrFactIndividual];
-corrFactIndRub = permute(corrFactIndRub, [2:ndims(s) + 1, 1]);
-
-% % Or your can do 
-% corrFactInd2 = [sMigFreq.corrFactIndividual];
-% corrFactInd2 = mergeAndPermute(corrFactInd2, {4, 1:ndims(sMigFreq)}, true, [size(s), numMicro]);
+[sRubFreq, corrFactIndRub, corrFactGlobalRub] = SimulationController.addCancellationParametersToStructure(sRubFreq);
 
 % Hisgoram
 absCorrFactEdges = 0:0.1:4;
@@ -430,34 +528,189 @@ maxDist = 20; % meteres
 numSampIR = ceil(maxDist/c*fs);
 
 fte = [0.1 2.3 1.65;0.1 1.3 1.65;0.1 3.3 1.65];
-%fte=[alt(1,93)-0.001 alt(2,93) 1.65;2,2.3,1.65];
-%fte=alt(:,93);
-fuente_ruido=1;
-
-% Definimos la sala y las fuentes de ruido
-disp('Calculando las respuestas del sistema acústico a modelar...')
-% [h_array,alt,tecta,L,mallado_x,mallado_y,h_ad_sources] = SalaGtac(1.65,0.05,0.05,0,250,fs,c,fte,1);
-% save salasinrev h_array h_ad_sources alt tecta fs fte L mallado_x mallado_y;
-% 
-% 
-% [h_array,alt,tecta,L,mallado_x,mallado_y,h_ad_sources] = SalaGtac(1.65,0.2,0.2,0.15,250,fs,c,fte);
-% save salaconrev2 h_array h_ad_sources alt tecta fs fte L mallado_x mallado_y;
-[h_array,alt,tecta,L,mallado_x,mallado_y,h_ad_sources] = SalaGtac(1.65,1, 1,0,numSampIR,fs,c,fte(fuente_ruido,:));
-%save salasinr3 h_array h_ad_sources alt tecta fs fte L mallado_x mallado_y;
-% Calculamos las funciones directoras del array definido por 'alt' para sintentizar una fuente en la posición fte. 
-
-disp('Calculando la configuración del array...')
-[filtros_array,an,tn,activo_array]=WFS_DrivingSignals(alt,fte(fuente_ruido,:),c,fs);
 
 % Definimoa la señal de ruido
 durSign = 1; % Duration of tone for time processing
 t = (0:ceil(durSign*fs)-1)/fs;
-NSsignal = chirp(t, 20, durSign, 940)';
+NSsignal = chirp(t, 20, durSign, 940);
 
-[POT_ad,POT_ar]=generamapa(-NSsignal,h_array,filtros_array,activo_array,NSsignal,h_ad_sources(:,fuente_ruido,:,:));
+disp('Calculando las respuestas del sistema acústico a modelar...')
+[h_array,alt,tecta,L,mallado_x,mallado_y,h_ad_sources] = SalaGtac(1.65,1, 1,0,numSampIR,fs,c,fte);
+
+numNS = size(fte, 1);
+numMicro = size(h_array, 3) * size(h_array, 4);
+
+recNSsignalsMig = zeros(length(t), numMicro, numNS);
+recWFSsignalsMig = zeros(length(t), numMicro, numNS);
+for fuente_ruido = 1:3
+% Definimos la sala y las fuentes de ruido
+disp('Calculando la configuración del array...')
+[filtros_array,an,tn,activo_array]=WFS_DrivingSignals(alt,fte(fuente_ruido,:),c,fs);
+
+% Calculamos señales recibidas
+disp('Calculando las señales en los puntos de control...')
+[POT_ad,POT_ar]=generamapa(-NSsignal',h_array,filtros_array,activo_array,NSsignal',h_ad_sources(:,fuente_ruido,:,:));
+
+recNSsignalsMig(:, :, fuente_ruido) = POT_ad;
+recWFSsignalsMig(:, :, fuente_ruido) = POT_ar;
+end
 %%%%%%%%%%%%%%%%%%%%
 
-% For comparative analysis
+% Check the result is the same as with my code
+% To be completed
+
+% Analysis
+d = 0.18;
+[corrFact, corrFactGlob, fsel, axAbsInd, axPhaseInd, axAbsGlob, axPhaseGlob] =...
+    calculateTransferFunction(recWFSsignalsMig*d, -recNSsignalsMig, fs, {'time', 'minimizDim', 'nsPos'});
+
+corrFactTheo = sqrt(1i*fsel/c);
+
+axAbsInd.YLim = [0, 3];
+axAbsInd.NextPlot = 'Add';
+plot(axAbsInd, fsel, abs(corrFactTheo), 'r', 'LineWidth', 3);
+
+axPhaseInd.YLim = [0, 50];
+
+axAbsGlob.YLim = [0, 3];
+axAbsGlob.NextPlot = 'Add';
+plot(axAbsGlob, fsel, abs(corrFactTheo), 'r', 'LineWidth', 3);
+
+axPhaseGlob.YLim = [0, 50];
+
+% printfig(axAbsInd.Parent, imagesPath, 'Experiment9_MigScriptCorrFactAbsInd', 'eps');
+% printfig(axPhaseInd.Parent, imagesPath, 'Experiment9_MigScriptCorrFactPhaseInd', 'eps');
+
+% % Other analysis
+% corrFactResh = reshape(corrFact, [length(fsel), numMicro*numNS]);
+% ax = axes(figure);
+% lineVec = plot(ax, fsel, abs(corrFactResh));
+% 
+% % Each noise source with a line color
+% cmap = lines;
+% for ns = 1:numNS
+%     inds = sub2ind([numMicro, numNS], 1:numMicro, ns*ones(1, numMicro));
+%     colors = repmat({cmap(ns, :)}, [numMicro, 1]);
+%     [lineVec(inds).Color] = colors{:};
+% end
+% % Nothing noticeable
+% 
+% % Each control point (microphone position) with a line color
+% cmap = lines;
+% for micro = 1:numMicro
+%     inds = sub2ind([numMicro, numNS], micro*ones(1, numNS), 1:numNS);
+%     colors = repmat({cmap(micro, :)}, [numNS, 1]);
+%     [lineVec(inds).Color] = colors{:};
+% end
+% % The lines for the same microphone position tend to get clutterend, maybe,
+% % I'm not sure
+
+% Use my code to see if the result is the same
+% Important!! First, execute the third section of this m-file. It sets a lot of
+% parameters
+
+% Then
+if ~exist('obj', 'var') || ~isvalid(obj)
+    obj = SimulationController;
+end
+    
+zPos = 1.65;
+roomDim = L;
+predefRoomDim = true;
+[X, Y] = ndgrid(mallado_x, mallado_y);
+recPositions = [X(:), Y(:), zPos*ones(numel(X), 1)];
+NSpositions = fte;
+
+WFSposition = [alt', zPos*ones(96, 1)];
+obj.WFSposition = WFSposition;
+broadsideDir = [cosd(tecta' - 90), sind(tecta' - 90), zeros(96, 1)];
+obj.WFSToolObj.WFSarrayOrientation = simulator.vec2rotVec(broadsideDir);
+obj.WFSToolObj.scenarioObj.ax.XLim = [0, roomDim(1)];
+obj.WFSToolObj.scenarioObj.ax.YLim = [0, roomDim(2)];
+
+WFSfilterLength = size(filtros_array, 1);
+predefWFSfilterLength = true;
+
+WFSarrayOffset = [0, 0, 0]; % [x, y, z] coordinates. Useful for generating acoustic path IR.
+
+SetupParametersScript;
+AcousticPathCalculationScript;
+
+simulationScript;
+
+recNSsignalsRub = permute(recNS_signals(:, 1:length(t), 1, :), [2 1 4 3]);
+ax = axes(figure);
+plot(ax, t, recNSsignalsRub(:, 15, 2), t, recNSsignalsMig(:, 15, 2))
+
+dif = recNSsignalsRub - recNSsignalsMig;
+max(abs(dif(:)))
+
+recSignalsRub = permute(rec_signals(:, 1:length(t), 1, :), [2 1 4 3]);
+recWFSsignalsRub = recSignalsRub - recNSsignalsRub;
+ax = axes(figure);
+plot(ax, t, recWFSsignalsRub(:, 1, 3), t, d*recWFSsignalsMig(:, 1, 3))
+
+dif = recWFSsignalsRub - d*recWFSsignalsMig;
+max(abs(dif(:)))
+
+% They are different.
+% This is due to de fact that the WFS filters are different sometimes by
+% one sample. This is because I use this line to calculate the position of
+% the delta: 
+% indDelta = floor(delays*obj.Fs) + 1;
+% And he uses (traduced to my variable names and my algorithm):
+% indDelta = round(delays*obj.Fs);
+% Change it and the result will be the same.
+
+% % SVG scenario
+% viewBox = [0 0 L(1) L(2)];
+% centreX = (max(alt(1, :)) + min(alt(1, :)))/2;
+% centreY = (max(alt(2, :)) + min(alt(2, :)))/2;
+% NSangles = atan2d(centreY - fte(:,2), centreX - fte(:,1));
+% 
+% [X, Y] = ndgrid(mallado_x, mallado_y);
+% recPositions = [X(:), Y(:)];
+% 
+% objSVG = SVGdrawer('viewBox', viewBox, 'NSpositions', fte,...
+%     'NSangles', NSangles, 'microSymbol', 'dot', 'microSize', 0.05,...
+%     'microPositions', recPositions, 'WFSpositions', alt', 'WFSangles', tecta - 90);
+% 
+% name = 'Experiment9_MigScriptScheme';
+% % objSVG.drawSVG([imagesPath, name, '.svg']);
+% % 
+% % currentFolder = pwd;
+% % cd(imagesPath); % Needed for inkscape to link svg files properly
+% % system(['inkscape -z "', imagesPath, name, '.svg" --export-pdf="', imagesPath, name, '.pdf"'])
+% % cd(currentFolder)
+
+%% F) Comparative analysis between sampling frequencies
+
+%%%%%%%%%%%%%%%%%%%% ejemplocarwfs.m code
+fs = 44100;
+c=340;
+maxDist = 20; % meteres
+numSampIR = ceil(maxDist/c*fs)1;
+
+fte = [0.1 2.3 1.65;0.1 1.3 1.65;0.1 3.3 1.65];
+
+% Definimoa la señal de ruido
+durSign = 1; % Duration of tone for time processing
+t = (0:ceil(durSign*fs)-1)/fs;
+NSsignal = chirp(t, 20, durSign, 940);
+
+disp('Calculando las respuestas del sistema acústico a modelar...')
+[h_array,alt,tecta,L,mallado_x,mallado_y,h_ad_sources] = SalaGtac(1.65,1, 1,0,numSampIR,fs,c,fte);
+
+fuente_ruido = 1;
+% Definimos la sala y las fuentes de ruido
+disp('Calculando la configuración del array...')
+[filtros_array,an,tn,activo_array]=WFS_DrivingSignals(alt,fte(fuente_ruido,:),c,fs);
+
+% Calculamos señales recibidas
+disp('Calculando las señales en los puntos de control...')
+[POT_ad,POT_ar]=generamapa(-NSsignal',h_array,filtros_array,activo_array,NSsignal',h_ad_sources(:,fuente_ruido,:,:));
+%%%%%%%%%%%%%%%%%%%%
+
 eval(['POT_ad_', num2str(fs), ' = POT_ad;'])
 eval(['POT_ar_', num2str(fs), ' = POT_ar;'])
 eval(['h_ad_sources_', num2str(fs), ' = h_ad_sources;'])
