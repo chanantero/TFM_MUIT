@@ -23,7 +23,7 @@ if ~predefNumSampIR
 end
 
 if ~predefWFSfilterLength
-    WFSfilterLength = numSampIR*2;
+    WFSfilterLength = numSampIR;
     obj.WFSToolObj.filterWFS_length = WFSfilterLength;
 end
 

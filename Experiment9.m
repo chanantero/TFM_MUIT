@@ -840,3 +840,186 @@ axCorrDiff.XLim = [0, 1000];
 % For a maximum error of 10º, and a maximum frequency of 940Hz (aliasing frequency),
 % fs > 33840 Hz. So, a sampling frequency of 44100 is not only adequate,
 % but it can even be not hight enough for good precissions.
+
+%% G) Apply theoretical correction factor optimized for one centered frequency
+% Noise source positions inside chamber, so the code is very similar to C)
+% We don't compare Miguel and Rubén attenuation, it is not relevant to this
+% experiment. Just choose one.
+% Execute the System set up section first. Then perform a simulation with
+% ejemplocarwfs to generate the scenario variables that will be emulated
+
+fopt = 460; % Frequency at which we are going to optimize (Hz)
+corrFactTheoOpt = sqrt(1i*fopt/c);
+delay = (2*pi - angle(corrFactTheoOpt))/(2*pi*fopt);
+ind = floor(delay*fs) + 1;
+corrFilter = zeros(ind, 1);
+corrFilter(ind) = abs(corrFactTheoOpt);
+
+if ~exist('obj', 'var') || ~isvalid(obj)
+    obj = SimulationController;
+end
+    
+roomDim = L;
+predefRoomDim = true;
+[X, Y] = ndgrid(mallado_x, mallado_y);
+recPositions = [X(:), Y(:), zPos*ones(numel(X), 1)];
+
+WFSposition = [WFSpos', zPos*ones(96, 1)];
+obj.WFSposition = WFSposition;
+broadsideDir = [cosd(tecta' - 90), sind(tecta' - 90), zeros(96, 1)];
+obj.WFSToolObj.WFSarrayOrientation = simulator.vec2rotVec(broadsideDir);
+obj.WFSToolObj.scenarioObj.ax.XLim = [0, roomDim(1)];
+obj.WFSToolObj.scenarioObj.ax.YLim = [0, roomDim(2)];
+
+% Chirp signal for the noise source
+durSign = 1; % Duration of tone for time processing
+t = (0:ceil(durSign*fs)-1)/fs;
+NSsignal = chirp(t, 20, durSign, 940);
+
+maxDist = 20;
+numSampIR = 2^nextpow2(floor(maxDist/c*fs) + 1);
+
+WFSarrayOffset = [0, 0, 0]; % [x, y, z] coordinates. Useful for generating acoustic path IR.
+
+% Positions of the noise source
+% Quarter of a circle
+numPointsPerArc = 4;
+radius = [3.6 4 4.4 4.8];
+numArcs = numel(radius);
+xOctagon = obj.WFSposition(:, 1);
+yOctagon = obj.WFSposition(:, 2);
+centreX = (max(xOctagon) + min(xOctagon))/2;
+centreY = (max(yOctagon) + min(yOctagon))/2;
+y1 = centreY;
+y2 = roomDim(2) - centreY;
+alphaMax = pi + asin(y1/max(radius)) - deg2rad(1);
+alphaMin = pi - asin(y2/max(radius)) + deg2rad(1);
+alpha = linspace(alphaMin, alphaMax, numPointsPerArc)';
+x = centreX + repmat(radius, numPointsPerArc, 1).*repmat(cos(alpha), 1, numArcs);
+y = centreY + repmat(radius, numPointsPerArc, 1).*repmat(sin(alpha), 1, numArcs);
+NSpositions = [x(:), y(:), zPos*ones(numel(x), 1)];
+
+WFS_AcPath_previously_calculated = true;
+attenuationType = 'Miguel';
+
+SetupParametersScript
+AcousticPathCalculationScript
+
+simulationScript;
+
+% Analysis
+recWFS_signals = rec_signals - recNS_signals;
+recWFS_signals_Corr = filter(corrFilter, 1, recWFS_signals, [], 2);
+
+numSamp = size(rec_signals, 2);
+t = (0:numSamp - 1)/fs;
+ax = axes(figure);
+plot(ax, t, recNS_signals(1,:,1,1), t, recWFS_signals_Corr(1,:,1,1) + recNS_signals(1, :, 1, 1));
+legend(ax, 'NS', 'Total')
+ax.XLabel.String = 'Time (s)';
+
+% printfig(ax.Parent, imagesPath, 'Experiment9_cancOpt460HzTime', 'eps')
+
+% Calculate cancellation
+freqsFFT = (0:numSamp - 1)*fs/numSamp;
+sel = freqsFFT >= 0 & freqsFFT <= 1000;
+freqsFFTsel = freqsFFT(sel);
+
+recNS_freq = fft(recNS_signals, [], 2);
+rec_freq = fft(rec_signals, [], 2);
+recCorr_freq = fft(recNS_signals + recWFS_signals_Corr, [], 2);
+
+recNS_freq = recNS_freq(:, sel, :, :);
+rec_freq = rec_freq(:, sel, :, :);
+recCorr_freq = recCorr_freq(:, sel, :, :);
+
+canc = 10*log10(abs(rec_freq./recNS_freq));
+cancCorr = 10*log10(abs(recCorr_freq./recNS_freq));
+
+axCanc = histogram2D( canc, 2, freqsFFTsel, [], [] );
+axCancCorr = histogram2D( cancCorr, 2, freqsFFTsel, [], [] );
+colorbar(axCancCorr)
+axCancCorr.YLabel.String = 'Cancellation (dB)';
+axCancCorr.XLabel.String = 'Frequency (º)';
+
+% printfig(axCancCorr.Parent, imagesPath, 'Experiment9_cancOpt460Hz', 'eps')
+
+%% H) Diferentes coeficientes de reflexión con corrección frecuencial
+% Filter variables for the time WFS filter.
+% Constants
+c = 340; % Sound velocity (m/s)
+fs = 44100; % Sample frequency (samples/s)
+d = 0.18; % Separation between WFS array loudspeakers
+
+% Noise source coefficient
+amplitude = 1;
+phase = 0;
+
+% Frequencies
+freqs = 0; % Random frequency. Required for technical purposes
+numFreqs = 1; % Required for technical reasons
+
+% Room characteristics and impulse response of chamber
+WFS_AcPath_previously_calculated = false;
+NS_AcPath_previously_calculated = true;
+appendFreeSpaceAcPaths = false;
+predefNumSampIR = false; % It will be calculated automatically
+numReverbTime = 6;
+beta = linspace(0, 0.5, numReverbTime); % Average reflection coefficient of the walls of the chamber
+
+% WFS options
+% magnFiltOrder = 2.^(12);
+% hilbertFiltOrder = 2.^(12);
+% numFreqFilters = length(magnFiltOrder);
+% 
+% freqFilters = cell(numFreqFilters, 1);
+% freqFiltDelays = zeros(numFreqFilters, 1);
+% for k = 1:numFreqFilters
+%     [freqFilter, delay] = getFrequencyFilter( magnFiltOrder(k), hilbertFiltOrder(k), fs );    
+%     freqFilters{k} = freqFilter;
+%     freqFiltDelays(k) = delay;
+% end
+
+frequencyCorrection = true;
+
+attenuationType = 'Miguel';
+
+% Simulation options
+timeDomainActive = true;
+fakeTimeProcessing = false;
+frequencyDomainActive = false;
+automaticLengthModification = false;
+predefSignals = true;
+saveSignals = true;
+
+SetupParametersScript
+AcousticPathCalculationScript
+
+simulationScript;
+
+% Analysis
+numSamp = size(rec_signals, 2);
+freqsFFT = (0:numSamp - 1)*fs/numSamp;
+sel = freqsFFT >= 0 & freqsFFT <= 1000;
+freqsFFTsel = freqsFFT(sel);
+
+axCanc = gobjects(numReverbTime, 1);
+for rt = 1:numReverbTime
+    recNS_freq = fft(recNS_signals(:, :, :, :, rt), [], 2); recNS_freq = recNS_freq(:, sel, :, :);
+    rec_freq = fft(rec_signals(:, :, :, :, rt), [], 2); rec_freq = rec_freq(:, sel, :, :);
+    canc = 20*log10(abs(rec_freq./recNS_freq));
+    axCanc(rt) = histogram2D( canc, 2, freqsFFTsel, [], [] );
+end
+
+for rt = 1:numReverbTime
+    axCanc(rt).XLabel.String = 'Frequency (Hz)';
+    axCanc(rt).YLabel.String = 'Cancellation (dB)';
+    axCanc(rt).YLim = [-20, 0];
+    
+    aux = num2str(beta(rt));
+    if ismember('.', aux)
+        aux = aux(3:end);
+    end
+    printfig(axCanc(rt).Parent, imagesPath, ['Experiment9_cancFreqCorrReflecCoef', aux], 'eps')
+end
+

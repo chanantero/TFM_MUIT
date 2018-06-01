@@ -872,7 +872,8 @@ classdef WFSToolSimple < handle
                     end
        
                     obj.WFSarrayCoefficient = wfsSignals;
-                    NSsignals(virtNS, :) = 0;
+%                     NSsignals(virtNS, :) = 0;
+                    NSsignals(~obj.real, :) = 0;
                     obj.noiseSourceCoefficient_complete = NSsignals;
             end
             
@@ -1656,7 +1657,7 @@ classdef WFSToolSimple < handle
             
             attenuations = attenuations * obj.WFSarrayAdjacentSeparation;
             
-            if obj.frequencyCorrection
+            if obj.frequencyCorrection && obj.domain == 'frequency'
                 % Adjust attenuation according to the 2.5D Rayleigh I integral
                 % coefficient that depends on frequency
                 attenuations = attenuations...

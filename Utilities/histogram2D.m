@@ -11,7 +11,7 @@ xEdges = p.Results.xEdges;
 yEdges = p.Results.yEdges;
 
 if isempty(yEdges);
-    yEdges = [min(A(:)), max(A(:))];
+    yEdges = linspace(min(A(:)), max(A(:)), 40);
 end
 
 if isempty(xEdges);
