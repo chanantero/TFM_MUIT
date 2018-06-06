@@ -51,7 +51,9 @@ for rt = 1:numReverbTime
     % Set up acoustic paths for the WFS array
     if WFS_AcPath_previously_calculated
         % In case you calculate WFS_IR and WFS_FR previously
-        WFSacPathIR = permute(WFS_IR(:, :, :, rt), [1, 3, 2]);
+        if timeDomainActive
+            WFSacPathIR = permute(WFS_IR(:, :, :, rt), [1, 3, 2]);
+        end
         WFSacPathFR = permute(WFS_FR(:, :, :, rt), [1, 3, 2]);
     else
         WFS_IR_current = zeros(obj.numMicro, numSampIR, obj.numWFS);
@@ -68,8 +70,10 @@ for rt = 1:numReverbTime
         WFSacPathFR = permute(WFS_FR_current, [1, 3, 2]);
     end
     
+    if timeDomainActive
     obj.domain= 'time';
     obj.setAcousticPaths('WFS', WFSacPathIR);
+    end
     
     obj.domain= 'frequency';
     WFSacPathFRstruct = struct('acousticPaths', WFSacPathFR, 'frequencies', freqs);
@@ -78,7 +82,10 @@ for rt = 1:numReverbTime
     for f = 1:numFreqs
         fcurr = freqs(f); % Current frequency
         obj.frequency = fcurr;
-        preDelayPhaseShift = preDelay/fs*2*pi*fcurr;
+        
+        if timeDomainActive && ~fakeTimeProcessing
+            preDelayPhaseShift = preDelay/fs*2*pi*fcurr;
+        end
         
         % Generate tone with the propper frequency
 %         x = obj.amplitude(1) * cos(2*pi*fcurr*t + obj.phase(1));
@@ -94,9 +101,11 @@ for rt = 1:numReverbTime
             obj.NSposition = NSpositions(ns, :);
             
             % Set up acoustic paths for the noise source
-            obj.domain= 'time';
-            NSacPathIR = repmat(permute(NS_IR(:, :, ns, rt), [1, 3, 2]), [1, 2, 1]);
-            obj.setAcousticPaths('NS', NSacPathIR);
+            if timeDomainActive
+                obj.domain= 'time';
+                NSacPathIR = repmat(permute(NS_IR(:, :, ns, rt), [1, 3, 2]), [1, 2, 1]);
+                obj.setAcousticPaths('NS', NSacPathIR);
+            end
             
             obj.domain= 'frequency';
             NSacPathFR = repmat(permute(NS_FR(:, :, ns, rt), [1 3 2]), [1 2 1]);

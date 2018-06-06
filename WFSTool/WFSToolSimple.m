@@ -1706,7 +1706,7 @@ classdef WFSToolSimple < handle
                     end
                 end
             end
-                        
+            
             if obj.frequencyCorrection
             % Apply the filter for frequency dependence and the hilbert
             % filter

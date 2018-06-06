@@ -78,16 +78,21 @@ end
 
 if WFS_AcPath_previously_calculated && NS_AcPath_previously_calculated ...
         && appendFreeSpaceAcPaths
-    acPath = simulator.calculateMonopolesIR(obj.WFSposition, recPositions, c, fs, numSampIR);
-    WFS_IR = cat(4, permute(acPath, [1 3 2 4]), WFS_IR);
+    
+    if timeDomainActive
+        acPath = simulator.calculateMonopolesIR(obj.WFSposition, recPositions, c, fs, numSampIR);
+        WFS_IR = cat(4, permute(acPath, [1 3 2 4]), WFS_IR);
+    end
     
     acPath = simulator.calculateTheoricAcousticPaths(...
         obj.WFSToolObj.WFSarrayPosition, obj.WFSToolObj.WFSarrayRadiationPattern, obj.WFSToolObj.WFSarrayOrientation,...
         recPositions, obj.WFSToolObj.receiverRadiationPattern, obj.WFSToolObj.receiverOrientation, freqs, c);
     WFS_FR = cat(4, permute(acPath, [1 3 2 4]), WFS_FR);
     
-    acPath = simulator.calculateMonopolesIR(NSpositions, recPositions, c, fs, numSampIR);
-    NS_IR = cat(4, permute(acPath, [1 3 2 4]), NS_IR);
+    if timeDomainActive
+        acPath = simulator.calculateMonopolesIR(NSpositions, recPositions, c, fs, numSampIR);
+        NS_IR = cat(4, permute(acPath, [1 3 2 4]), NS_IR);
+    end
     
     acPath = simulator.calculateTheoricAcousticPaths(...
         NSpositions, repmat({@simulator.monopoleRadPat}, numNSpos, 1), repmat([1 0 0 1], numNSpos, 1),... % [1 0 0 1] is just a default orientation. It doesn't matter because they are monopoles

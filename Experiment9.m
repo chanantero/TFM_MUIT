@@ -152,6 +152,7 @@ wfsInd = 2;
 plot(ax, tWFSfilt, filtros_array(:, wfsInd), tWFSfilt, permute(obj.WFSToolObj.filtersWFS_IR(wfsInd, 1, :), [3 1 2]))
 
 % Let's test if that's the only remaining difference
+obj.domain = 'time';
 obj.WFSToolObj.filtersWFS_IR = repmat(permute(filtros_array, [2 3 1]), [1 2 1]);
 isequal(repmat(permute(filtros_array, [2 3 1]), [1 2 1]), obj.WFSToolObj.filtersWFS_IR)
 obj.WFSToolObj.WFScalculation();
@@ -252,11 +253,11 @@ recNS_signals_Rub = recNS_signals;
 assert(isequal(recNS_signals_Mig, recNS_signals_Rub), 'Signals from NS should be the same')
 recNS_time = recNS_signals_Mig;
 
-corrFactTheo = sqrt(1i*fsel/c);
-
     % Rubén attenuation
 recWFS_time_Rub = rec_signals_Rub - recNS_time;
 [corrFact_Rub, corrFactGlob_Rub, fsel, axAbsIndRub, axPhaseIndRub, axAbsGlobRub, axPhaseGlobRub] = calculateTransferFunction(recWFS_time_Rub, -recNS_time, fs, {'minimizDim', 'time', 'reverb', 'NSpos'});
+
+corrFactTheo = sqrt(1i*fsel/c);
 
 axAbsIndRub.NextPlot = 'Add';
 plot(axAbsIndRub, fsel, abs(corrFactTheo), 'r', 'LineWidth', 3);
@@ -280,8 +281,8 @@ plot(axAbsIndMig, fsel, abs(corrFactTheo), 'r', 'LineWidth', 3);
 axAbsGlobMig.NextPlot = 'Add';
 plot(axAbsGlobMig, fsel, abs(corrFactTheo), 'r', 'LineWidth', 3);
 
-printfig(axAbsIndMig.Parent, imagesPath, 'Experiment9_CorrFactAbsIndChirpMigAtten', 'eps');
-printfig(axPhaseIndMig.Parent, imagesPath, 'Experiment9_CorrFactPhaseIndChirpMigAtten', 'eps');
+% printfig(axAbsIndMig.Parent, imagesPath, 'Experiment9_CorrFactAbsIndChirpMigAtten', 'eps');
+% printfig(axPhaseIndMig.Parent, imagesPath, 'Experiment9_CorrFactPhaseIndChirpMigAtten', 'eps');
 
 % % Graphs
 % domain = [0 1];
@@ -371,12 +372,12 @@ objSVG = SVGdrawer('viewBox', viewBox, 'NSpositions', NSpositions,...
     'microPositions', recPositions, 'WFSpositions', obj.WFSposition(:, [1 2]), 'WFSangles', tecta - 90);
 
 name = 'Experiment9_NSinsideChamberScheme';
-objSVG.drawSVG([imagesPath, name, '.svg']);
-
-currentFolder = pwd;
-cd(imagesPath); % Needed for inkscape to link svg files properly
-system(['inkscape -z "', imagesPath, name, '.svg" --export-pdf="', imagesPath, name, '.pdf"'])
-cd(currentFolder)
+% objSVG.drawSVG([imagesPath, name, '.svg']);
+% 
+% currentFolder = pwd;
+% cd(imagesPath); % Needed for inkscape to link svg files properly
+% system(['inkscape -z "', imagesPath, name, '.svg" --export-pdf="', imagesPath, name, '.pdf"'])
+% cd(currentFolder)
 
 %% D) Multiple NS positions not limited by room dimension. Use time and frequency processing
 % Positions of the noise source
