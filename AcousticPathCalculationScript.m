@@ -29,22 +29,15 @@ end
 
 if WFS_AcPath_previously_calculated
     WFS_IR = zeros(obj.numMicro, numSampIR, obj.numWFS, numReverbTime);
-    disp('IR WFS')
     for k = 1:obj.numWFS
-        fprintf('%d/%d\n', k, obj.numWFS);
-        disp(' Reverberation Time:')
         for rt = 1:numReverbTime
-            fprintf(' %d/%d\n', rt, numReverbTime);
             WFS_IR(:, :, k, rt) = rir_generator(c, fs, r, wfsPos(k, :), roomDim, Beta(rt, :), numSampIR);
         end
     end
     
     % Calculate the frequency responses
     WFS_FR = zeros(obj.numMicro, numFreqs, obj.numWFS, numReverbTime);
-    disp('FR WFS')
     for k = 1:obj.numWFS
-        fprintf('%d/%d\n', k, obj.numWFS);
-        disp(' Reverberation Time:')
         for rt = 1:numReverbTime
             WFS_FR(:, :, k, rt) = DFT_slow(fs*WFS_IR(:, :, k, rt).', fs, freqs).';
         end
@@ -55,21 +48,14 @@ end
 % Do the same with the noise source positions
 if NS_AcPath_previously_calculated
     NS_IR = zeros(obj.numMicro, numSampIR, numNSpos, numReverbTime);
-    disp('IR NS')
     for k = 1:numNSpos
-        fprintf('%d/%d\n', k, numNSpos);
-        disp(' Reverberation Time:')
         for rt = 1:numReverbTime
-            fprintf(' %d/%d\n', rt, numReverbTime);
             NS_IR(:, :, k, rt) = rir_generator(c, fs, r, nsPos(k,:), roomDim, Beta(rt, :), numSampIR);
         end
     end
     
     NS_FR = zeros(obj.numMicro, numFreqs, numNSpos, numReverbTime);
-    disp('FR NS')
     for k = 1:numNSpos
-        fprintf('%d/%d\n', k, numNSpos);
-        disp(' Reverberation Time:')
         for rt = 1:numReverbTime
             NS_FR(:, :, k, rt) = DFT_slow(fs*NS_IR(:, :, k, rt).', fs, freqs).';
         end

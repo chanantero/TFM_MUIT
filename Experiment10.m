@@ -798,3 +798,319 @@ plot(axAbsGlob, freqs, abs(corrFactTheo), 'r', 'LineWidth', 3);
 % critical factor might be the distance in wavelengths from the receiving 
 % point to the
 % line of secondary sources.
+
+% In order to go deep in tis concept, I'm going to create a truncated
+% linear array, and I'm going to play with the longitude of it and the
+% point where the receiver point is situated
+numLongWFS = 100;
+longWFS = 0.18*23*linspace(0.1, 10, numLongWFS);
+zPos = 1.65;
+numWFS = 200;
+WFSyPos = 3;
+
+numRec = 100;
+distWFS2Rec = linspace(0.1, 10, numRec);
+
+yNS = (10:10:100)';
+numNS = length(yNS);
+
+progressBarActive = false;
+
+ss = cell(numel(longWFS), 1);
+for long = 1:numel(longWFS)
+    fprintf('long = %d/%d\n', long, numel(longWFS));
+    
+d = longWFS(long)/numWFS;
+WFSposition = [(0:numWFS-1)'*d, WFSyPos*ones(numWFS, 1), ones(numWFS, 1)*zPos];
+WFScentreX = (max(WFSposition(:, 1)) + min(WFSposition(:, 1)))/2;
+broadsideDir = repmat([0 -1 0], numWFS, 1);
+
+recPositions = [WFScentreX*ones(numRec, 1), WFSyPos - distWFS2Rec', zPos*ones(numRec, 1)];
+
+NSpositions = [WFScentreX*ones(numNS, 1), yNS, zPos*ones(numNS, 1)];
+
+obj.WFSposition = WFSposition;
+obj.WFSToolObj.WFSarrayOrientation = simulator.vec2rotVec(broadsideDir);
+obj.WFSToolObj.scenarioObj.ax.XLim = [min(WFSposition(:, 1)), max(WFSposition(:, 1))];
+obj.WFSToolObj.scenarioObj.ax.YLim = [min(recPositions(:, 2)), NSpositions(2)];
+obj.WFSToolObj.WFSarrayAdjacentSeparation = d;
+
+SetupParametersScript
+AcousticPathCalculationScript
+simulationScript;
+
+sFreq = s(2, :, :, :);
+ss{long} = sFreq;
+end
+
+sFreqTotal = cat(1, ss{:});
+
+% Calculate individual and global correction factors
+[sFreq, corrFactInd, corrFactGlobal] = SimulationController.addCancellationParametersToStructure(sFreqTotal);
+
+% Hisgoram
+absCorrFactEdges = 0:0.1:4;
+phaseCorrFactEdges = -180:180;
+
+axAbsInd = histogram2D( abs(corrFactInd), 2, freqs, [], [] );
+axPhaseInd = histogram2D( rad2deg(angle(corrFactInd)), 2, freqs, [], [] );
+% axPhaseInd.YLim = [0 50];
+
+axAbsGlob = histogram2D( abs(corrFactGlobal), 2, freqs, [], [] );
+axPhaseGlob= histogram2D( rad2deg(angle(corrFactGlobal)), 2, freqs, [], []);
+% axPhaseGlob.YLim = [0 50];
+
+axAbsInd.Parent.Name = 'CorrFact Ind Abs';
+axPhaseInd.Parent.Name = 'CorrFact Ind Phase';
+axAbsGlob.Parent.Name = 'CorrFact Glob Abs';
+axPhaseGlob.Parent.Name = 'CorrFact Glob Phase';
+
+corrFactTheo = sqrt(1i*freqs/c);
+
+axAbsInd.NextPlot = 'Add';
+plot(axAbsInd, freqs, abs(corrFactTheo), 'r', 'LineWidth', 3);
+axAbsGlob.NextPlot = 'Add';
+plot(axAbsGlob, freqs, abs(corrFactTheo), 'r', 'LineWidth', 3);
+
+ax = axes(figure);
+plot(ax, squeeze(rad2deg(angle(corrFactInd))))
+
+visualObj = animation({longWFS, freqs, 1:numRec},...
+    {squeeze(rad2deg(angle(corrFactInd)))}, {'Longitude WFSarray', 'Frequency', 'Receiver point'}, ...
+    {'Frequency response'}, [], []);
+
+
+%% Theoretical comprobations
+
+C = linspace(1, 20, 50); % Escalation factor
+numC = numel(C);
+longWFS0 = 0.18*100;
+longWFS = longWFS0*C;
+zPos = 1.65;
+numWFS = 200;
+WFSyPos = 3;
+broadsideDir = repmat([0 -1 0], numWFS, 1);
+
+distWFS2Rec0 = 1;
+distWFS2Rec = distWFS2Rec0*C;
+
+distNS0 = 5;
+yNS = WFSyPos + distNS0*C';
+numNS = length(yNS);
+
+freq0 = 200;
+
+progressBarActive = false;
+
+freqs = freq0;
+ss = cell(numC, 1);
+for esc = 1:numC
+    
+d = longWFS(esc)/numWFS;
+WFSposition = [(0:numWFS-1)'*d, WFSyPos*ones(numWFS, 1), ones(numWFS, 1)*zPos];
+WFScentreX = (max(WFSposition(:, 1)) + min(WFSposition(:, 1)))/2;
+
+recPositions = [WFScentreX, WFSyPos - distWFS2Rec(esc), zPos];
+
+NSpositions = [WFScentreX, yNS(esc), zPos];
+
+obj.WFSposition = WFSposition;
+obj.WFSToolObj.WFSarrayOrientation = simulator.vec2rotVec(broadsideDir);
+obj.WFSToolObj.scenarioObj.ax.XLim = [min(WFSposition(:, 1)), max(WFSposition(:, 1))];
+obj.WFSToolObj.scenarioObj.ax.YLim = [min(recPositions(:, 2)), 1+NSpositions(2)];
+obj.WFSToolObj.WFSarrayAdjacentSeparation = d;
+
+SetupParametersScript
+AcousticPathCalculationScript
+simulationScript;
+
+sFreq = s(2, :, :, :);
+ss{esc} = sFreq;
+end
+
+
+freqEsc = freq0*C;
+
+d = longWFS0/numWFS;
+WFSposition = [(0:numWFS-1)'*d, WFSyPos*ones(numWFS, 1), ones(numWFS, 1)*zPos];
+WFScentreX = (max(WFSposition(:, 1)) + min(WFSposition(:, 1)))/2;
+
+recPositions = [WFScentreX, WFSyPos - distWFS2Rec0, zPos];
+
+NSpositions = [WFScentreX, WFSyPos + distNS0, zPos];
+
+obj.WFSposition = WFSposition;
+obj.WFSToolObj.WFSarrayOrientation = simulator.vec2rotVec(broadsideDir);
+obj.WFSToolObj.scenarioObj.ax.XLim = [min(WFSposition(:, 1)), max(WFSposition(:, 1))];
+obj.WFSToolObj.scenarioObj.ax.YLim = [min(recPositions(:, 2)), 1+NSpositions(2)];
+obj.WFSToolObj.WFSarrayAdjacentSeparation = d;
+
+sOr = cell(numC, 1);
+for esc = 1:numC
+freqs = freqEsc(esc);
+
+SetupParametersScript
+AcousticPathCalculationScript
+simulationScript;
+
+sFreq = s(2, :, :, :);
+sOr{esc} = sFreq;
+end
+
+sFreqTotal = cat(1, ss{:});
+sFreqOrTotal = cat(1, sOr{:});
+
+recWFScoef = zeros(size(sFreqTotal));
+recWFScoef(:) = [sFreqTotal.recWFScoef];
+
+recWFScoefOr = zeros(size(sFreqOrTotal));
+recWFScoefOr(:) = [sFreqOrTotal.recWFScoef];
+
+ax = axes(figure);
+plot(ax, C, abs([recWFScoef, recWFScoefOr./C']));
+
+% Conclussion: scaling by C is the same as having the original scenario,
+% calculate the field when k is k_original*C, and dividing it by C
+
+%% Continuation of Secion 5: Structured Experiments
+
+% A) Ideal case: L=inf, Q_perfect and Q
+% Monopole source at (0, d_ps, 0)
+% Infinite linear array at the x axis
+
+limx = [-1000 1000]; % Limits of integration on the infinite source
+
+numDist_rec = 100;
+numX_rec = 1;
+numDist_ps = 10;
+d_rec = linspace(1e-1, 100, numDist_rec);
+x_rec = linspace(0, 10, numX_rec);
+d_ps = linspace(1e-2, 10, numDist_ps);
+k = 1;
+
+r_ps = @(d_ps, x) sqrt(d_ps.^2 + x.^2); % Distance from primary source to secondary source
+r_rec = @(d_rec, x_rec, x_s) sqrt(d_rec.^2 + (x_rec - x_s).^2); % Distance from point of the secondary source and point of measure
+Q_perfect = @(x_s, d_ps) d_ps./r_ps(d_ps, x_s).*exp(-1i*k*r_ps(d_ps, x_s))./sqrt(r_ps(d_ps, x_s)).*(sqrt(1i*k/(2*pi)) + 1./(r_ps(d_ps, x_s)*sqrt(1i*2*pi*k))); % Feeding of each infinitesimal secondary source
+Q = @(x_s, d_ps) d_ps./r_ps(d_ps, x_s).*exp(-1i*k*r_ps(d_ps, x_s))./sqrt(r_ps(d_ps, x_s)).*sqrt(1i*k/(2*pi)); % Feeding of each infinitesimal secondary source
+G = @(dist, k) exp(-1i*k*dist)./dist;
+
+I_wfs_perfect = zeros(numDist_ps, numDist_rec, numX_rec);
+I_wfs = zeros(numDist_ps, numDist_rec, numX_rec);
+I_ps = zeros(numDist_ps, numDist_rec, numX_rec);
+for ps = 1:numDist_ps
+    fprintf('%d/%d\n', ps, numDist_ps);
+    % Calculate the field on every receiving point    
+    for yrec = 1:numDist_rec
+        for xrec = 1:numX_rec
+            g = @(x_s) sqrt(r_rec(d_rec(yrec), x_rec(xrec), x_s)./(r_rec(d_rec(yrec), x_rec(xrec), x_s) + r_ps(d_ps(ps), x_s)));
+            G_ = @(x_s) G(r_rec(d_rec(yrec), x_rec(xrec), x_s), k);
+            
+            Q_perfect_ = @(x_s) Q_perfect(x_s, d_ps(ps));
+            aux = @(x_s) Q_perfect_(x_s).*G_(x_s).*g(x_s);
+            I_wfs_perfect(ps, yrec, xrec) = integral(aux, limx(1), limx(2));
+            
+            Q_ = @(x_s) Q(x_s, d_ps(ps));
+            aux = @(x_s) Q_(x_s).*G_(x_s).*g(x_s);
+            I_wfs(ps, yrec, xrec) = integral(aux, limx(1), limx(2));
+            
+            dist = sqrt((d_rec(yrec) + d_ps(ps))^2 + x_rec(xrec)^2);
+            I_ps(ps, yrec, xrec) = exp(-1i*k*dist)/dist;
+        end
+    end
+end
+
+repAbs = cat(4, 20*log10(abs(I_wfs_perfect)./abs(I_ps)), 20*log10(abs(I_wfs)./abs(I_ps)));
+visualObj = animation({d_ps, d_rec, x_rec, 1:2},...
+    {repAbs}, {'Distance primary source', 'Distance receiver', 'Horiz. deviation receiver', 'Type'}, ...
+    {'|Prel| (dB)'}, [], []);
+
+repPha = cat(4, rad2deg(angle(I_wfs_perfect./I_ps)), rad2deg(angle(I_wfs./I_ps)));
+visualObj = animation({d_ps, d_rec, x_rec, 1:2},...
+    {repPha}, {'Distance primary source', 'Distance receiver', 'Horiz. deviation receiver', 'Type'}, ...
+    {'|Prel| (dB)'}, [], []);
+
+% Observation: I don't see a significative difference in performance. So
+% don't worry too much about the 1/r0 term, because the dominant limitation
+% is the inaccuracy of the stationary phase method
+
+% B) d_ps = inf
+Lmax = 100;
+numDist_rec = 10;
+d_rec = linspace(1e-1, 100, numDist_rec);
+d_ps = 100;
+k = 1;
+
+dl = 0.01;
+x_s = 0:dl:Lmax/2;
+numL = length(x_s);
+
+I_wfs = zeros(numDist_rec, numL);
+for yrec = 1:numDist_rec
+    g = @(x_s) sqrt(r_rec(d_rec(yrec), 0, x_s)./(r_rec(d_rec(yrec), 0, x_s) + r_ps(d_ps, x_s)));
+    G_ = @(x_s) G(r_rec(d_rec(yrec), 0, x_s), k);
+    
+    Q_ = @(x_s) Q(x_s, d_ps);
+    aux = @(x_s) Q_(x_s).*G_(x_s).*g(x_s);
+    
+    val = aux(x_s);
+    val(2:end) = val(2:end)*2;
+    I_wfs(yrec, :) = cumsum(val)*dl;
+end
+
+I_ps = (exp(-1i*k*(d_ps + d_rec))./(d_ps + d_rec)).';
+
+I_psExt = pointWiseExtend(I_ps, I_wfs);
+
+repAbs = 20*log10(abs(I_wfs(:, 1:50:end))./abs(I_psExt(:, 1:50:end)));
+visualObj = animation({d_rec, x_s(1:50:end)*2},...
+    {repAbs}, {'Distance receiver', 'L (m)'}, ...
+    {'|Prel| (dB)'}, [], []);
+
+% Other way more convenient for plotting
+L = 1;
+numDist_rec = 100;
+numDist_ps = 1;
+d_rec = linspace(0, 10, numDist_rec+1); d_rec = d_rec(2:end);
+d_ps = 100;
+k = 2*pi*(0.5:0.2:50);
+numK = length(k);
+
+Q = @(x_s, d_ps, k) d_ps./r_ps(d_ps, x_s).*exp(-1i*k*r_ps(d_ps, x_s))./sqrt(r_ps(d_ps, x_s)).*sqrt(1i*k/(2*pi)); % Feeding of each infinitesimal secondary source
+
+I_wfs = zeros(numDist_rec, numK);
+I_ps = zeros(numDist_rec, numK);
+for yrec = 1:numDist_rec
+    fprintf('%d/%d\n', yrec, numDist_rec)
+    g = @(x_s) sqrt(r_rec(d_rec(yrec), 0, x_s)./(r_rec(d_rec(yrec), 0, x_s) + r_ps(d_ps, x_s)));
+    for kIter = 1:numK
+        G_ = @(x_s) G(r_rec(d_rec(yrec), 0, x_s), k(kIter));
+        Q_ = @(x_s) Q(x_s, d_ps, k(kIter));
+        aux = @(x_s) Q_(x_s).*G_(x_s).*g(x_s);
+        
+        dl = min(0.01/k(kIter), 0.01);
+        x_s = 0:dl:L/2;
+        
+        val = aux(x_s);
+        val(2:end) = val(2:end)*2;
+                
+        I_wfs(yrec, kIter) = sum(val)*dl;
+        I_ps(yrec, kIter) = G(d_rec(yrec) + d_ps, k(kIter));
+    end
+end
+
+repAbs = 20*log10(abs(I_wfs)./abs(I_ps));
+visualObj = animation({d_rec, k},...
+    {repAbs}, {'Distance receiver', 'k (rad/m)'}, ...
+    {'|Prel| (dB)'}, [], []);
+
+
+repPha = rad2deg(angle(I_wfs./I_ps));
+visualObj = animation({d_rec, k},...
+    {repPha}, {'Distance receiver', 'k (rad/m)'}, ...
+    {'|Prel| (dB)'}, [], []);
+
+% Find the k for which the angle starts to converge
+[minVal, minInd] = min(repPha, [], 2);
+kThreshold = k(minInd);
+ax = axes(figure);
+plot(ax, d_rec, kThreshold)

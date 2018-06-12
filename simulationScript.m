@@ -37,6 +37,7 @@ recWFScoef_freq = zeros(numMicro, numFreqs, numNSpos, numReverbTime);
 WFScoef_freq = zeros(obj.numWFS, numFreqs, numNSpos, numReverbTime);
 
 % Progress bar variables
+if progressBarActive
 maxIterPerLevel = [numReverbTime, numFreqs, numNSpos];
 numLevels = length(maxIterPerLevel);
 totalIter = prod(maxIterPerLevel);
@@ -46,6 +47,7 @@ descMsg = '';
 aux = [zeros(1, numLevels); maxIterPerLevel];
 numMsg = ['[', sprintf(' %d/%d ', aux), ']'];
 progress = 0;
+end
 for rt = 1:numReverbTime
     
     % Set up acoustic paths for the WFS array
@@ -198,7 +200,7 @@ for rt = 1:numReverbTime
             end
             
             % Progress monitoring
-            if true % ns == numNSpos
+            if progressBarActive % ns == numNSpos
                 completedIterPerLevel = [rt-1, f-1, ns]; % Completed
                 for k = numLevels:-1:2
                     if completedIterPerLevel(k) == maxIterPerLevel(k)
@@ -221,6 +223,9 @@ for rt = 1:numReverbTime
     end
 end
 
+if progressBarActive
+close(wb);
+end
 
 %% Formatting of results
 

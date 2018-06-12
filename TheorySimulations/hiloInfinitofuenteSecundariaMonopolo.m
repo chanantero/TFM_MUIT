@@ -10,8 +10,8 @@ k = 2;
 
 Ds = 1:10;
 
-ds = @(Ds, y, z) sqrt(Ds.^2 + y.^2 + z.^2);
-dr = @(xm, y, z) sqrt(xm.^2 + y.^2 + z.^2); % Distance from point of the source and point of measure
+ds = @(Ds, y, z) sqrt(Ds.^2 + y.^2 + z.^2); % Distance from primary source to secondary source
+dr = @(xm, y, z) sqrt(xm.^2 + y.^2 + z.^2); % Distance from point of the secondary source and point of measure
 ds_ = @(z) ds(Ds, yl, z);
 dr_ = @(xm, z) dr(xm, yl, z);
 % f = @(x, z) Ds./ds_(z).*(1i*k + 1./ds_(z)).*exp(-1i*k*(dr_(x, z) + ds_(z)))./(dr_(x, z).*ds_(z)); % Contribution from the source at point z to the field of point x

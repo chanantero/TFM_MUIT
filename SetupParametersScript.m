@@ -56,3 +56,7 @@ end
 if ~exist('saveSignals', 'var')
     saveSignals = false;
 end
+
+if ~exist('progressBarActive', 'var')
+    progressBarActive = true;
+end

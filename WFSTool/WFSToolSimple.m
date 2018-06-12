@@ -1854,7 +1854,7 @@ classdef WFSToolSimple < handle
                 gridPoints = gridPoints(flag);
                 queryPoints = queryPoints(flag);
                 
-                F = griddedInterpolant(gridPoints, acPath, 'linear', 'nearest');
+                F = griddedInterpolant(gridPoints, squeeze(acPath), 'linear', 'nearest');
                 acPath_query = F(queryPoints);
                 if numReceiv == 1 && numSources > 1
                     acPath_query = permute(acPath_query, [3 1 2]);
