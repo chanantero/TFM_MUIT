@@ -981,12 +981,14 @@ plot(ax, C, abs([recWFScoef, recWFScoefOr./C']));
 limx = [-1000 1000]; % Limits of integration on the infinite source
 
 numDist_rec = 100;
-numX_rec = 1;
-numDist_ps = 10;
-d_rec = linspace(1e-1, 100, numDist_rec);
-x_rec = linspace(0, 10, numX_rec);
-d_ps = linspace(1e-2, 10, numDist_ps);
+d_rec = linspace(0, 10, numDist_rec + 1); d_rec = d_rec(2:end);
+x_rec = 0;
+d_ps = linspaceExtended([0 1 10 100], [10, 9, 3]); d_ps = d_ps(2:end);
 k = 1;
+
+numDist_rec = length(d_rec);
+numDist_ps = length(d_ps);
+numX_rec = length(x_rec);
 
 r_ps = @(d_ps, x) sqrt(d_ps.^2 + x.^2); % Distance from primary source to secondary source
 r_rec = @(d_rec, x_rec, x_s) sqrt(d_rec.^2 + (x_rec - x_s).^2); % Distance from point of the secondary source and point of measure
@@ -1028,6 +1030,39 @@ repPha = cat(4, rad2deg(angle(I_wfs_perfect./I_ps)), rad2deg(angle(I_wfs./I_ps))
 visualObj = animation({d_ps, d_rec, x_rec, 1:2},...
     {repPha}, {'Distance primary source', 'Distance receiver', 'Horiz. deviation receiver', 'Type'}, ...
     {'|Prel| (dB)'}, [], []);
+
+
+indRec = d_rec >= 0 & d_rec <= 3;
+indPS = d_ps >= 0 & d_ps <= 3;
+indXRec = 1;
+indType = 2;
+[X, Y] = ndgrid(d_ps(indPS), d_rec(indRec));
+Z = repAbs(indPS, indRec, indXRec, indType); 
+ax = axes(figure);
+surf(ax, X, Y, Z)
+ax.XLabel.Interpreter = 'latex';
+ax.YLabel.Interpreter = 'latex';
+ax.ZLabel.Interpreter = 'latex';
+ax.XLabel.String = '$d_{ps}$';
+ax.YLabel.String = '$d$';
+ax.ZLabel.String = '$20\log_{10}(|P_{rel}|)$';
+
+indPS = d_ps >= 0 & d_ps <= 3;
+[~, indRec] = min(abs(d_rec - 10));
+indXRec = 1;
+indType = 2;
+x = d_ps(indPS);
+y = repAbs(indPS, indRec, indXRec, indType);
+ax = axes(figure);
+plot(ax, x, y)
+ax.XLabel.Interpreter = 'latex';
+ax.YLabel.Interpreter = 'latex';
+ax.XLabel.String = '$d_{ps}/\lambda$';
+ax.YLabel.String = '$20\log_{10}(|P_{rel}|)$ (dB)';
+ax.XLabel.FontSize = 15;
+ax.YLabel.FontSize = 15;
+
+% printfig(ax.Parent, imagesPath, 'Experiment10_TruncationIdealCaseA', 'eps')
 
 % Observation: I don't see a significative difference in performance. So
 % don't worry too much about the 1/r0 term, because the dominant limitation
