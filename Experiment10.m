@@ -1022,24 +1022,19 @@ for ps = 1:numDist_ps
 end
 
 repAbs = cat(4, 20*log10(abs(I_wfs_perfect)./abs(I_ps)), 20*log10(abs(I_wfs)./abs(I_ps)));
-visualObj = animation({d_ps, d_rec, x_rec, 1:2},...
-    {repAbs}, {'Distance primary source', 'Distance receiver', 'Horiz. deviation receiver', 'Type'}, ...
-    {'|Prel| (dB)'}, [], []);
-
 repPha = cat(4, rad2deg(angle(I_wfs_perfect./I_ps)), rad2deg(angle(I_wfs./I_ps)));
+
+% visualObj = animation({d_ps, d_rec, x_rec, 1:2},...
+%     {repAbs}, {'Distance primary source', 'Distance receiver', 'Horiz. deviation receiver', 'Type'}, ...
+%     {'|Prel| (dB)'}, [], []);
 visualObj = animation({d_ps, d_rec, x_rec, 1:2},...
     {repPha}, {'Distance primary source', 'Distance receiver', 'Horiz. deviation receiver', 'Type'}, ...
     {'|Prel| (dB)'}, [], []);
 
+vecs = {d_ps, d_rec, x_rec, [1 2]};
 
-indRec = d_rec >= 0 & d_rec <= 3;
-indPS = d_ps >= 0 & d_ps <= 3;
-indXRec = 1;
-indType = 2;
-[X, Y] = ndgrid(d_ps(indPS), d_rec(indRec));
-Z = repAbs(indPS, indRec, indXRec, indType); 
-ax = axes(figure);
-surf(ax, X, Y, Z)
+% Primary source and receiver near field
+ax = drawArray(vecs, repAbs, [1, 2], 'indepDimLimits', [0 3; 0 3], 'nonIndepDimIndices', [1 2], 'surf', true);
 ax.XLabel.Interpreter = 'latex';
 ax.YLabel.Interpreter = 'latex';
 ax.ZLabel.Interpreter = 'latex';
@@ -1047,22 +1042,39 @@ ax.XLabel.String = '$d_{ps}$';
 ax.YLabel.String = '$d$';
 ax.ZLabel.String = '$20\log_{10}(|P_{rel}|)$';
 
-indPS = d_ps >= 0 & d_ps <= 3;
-[~, indRec] = min(abs(d_rec - 10));
-indXRec = 1;
-indType = 2;
-x = d_ps(indPS);
-y = repAbs(indPS, indRec, indXRec, indType);
-ax = axes(figure);
-plot(ax, x, y)
+% Receiver far field, primary source near field
+ax = drawArray(vecs, repAbs, 1, 'indepDimLimits', [0 3], 'nonIndepDimValues', [10 0 2]);
 ax.XLabel.Interpreter = 'latex';
 ax.YLabel.Interpreter = 'latex';
 ax.XLabel.String = '$d_{ps}/\lambda$';
 ax.YLabel.String = '$20\log_{10}(|P_{rel}|)$ (dB)';
 ax.XLabel.FontSize = 15;
 ax.YLabel.FontSize = 15;
-
+[aux, x, y] = drawArray(vecs, repPha, 1, 'indepDimLimits', [0 3], 'nonIndepDimValues', [Inf 0 2]);
+close(aux.Parent)
+yyaxis(ax, 'right')
+plot(ax, x, y)
+ax.YLabel.Interpreter = 'latex';
+ax.YLabel.String = '$\angle{P_{rel}} (^{\circ})$';
+ax.YLabel.FontSize = 15;
 % printfig(ax.Parent, imagesPath, 'Experiment10_TruncationIdealCaseA', 'eps')
+
+% Primary source far field, receiver near field
+ax = drawArray(vecs, repAbs, 2, 'indepDimLimits', [0 3], 'nonIndepDimValues', [Inf 0 2]);
+ax.XLabel.Interpreter = 'latex';
+ax.YLabel.Interpreter = 'latex';
+ax.XLabel.String = '$d/\lambda$';
+ax.YLabel.String = '$20\log_{10}(|P_{rel}|)$ (dB)';
+ax.XLabel.FontSize = 15;
+ax.YLabel.FontSize = 15;
+[aux, x, y] = drawArray(vecs, repPha, 2, 'indepDimLimits', [0 3], 'nonIndepDimValues', [Inf 0 2]);
+close(aux.Parent)
+yyaxis(ax, 'right')
+plot(ax, x, y)
+ax.YLabel.Interpreter = 'latex';
+ax.YLabel.String = '$\angle{P_{rel}} (^{\circ})$';
+ax.YLabel.FontSize = 15;
+% printfig(ax.Parent, imagesPath, 'Experiment10_TruncationIdealCaseB', 'eps')
 
 % Observation: I don't see a significative difference in performance. So
 % don't worry too much about the 1/r0 term, because the dominant limitation
@@ -1134,12 +1146,12 @@ for yrec = 1:numDist_rec
 end
 
 repAbs = 20*log10(abs(I_wfs)./abs(I_ps));
+repPha = rad2deg(angle(I_wfs./I_ps));
+
 visualObj = animation({d_rec, k},...
     {repAbs}, {'Distance receiver', 'k (rad/m)'}, ...
     {'|Prel| (dB)'}, [], []);
 
-
-repPha = rad2deg(angle(I_wfs./I_ps));
 visualObj = animation({d_rec, k},...
     {repPha}, {'Distance receiver', 'k (rad/m)'}, ...
     {'|Prel| (dB)'}, [], []);
@@ -1149,3 +1161,73 @@ visualObj = animation({d_rec, k},...
 kThreshold = k(minInd);
 ax = axes(figure);
 plot(ax, d_rec, kThreshold)
+
+ax = drawArray(vecs, repAbs, [2 1], 'indepDimLimits', [0 Inf], 'nonIndepDimValues', [Inf 0 2]);
+
+% Line source integral
+f = @(x_s, d, k) exp(-1i*k*sqrt(d^2 + x_s.^2))./sqrt(d^2 + x_s.^2);
+
+d = 10;
+k = 1;
+Lmax = 100;
+dx = 2*pi/k*0.01;
+sampVec = 0:dx:Lmax/2;
+val = f(sampVec, d, k)*dx;
+val(2:end) = 2*val(2:end);
+
+acumI = cumsum(val);
+ideal = exp(-1i*k*d)*sqrt(2*pi/(1i*k*d)); % When we have integrated to the infinity
+
+cmap = lines;
+ax = axes(figure, 'NextPlot', 'Add');
+plot(ax, sampVec*2, abs(acumI), 'Color', cmap(1,:));
+plot(ax, [0, sampVec(end)*2], abs(ideal)*ones(1, 2), '--', 'Color', cmap(1,:))
+ax.XLabel.Interpreter = 'latex';
+ax.XLabel.String = 'L (m)';
+ax.YLabel.String = '$|I|$';
+ax.YLabel.Interpreter = 'latex';
+ax.YColor = cmap(1,:);
+yyaxis(ax, 'right')
+plot(ax, sampVec*2, rad2deg(angle(acumI)), 'Color', cmap(2,:));
+plot(ax, [0, sampVec(end)*2], rad2deg(angle(ideal))*ones(1, 2), '--', 'Color', cmap(2,:))
+ax.YLabel.String = '$\angle{I} (^\circ)$';
+ax.YLabel.Interpreter = 'latex';
+ax.YColor = cmap(2,:);
+yyaxis('left')
+ax.YColor = cmap(1,:);
+ax.Title.String = '$d = 10$, $k = 1$';
+ax.Title.Interpreter = 'latex';
+
+% printfig(ax.Parent, imagesPath, 'lineSourceIntegral', 'eps');
+
+% Not very useful. It's better to normalize:
+fnorm = @(x_s, lambdaNorm, dNorm) exp(-1i*2*pi/lambdaNorm*sqrt(dNorm^2 + x_s.^2))./sqrt(dNorm^2 + x_s.^2);
+% lambdaNorm = lambda/L and dNorm = d/L
+
+dNorm = linspace(1, 10, 100); dNorm = dNorm(2:end);
+LNorm = linspace(1, 1000, 100); LNorm = LNorm(2:end);
+
+numD = length(dNorm);
+numL = length(LNorm);
+
+I = zeros(numD, numL);
+for dIter = 1:numD
+    for Liter = 1:numL
+        lambdaNorm = 1/LNorm(Liter);
+        dx = lambdaNorm*0.01;
+        sampVec = 0:dx:1/2;
+        val = fnorm(sampVec, lambdaNorm, dNorm(dIter))*dx;
+        val(2:end) = 2*val(2:end);
+        
+        ideal = exp(-1i*2*pi/lambdaNorm*dNorm(dIter))*sqrt(2*pi/(1i*2*pi/lambdaNorm*dNorm(dIter)));
+        I(dIter, Liter) = sum(val)/ideal;
+    end
+end
+
+ax = drawArray({dNorm, LNorm}, abs(I), [1 2], 'surfOrPlot', 'surf');
+ax.XLabel.String = '$d/L$';
+ax.YLabel.String = '$\lambda/L$';
+
+
+
+
