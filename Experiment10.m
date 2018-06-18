@@ -1154,7 +1154,7 @@ visualObj = animation({d_rec, k},...
 
 visualObj = animation({d_rec, k},...
     {repPha}, {'Distance receiver', 'k (rad/m)'}, ...
-    {'|Prel| (dB)'}, [], []);
+    {'\angle{Prel} (\circ)'}, [], []);
 
 % Find the k for which the angle starts to converge
 [minVal, minInd] = min(repPha, [], 2);
@@ -1164,7 +1164,7 @@ plot(ax, d_rec, kThreshold)
 
 ax = drawArray(vecs, repAbs, [2 1], 'indepDimLimits', [0 Inf], 'nonIndepDimValues', [Inf 0 2]);
 
-% Line source integral
+% C) Line source integral
 f = @(x_s, d, k) exp(-1i*k*sqrt(d^2 + x_s.^2))./sqrt(d^2 + x_s.^2);
 
 d = 10;
@@ -1204,8 +1204,8 @@ ax.Title.Interpreter = 'latex';
 fnorm = @(x_s, lambdaNorm, dNorm) exp(-1i*2*pi/lambdaNorm*sqrt(dNorm^2 + x_s.^2))./sqrt(dNorm^2 + x_s.^2);
 % lambdaNorm = lambda/L and dNorm = d/L
 
-dNorm = linspace(1, 10, 100); dNorm = dNorm(2:end);
-LNorm = linspace(1, 1000, 100); LNorm = LNorm(2:end);
+dNorm = linspace(0, 2, 100); dNorm = dNorm(2:end);
+LNorm = linspace(0, 20, 1000); LNorm = LNorm(2:end);
 
 numD = length(dNorm);
 numL = length(LNorm);
@@ -1214,7 +1214,7 @@ I = zeros(numD, numL);
 for dIter = 1:numD
     for Liter = 1:numL
         lambdaNorm = 1/LNorm(Liter);
-        dx = lambdaNorm*0.01;
+        dx = min(lambdaNorm*0.01, 0.01);
         sampVec = 0:dx:1/2;
         val = fnorm(sampVec, lambdaNorm, dNorm(dIter))*dx;
         val(2:end) = 2*val(2:end);
@@ -1224,10 +1224,69 @@ for dIter = 1:numD
     end
 end
 
-ax = drawArray({dNorm, LNorm}, abs(I), [1 2], 'surfOrPlot', 'surf');
+visualObj = animation({dNorm, LNorm},...
+    {rad2deg(angle(I))}, {'d/L', 'L/\lambda'}, ...
+    {'angle(I)'}, [], []);
+
+% Find the k for which the angle starts to converge
+[minVal, minInd] = min(rad2deg(angle(I)), [], 2);
+LNormThreshold = LNorm(minInd);
+% When d/L (dNorm) is very small, the method of finding the minimum is not useful
+% because the shape of the curve is different. Let's remove those values
+% when representing. To do that, we put the condition that LNormThreshold
+% values should be monotically increasing with dNorm
+validInd = (LNormThreshold(2:end) - LNormThreshold(1:end-1)) >= 0;
+ini = find(validInd, 1, 'first');
+ax = axes(figure);
+plot(ax, dNorm(ini:end), LNormThreshold(ini:end))
 ax.XLabel.String = '$d/L$';
-ax.YLabel.String = '$\lambda/L$';
+ax.YLabel.String = '$L/\lambda$';
+ax.XLabel.Interpreter = 'latex';
+ax.YLabel.Interpreter = 'latex';
+ax.YLim = [0, 15];
+% printfig(ax.Parent, imagesPath, 'LnormThreshold', 'eps');
 
+% GTAC side
+s = WFSToolSimple.generateScenario(96);
+Lx = max(s.loudspeakersPosition(:,1)) - min(s.loudspeakersPosition(:,1));
+L = 0.18*23;
+c = 340;
+dNormGTAC = linspace(0, Lx, 100)/L;
+f = 1:0.25:500;
 
+numD = length(dNormGTAC);
+numF = length(f);
+I = zeros(numD, numF);
+for dIter = 1:numD
+    for fIter = 1:numF
+        lambdaNorm = c/(f(fIter)*L);
+        dx = min(lambdaNorm*0.01, 0.01);
+        sampVec = 0:dx:1/2;
+        val = fnorm(sampVec, lambdaNorm, dNormGTAC(dIter))*dx;
+        val(2:end) = 2*val(2:end);
+        
+        ideal = exp(-1i*2*pi/lambdaNorm*dNormGTAC(dIter))*sqrt(2*pi/(1i*2*pi/lambdaNorm*dNormGTAC(dIter)));
+        I(dIter, fIter) = sum(val)/ideal;
+    end
+end
 
+visualObj = animation({dNormGTAC, f},...
+    {rad2deg(angle(I))}, {'d/L', 'f'}, ...
+    {'angle(I)'}, [], []);
 
+% Find the k for which the angle starts to converge
+[minVal, minInd] = min(rad2deg(angle(I)), [], 2);
+fThreshold = f(minInd);
+% When d/L (dNorm) is very small, the method of finding the minimum is not useful
+% because the shape of the curve is different. Let's remove those values
+% when representing. To do that, we put the condition that LNormThreshold
+% values should be monotically increasing with dNorm
+notValidInd = (fThreshold(2:end) - fThreshold(1:end-1)) < 0;
+ini = find(notValidInd, 1, 'last') + 1;
+ax = axes(figure);
+plot(ax, dNormGTAC(ini:end)*L, fThreshold(ini:end))
+ax.XLabel.String = '$d$ (m)';
+ax.YLabel.String = '$f$ (Hz)';
+ax.XLabel.Interpreter = 'latex';
+ax.YLabel.Interpreter = 'latex';
+% printfig(ax.Parent, imagesPath, 'freqThresholdGTAC', 'eps');
