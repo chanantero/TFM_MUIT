@@ -456,13 +456,13 @@ classdef scenario < handle
         function attenuation = calcPhysicalAttenuation(obj, distances, cosAlfa)
 %             if obj.numLoudspeakers == 96
                 if obj.attenuationType == 'Ruben'
-                    r0 = 1.44*(0.5+cosd(45));
+                    Delta_r0 = 1.44*(0.5+cosd(45));
                 elseif obj.attenuationType == 'Miguel'
-                    r0 = 1.28*2;
+                    Delta_r0 = 1.28*2;
                 elseif obj.attenuationType == 'Custom'
-                    r0 = obj.r0;
+                    Delta_r0 = obj.r0;
                 end
-                A = sqrt(r0./(r0+distances));
+                A = sqrt(Delta_r0./(Delta_r0+distances));
                 attenuation = A.*cosAlfa./sqrt(distances);
 %             else
 % %                 attenuation = ones(size(distances));

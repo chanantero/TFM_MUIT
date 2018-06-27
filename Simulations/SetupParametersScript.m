@@ -16,7 +16,7 @@ numFreqFilters = numel(freqFilters);
 if ~exist('WFSfilterLength', 'var')
     predefWFSfilterLength = false;
 else
-    obj.WFSToolObj.filterWFS_length = WFSfilterLength;
+    predefWFSfilterLength = true;
 end
 numFreqs = numel(freqs);
 
@@ -47,11 +47,11 @@ if ~exist('predefSignals', 'var')
 end
 
 if ~exist('predefRoomDim', 'var')
-    predefSignals = false;
+    predefRoomDim = false;
 end
 
 if ~exist('predefNumSampIR', 'var')
-    predefSignals = false;
+    predefNumSampIR = false;
 end
 if ~exist('saveSignals', 'var')
     saveSignals = false;
