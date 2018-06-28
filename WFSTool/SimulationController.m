@@ -723,7 +723,7 @@ classdef SimulationController < handle
             for k = 1:numel(s)
                 s(k).corrFactIndividual = -s(k).recNScoef./s(k).recWFScoef;
                 s(k).corrFactGlobal = -s(k).recWFScoef\s(k).recNScoef;
-                s(k).attenuationIndividual = abs(s(k).recCoef./s(k).recNScoef);
+                s(k).attenuationIndividual = abs(s(k).recCoef./s(k).recNScoef).^2;
                 s(k).attenuationGlobal = sum(abs(s(k).recCoef).^2)./sum(abs(s(k).recNScoef).^2);
             end
             

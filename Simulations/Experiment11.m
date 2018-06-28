@@ -80,7 +80,7 @@ frequencyCorrection = false;
 attenuationType = 'Ruben';
 
 % Simulation options
-timeDomainActive = true;
+timeDomainActive = false;
 fakeTimeProcessing = false;
 frequencyDomainActive = true;
 automaticLengthModification = false;
@@ -89,19 +89,8 @@ saveSignals = true;
 % Duration of tone for time processing
 durSign = 1;
 
-%% Setup first parameters
 SetupParametersScript
-
-%% Pre-calculate impulse responses
-% Since it would take a lot of time to calculate the IR during the
-% simulations, we calculate it previously and save it to a .mat. 
-
 AcousticPathCalculationScript
-% WFSposition = obj.WFSposition;
-% save([dataPathName, 'AcPathResponsesWFS_', ID, '.mat'], 'r', 'roomDim', 'numSamp', 'WFSposition', 'freqs', 'WFS_IR', 'WFS_FR')
-% save([dataPathName, 'AcPathResponsesNS_', ID, '.mat'], 'r', 'roomDim', 'numSamp', 'NSpositions', 'NS_IR', 'freqs', 'NS_FR')
-
-%% Simulation
 simulationScript
 
 %% Graphs for the report
@@ -116,8 +105,8 @@ ax.XLabel.String = 'Time (s)';
 % printfig(ax.Parent, imagesPath, 'Experiment11_exampleNoFreqCorr', 'eps');
 
 [s, corrFactInd, corrFactGlob, attenInd, attenGlob] = SimulationController.addCancellationParametersToStructure(s);
-attenInd(:, 1, 1, :, 13)
-cancInd = -20*log10(attenInd(2, 1, 13));
+attenInd(2, 1, 13)
+cancInd = -10*log10(attenInd(2, 1, 13));
 corrFact = corrFactInd(2, 1, 13);
 
 %% SVG scenario of just one receiver measure point
@@ -162,13 +151,10 @@ objVis.scenInd = 2;
 fig = figure;
 newax = copyobj(objVis.ax2Dmap, fig);
 colorbar(newax)
-colormap(newax, flipud(jet))
-newax.Children(2).CData = -newax.Children(2).CData;
-newax.CLim = [0, 4];
 
-% printfig(fig, imagesPath, 'Experiment11_multipleReceiverCancel2Dmap', 'eps')
+% printfig(fig, imagesPath, 'Experiment11_multipleReceiverAtten2Dmap', 'eps')
 
-cancGlob = -20*log10(attenGlob(2));
+cancGlob = -10*log10(attenGlob(2));
 
 %% Different positions of noise source
 
@@ -187,6 +173,17 @@ y = centreY + repmat(radius, numPointsPerArc, 1).*repmat(sin(alpha), 1, numArcs)
 NSpositions = [x(:), y(:), zeros(numel(x), 1)];
 
 SetupParametersScript
+AcousticPathCalculationScript
+simulationScript
+
+[s, corrFactInd, corrFactGlob, attenInd, attenGlob] = SimulationController.addCancellationParametersToStructure(s);
+% The frequency simulations are ideal, and hence we will use them.
+size(attenGlob)
+ax = axes(figure);
+h = histogram(ax, 10*log10(attenGlob(2, 1, :)), 5);
+ax.XLim = [-5, 0];
+ax.XLabel.String = 'Attenuation (dB)';
+% printfig(ax.Parent, imagesPath, 'Experiment11_attenGlobDifNSNoFreqCor', 'eps')
 
 %% SVG scenario for multiple measure points and noise sources
 viewBox = [-WFSarrayOffset(1), -WFSarrayOffset(2), max(NSpositions(:, 1))+WFSarrayOffset(1)+0.5, max(NSpositions(:, 2))+WFSarrayOffset(2)+0.5];
@@ -203,3 +200,65 @@ currentFolder = pwd;
 cd(imagesPath); % Needed for inkscape to link svg files properly
 system(['inkscape -z "', imagesPath, name, '.svg" --export-pdf="', imagesPath, name, '.pdf"'])
 cd(currentFolder)
+
+%% Chirp signal
+
+durSign = 1; % Duration of tone for time processing
+t = (0:ceil(durSign*fs)-1)/fs;
+NSsignal = chirp(t, 20, durSign, 940);
+
+predefSignals = true;
+timeDomainActive = true;
+
+SetupParametersScript
+AcousticPathCalculationScript
+simulationScript
+
+% Analysis
+recWFS_signals = rec_signals - recNS_signals;
+
+% Perform FFT
+numSamp = size(recNS_signals, 2);
+t = (0:numSamp-1)/fs;
+f = (0:numSamp-1)/(numSamp/fs);
+sel = f >= 0 & f <= 1000;
+fsel = f(sel);
+
+recNS = fft(recNS_signals, [], 2); %/fs;
+recNS = recNS(:, sel, :, :);
+recWFS = fft(recWFS_signals, [], 2); %/fs;
+recWFS = recWFS(:, sel, :, :);
+corrFact = -recNS./recWFS;
+
+% In order to calculate the global cancellation, it is convenient to create
+% a structure array
+ss = repmat(s(1), [numel(fsel), numNSpos]);
+for fIter = 1:numel(fsel)
+    for ns = 1:numNSpos
+        ss(fIter, ns).recCoef = recNS(:, fIter, 1, ns) + recWFS(:, fIter, 1, ns);
+        ss(fIter, ns).recNScoef = recNS(:, fIter, 1, ns); 
+        ss(fIter, ns).recWFScoef = recWFS(:, fIter, 1, ns);
+        ss(fIter, ns).Frequency = fsel(fIter);
+    end
+end
+
+[ss, corrFactInd, corrFactGlob, attenInd, attenGlob] = SimulationController.addCancellationParametersToStructure(ss);
+
+vecs = {fsel, 1:numNSpos};
+indepDim = 1;
+ax = drawArray(vecs, 10*log10(attenGlob), indepDim, 'nonIndepDimIndices', 1);
+ax.XLabel.String = 'Frequency (Hz)';
+ax.YLabel.String = 'Attenuation (dB)';
+% printfig(ax.Parent, imagesPath, 'Experiment11_globalCancOneNSChirp', 'eps')
+
+%% Explanation of frequency dependent histograms
+vecs = {fsel, 1:numNSpos};
+indepDim = 2;
+[repVectors, repData] = filterArrayForRepresentation(vecs, 10*log10(attenGlob), indepDim, 'nonIndepDimValues', 440);
+
+ax = axes(figure);
+histogram2(ax, 
+ax.XLim = [-5, 0];
+ax.XLabel.String = 'Attenuation (dB)';
+% printfig(ax.Parent, imagesPath, 'Experiment11_attenGlobDifNSchirp3Dhist', 'eps')
+
