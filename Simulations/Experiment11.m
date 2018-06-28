@@ -21,7 +21,9 @@ end
 c = 340; % Sound velocity (m/s)
 fs = 44100; % Sample frequency (samples/s)
 WFSfilterLength = 22050;
-WFSarrayOffset = [0.5, 1.5, 1.65]; % [x, y, z] coordinates. Useful for generating acoustic path IR.
+zPos = 1.65;
+WFSarrayOffset = [0.46 2.21 zPos]; % [x, y, z] coordinates. Useful for generating acoustic path IR.
+roomDim = [4.48, 9.13, 2.64];
 
 % Noise source coefficient
 amplitude = 1;
@@ -71,7 +73,7 @@ freqs = 440;
 beta = 0; % Average reflection coefficient of the walls of the chamber
 WFS_AcPath_previously_calculated = true;
 NS_AcPath_previously_calculated = true;
-appendFreeSpaceAcPaths = true;
+appendFreeSpaceAcPaths = false;
 
 % WFS options
 frequencyCorrection = false;
@@ -111,111 +113,93 @@ ax = axes(figure);
 plot(ax, t, recNS_signals(13, :), t, rec_signals(13, :))
 ax.XLim = [0.2, 0.21];
 ax.XLabel.String = 'Time (s)';
-printfig(ax.Parent, imagesPath, 'Experiment11_exampleNoFreqCorr', 'eps');
+% printfig(ax.Parent, imagesPath, 'Experiment11_exampleNoFreqCorr', 'eps');
 
+[s, corrFactInd, corrFactGlob, attenInd, attenGlob] = SimulationController.addCancellationParametersToStructure(s);
+attenInd(:, 1, 1, :, 13)
+cancInd = -20*log10(attenInd(2, 1, 13));
+corrFact = corrFactInd(2, 1, 13);
 
+%% SVG scenario of just one receiver measure point
+viewBox = [-WFSarrayOffset(1) -WFSarrayOffset(2) roomDim(1) roomDim(2)];
+NSangles = atan2d(centerY - NSpositions(:,2), centerX - NSpositions(:,1));
 
-%% Load saved information
-% s = dataStruct.data;
-% beta = dataStruct.ReverbTime;
-% 
-% numMicro = size(dataStruct.recPositions, 1);
+objSVG = SVGdrawer('viewBox', viewBox, 'NSpositions', NSpositions,...
+    'NSangles', NSangles, 'microSymbol', 'dot', 'microSize', 0.05,...
+    'microPositions', [centerX, centerY]);
 
+name = 'Experiment11_scheme_oneReceiver';
+objSVG.drawSVG([imagesPath, name, '.svg']);
 
-%% Visualization: 2D map, case by case
+currentFolder = pwd;
+cd(imagesPath); % Needed for inkscape to link svg files properly
+system(['inkscape -z "', imagesPath, name, '.svg" --export-pdf="', imagesPath, name, '.pdf"'])
+cd(currentFolder)
 
-% Create simulationViewer object
+%% SVG scenario of a grid of points of measure
+viewBox = [-WFSarrayOffset(1) -WFSarrayOffset(2) roomDim(1) roomDim(2)];
+NSangles = atan2d(centerY - NSpositions(:,2), centerX - NSpositions(:,1));
+
+objSVG = SVGdrawer('viewBox', viewBox, 'NSpositions', NSpositions,...
+    'NSangles', NSangles, 'microSymbol', 'dot', 'microSize', 0.05,...
+    'microPositions', recPositions);
+
+name = 'Experiment11_scheme_multipleReceiver';
+objSVG.drawSVG([imagesPath, name, '.svg']);
+
+currentFolder = pwd;
+cd(imagesPath); % Needed for inkscape to link svg files properly
+system(['inkscape -z "', imagesPath, name, '.svg" --export-pdf="', imagesPath, name, '.pdf"'])
+cd(currentFolder)
+
+%% What happens for the grid of points?
+
 objVis = simulationViewer(obj.ax, s);
+objVis.magnitude = 'Cancellation';
+objVis.representationType = 'dB';
+objVis.scenInd = 2;
 
-%% Visualization: correction factor
-% Calculate individual and global correction factors
-corrFactInd = zeros([size(s), numMicro]); % Individual correction factor
-numDims = ndims(s);
-subinds_s = cell(numDims, 1);
-subinds_ext = cell(numDims + 1, 1);
-for k = 1:numel(s)
-    s(k).corrFactIndividual = -s(k).recNScoef./s(k).recWFScoef;
-    s(k).corrFactGlobal = -s(k).recWFScoef\s(k).recNScoef;
-    
-    [subinds_s{:}] = ind2sub(size(s), k);
-    for d = 1:numDims
-        subinds_ext{d} = subinds_s{d}*ones(numMicro, 1);
-    end
-    subinds_ext{end} = (1:numMicro)';
-    inds = sub2ind(size(corrFactInd), subinds_ext{:})';
-    
-    corrFactInd(inds) = s(k).corrFactIndividual;
-end
-corrFactGlobal = zeros(size(s)); % Individual correction factor
-corrFactGlobal(:) = [s.corrFactGlobal];
+fig = figure;
+newax = copyobj(objVis.ax2Dmap, fig);
+colorbar(newax)
+colormap(newax, flipud(jet))
+newax.Children(2).CData = -newax.Children(2).CData;
+newax.CLim = [0, 4];
 
-% How disperse are the individual correction factors for different NS
-% positions and microphone positions?
-% Note: you can use histogram2 instead of pcolor for visualizing, but the
-% flexibility is smaller
-freqs_aux = 0:1000;
-correctFactTheo = sqrt(1i * freqs_aux/c);
+% printfig(fig, imagesPath, 'Experiment11_multipleReceiverCancel2Dmap', 'eps')
 
-corrFactInd_zeroReverb = corrFactInd(2, :, :, 1, :);
-corrFactGlobal_zeroReverb = corrFactGlobal(2, :, :, 1);
-freqMat_ind = pointWiseExtend(freqs, corrFactInd_zeroReverb);
-freqMat_glob = pointWiseExtend(freqs, corrFactGlobal_zeroReverb);
-[N_abs, Xedges_abs, Yedges_abs] = histcounts2(freqMat_ind, abs(corrFactInd_zeroReverb), 'BinWidth', [freqs(2) - freqs(1), 0.1]);
-[N_phase, Xedges_phase, Yedges_phase] = histcounts2(freqMat_ind, rad2deg(angle(corrFactInd_zeroReverb)), 'BinWidth', [freqs(2) - freqs(1), 1]);
-[N_abs_glob, Xedges_abs_glob, Yedges_abs_glob] = ...
-    histcounts2(freqMat_glob, abs(corrFactGlobal_zeroReverb), 'BinWidth', [freqs(2) - freqs(1), 0.1]);
-[N_phase_glob, Xedges_phase_glob, Yedges_phase_glob] = ...
-    histcounts2(freqMat_glob, rad2deg(angle(corrFactGlobal_zeroReverb)), 'BinWidth', [freqs(2) - freqs(1), 1]);
+cancGlob = -20*log10(attenGlob(2));
 
-Nnorm_abs = N_abs./repmat(sum(N_abs, 2), [1, size(N_abs, 2)]);
-Nnorm_phase = N_phase./repmat(sum(N_phase, 2), [1, size(N_phase, 2)]);
-Nnorm_abs_glob = N_abs_glob./repmat(sum(N_abs_glob, 2), [1, size(N_abs_glob, 2)]);
-Nnorm_phase_glob = N_phase_glob./repmat(sum(N_phase_glob, 2), [1, size(N_phase_glob, 2)]);
+%% Different positions of noise source
 
-ax1 = axes(figure);
-C = zeros(length(Xedges_abs), length(Yedges_abs));
-C(1:end-1, 1:end-1) = Nnorm_abs;
-pcolor(ax1, Xedges_abs, Yedges_abs, C');
-ax1.Title.String = '|\Psi_{ind}| for individual cancellation';
-ax1.XLabel.String = 'Frequency (Hz)';
-ax1.YLabel.String = '|\Psi_{ind}|';
-colorbar
-ax1.NextPlot = 'Add';
-plot(ax1, freqs_aux, abs(correctFactTheo), 'r', 'LineWidth', 4);
+numPointsPerArc = 4;
+radius = [3.6 4 4.4 4.8];
+numArcs = numel(radius);
+xOctagon = obj.WFSposition(:, 1);
+yOctagon = obj.WFSposition(:, 2);
+centreX = (max(xOctagon) + min(xOctagon))/2;
+centreY = (max(yOctagon) + min(yOctagon))/2;
+alphaMax = pi/2;
+alphaMin = 0;
+alpha = linspace(alphaMin, alphaMax, numPointsPerArc)';
+x = centreX + repmat(radius, numPointsPerArc, 1).*repmat(cos(alpha), 1, numArcs);
+y = centreY + repmat(radius, numPointsPerArc, 1).*repmat(sin(alpha), 1, numArcs);
+NSpositions = [x(:), y(:), zeros(numel(x), 1)];
 
-% printfig(ax1.Parent, imagesPath, 'Experiment7_corrFactIndCancAbs', 'eps');
+SetupParametersScript
 
-ax2 = axes(figure);
-C = zeros(length(Xedges_phase), length(Yedges_phase));
-C(1:end-1, 1:end-1) = Nnorm_phase;
-pcolor(ax2, Xedges_phase, Yedges_phase, C');
-ax2.Title.String = 'phase(\Psi_{ind}) for individual cancellation';
-ax2.XLabel.String = 'Frequency (Hz)';
-ax2.YLabel.String = 'phase(\Psi_{ind})';
-colorbar
+%% SVG scenario for multiple measure points and noise sources
+viewBox = [-WFSarrayOffset(1), -WFSarrayOffset(2), max(NSpositions(:, 1))+WFSarrayOffset(1)+0.5, max(NSpositions(:, 2))+WFSarrayOffset(2)+0.5];
+NSangles = atan2d(centerY - NSpositions(:,2), centerX - NSpositions(:,1));
 
-% printfig(ax2.Parent, imagesPath, 'Experiment7_corrFactIndCancPhase', 'eps');
+objSVG = SVGdrawer('viewBox', viewBox, 'NSpositions', NSpositions,...
+    'NSangles', NSangles, 'microSymbol', 'dot', 'microSize', 0.05,...
+    'microPositions', recPositions);
 
-ax3 = axes(figure);
-C = zeros(length(Xedges_abs_glob), length(Yedges_abs_glob));
-C(1:end-1, 1:end-1) = Nnorm_abs_glob;
-pcolor(ax3, Xedges_abs_glob, Yedges_abs_glob, C');
-ax3.Title.String = '|\Psi_{global}| for global cancellation';
-ax3.XLabel.String = 'Frequency (Hz)';
-ax3.YLabel.String = '|\Psi_{global}|';
-colorbar
-ax3.NextPlot = 'Add';
-plot(ax3, freqs_aux, abs(correctFactTheo), 'r', 'LineWidth', 4);
+name = 'Experiment11_scheme_multipleReceiverMultipleNS';
+objSVG.drawSVG([imagesPath, name, '.svg']);
 
-% printfig(ax3.Parent, imagesPath, 'Experiment7_corrFactGlobCancAbs', 'eps');
-
-ax4 = axes(figure);
-C = zeros(length(Xedges_phase_glob), length(Yedges_phase_glob));
-C(1:end-1, 1:end-1) = Nnorm_phase_glob;
-pcolor(ax4, Xedges_phase_glob, Yedges_phase_glob, C');
-ax4.Title.String = 'phase(\Psi_{global}) for global cancellation';
-ax4.XLabel.String = 'Frequency (Hz)';
-ax4.YLabel.String = 'phase(\Psi_{global})';
-colorbar
-
-% printfig(ax4.Parent, imagesPath, 'Experiment7_corrFactGlobCancPhase', 'eps');
+currentFolder = pwd;
+cd(imagesPath); % Needed for inkscape to link svg files properly
+system(['inkscape -z "', imagesPath, name, '.svg" --export-pdf="', imagesPath, name, '.pdf"'])
+cd(currentFolder)

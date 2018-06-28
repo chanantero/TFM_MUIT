@@ -719,12 +719,12 @@ classdef SimulationController < handle
             s.OptimizationOptions = p.Results.OptimOptions;
         end
         
-        function [s, corrFactInd, corrFactGlobal] = addCancellationParametersToStructure(s)
+        function [s, corrFactInd, corrFactGlobal, attenInd, attenGlob] = addCancellationParametersToStructure(s)
             for k = 1:numel(s)
                 s(k).corrFactIndividual = -s(k).recNScoef./s(k).recWFScoef;
                 s(k).corrFactGlobal = -s(k).recWFScoef\s(k).recNScoef;
-%                 s(k).cancellationIndividual = -s(k).
-%                 s(k).cancellationGlobal
+                s(k).attenuationIndividual = abs(s(k).recCoef./s(k).recNScoef);
+                s(k).attenuationGlobal = sum(abs(s(k).recCoef).^2)./sum(abs(s(k).recNScoef).^2);
             end
             
             numMicro = numel(s(1).recCoef);
@@ -738,6 +738,13 @@ classdef SimulationController < handle
 
             corrFactGlobal = zeros(size(s)); % Global correction factor
             corrFactGlobal(:) = [s.corrFactGlobal];
+            
+%             cancInd = 
+            attenInd = zeros([numMicro, size(s)]);
+            attenInd(:) = [s.attenuationIndividual];
+            attenInd = permute(attenInd, [2:ndims(s) + 1, 1]);
+            attenGlob = zeros(size(s));
+            attenGlob(:) = [s.attenuationGlobal];            
         end
     end
     
