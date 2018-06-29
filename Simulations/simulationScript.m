@@ -26,7 +26,7 @@ recCoef_time = zeros(numMicro, numFreqs, numNSpos, numReverbTime, numFreqFilters
 recWFScoef_time = zeros(numMicro, numFreqs, numNSpos, numReverbTime, numFreqFilters);
 WFScoef_time = zeros(obj.numWFS, numFreqs, numNSpos, numReverbTime, numFreqFilters);
 
-if saveSignals
+if timeDomainActive && saveSignals
     recNS_signals = zeros(numMicro, numSampSign, numFreqs, numNSpos, numReverbTime);
     rec_signals = zeros(numMicro, numSampSign, numFreqs, numNSpos, numReverbTime, numFreqFilters);
 end

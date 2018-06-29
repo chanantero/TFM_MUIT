@@ -80,7 +80,7 @@ frequencyCorrection = false;
 attenuationType = 'Ruben';
 
 % Simulation options
-timeDomainActive = false;
+timeDomainActive = true;
 fakeTimeProcessing = false;
 frequencyDomainActive = true;
 automaticLengthModification = false;
@@ -88,6 +88,7 @@ saveSignals = true;
 
 % Duration of tone for time processing
 durSign = 1;
+predefSignals = false;
 
 SetupParametersScript
 AcousticPathCalculationScript
@@ -172,15 +173,17 @@ x = centreX + repmat(radius, numPointsPerArc, 1).*repmat(cos(alpha), 1, numArcs)
 y = centreY + repmat(radius, numPointsPerArc, 1).*repmat(sin(alpha), 1, numArcs);
 NSpositions = [x(:), y(:), zeros(numel(x), 1)];
 
+timeDomainActive = false;
+
 SetupParametersScript
 AcousticPathCalculationScript
 simulationScript
 
-[s, corrFactInd, corrFactGlob, attenInd, attenGlob] = SimulationController.addCancellationParametersToStructure(s);
+[s, corrFactInd440, corrFactGlob440, attenInd440, attenGlob440] = SimulationController.addCancellationParametersToStructure(s);
 % The frequency simulations are ideal, and hence we will use them.
-size(attenGlob)
+size(attenGlob440)
 ax = axes(figure);
-h = histogram(ax, 10*log10(attenGlob(2, 1, :)), 5);
+h = histogram(ax, 10*log10(attenGlob440(2, 1, :)), 5);
 ax.XLim = [-5, 0];
 ax.XLabel.String = 'Attenuation (dB)';
 % printfig(ax.Parent, imagesPath, 'Experiment11_attenGlobDifNSNoFreqCor', 'eps')
@@ -256,9 +259,45 @@ vecs = {fsel, 1:numNSpos};
 indepDim = 2;
 [repVectors, repData] = filterArrayForRepresentation(vecs, 10*log10(attenGlob), indepDim, 'nonIndepDimValues', 440);
 
+[counts, edges] = histcounts(repData, 5);
 ax = axes(figure);
-histogram2(ax, 
-ax.XLim = [-5, 0];
+bar3cRub(counts', edges, [0 1], ax);
 ax.XLabel.String = 'Attenuation (dB)';
+ax.DataAspectRatio = [1 1 2];
+colorbar(ax)
 % printfig(ax.Parent, imagesPath, 'Experiment11_attenGlobDifNSchirp3Dhist', 'eps')
 
+ax.View = [-90, 90];
+% printfig(ax.Parent, imagesPath, 'Experiment11_attenGlobDifNSchirp3DhistAbove', 'eps')
+
+% Represent the 2D histogram of the attenuation
+freqEdges = 0:20:1000;
+attenEdges = -10:5;
+ax = histogram2D(10*log10(attenGlob), 1, fsel, freqEdges, attenEdges, 'visual3D', true);
+ax.XLabel.String = 'Frequency (Hz)';
+ax.YLabel.String = 'Attenuation (dB)';
+colorbar(ax);
+% printfig(ax.Parent, imagesPath, 'Experiment11_DifNSchirpGlobAtten', 'eps')
+
+% Represent the 2D histogram of the correction factor
+corrFact = sqrt(1i*fsel/c);
+
+corrFactEdges = 0:0.1:2;
+ax = histogram2D(abs(corrFactGlob), 1, fsel, freqEdges, corrFactEdges);
+ax.XLabel.String = 'Frequency (Hz)';
+ax.YLabel.String = '|\Psi|';
+colorbar(ax);
+ax.NextPlot = 'Add';
+plot(ax, fsel, abs(corrFact), 'r', 'LineWidth', 5)
+l = legend(ax.Children(1), '$\Big |\sqrt{\frac{jk}{2\pi}}\Big |$');
+l.Interpreter = 'latex';
+l.FontSize = 18;
+% printfig(ax.Parent, imagesPath, 'Experiment11_DifNSchirpGlobCorrFactAbs', 'eps')
+
+corrFactEdgesPhase = 0:1:50;
+ax = histogram2D(rad2deg(angle(corrFactGlob)), 1, fsel, freqEdges, corrFactEdgesPhase);
+ax.XLabel.String = 'Frequency (Hz)';
+ax.YLabel.String = '|\Psi|';
+colorbar(ax);
+ax.NextPlot = 'Add';
+% printfig(ax.Parent, imagesPath, 'Experiment11_DifNSchirpGlobCorrFactPhase', 'eps')
