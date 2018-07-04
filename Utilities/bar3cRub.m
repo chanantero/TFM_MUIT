@@ -21,17 +21,19 @@ CData = Z;
 % Modify CData so the lateral side of the bars have the right color
 increaseX = find(diff([zeros(1, N); data; zeros(1, N)], 1, 1) > 0);
 wallsXDir_x = 1:2:size(CData, 1)-1;
-wallsXDir_y = 2:2:size(CData, 2);
+wallsXDir_y = 2:2:size(CData, 2)-2;
 [X, Y] = ndgrid(wallsXDir_x, wallsXDir_y);
 indWallXmat = sub2ind(size(CData), X, Y);
-CData(indWallXmat(increaseX)) = data(increaseX);
+aux = [data; zeros(1,N)];
+CData(indWallXmat(increaseX)) = aux(increaseX);
 
 increaseY = find(diff([zeros(M, 1), data, zeros(M, 1)], 1, 2) > 0);
 wallsYDir_y = 1:2:size(CData, 2)-1;
-wallsYDir_x = 2:2:size(CData, 1);
+wallsYDir_x = 2:2:size(CData, 1)-2;
 [X, Y] = ndgrid(wallsYDir_x, wallsYDir_y);
 indWallYmat = sub2ind(size(CData), X, Y);
-CData(indWallYmat(increaseY)) = data(increaseY);
+aux = [data, zeros(M, 1)];
+CData(indWallYmat(increaseY)) = aux(increaseY);
 
 if predefAx
     ax = p.Results.axes;

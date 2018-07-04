@@ -151,7 +151,6 @@ ax.YLabel.String = '|H(f)|';
 %% Test function getFrequencyFilter
 [hTotal, delay] = getFrequencyFilter(512, 2^14, 44100);
 
-hTotal = freqFilters{4};
 N = length(hTotal);
 Htotal = fft(hTotal); % fft(freqFilters{1});
 df = 1/N;
@@ -168,7 +167,6 @@ plot(ax, f_fftshift, sqrt(abs(f_fftshift)/343))
 legend(ax, 'Real', 'Ideal')
 ax.Title.String = 'Frequency response';
 
-delay = freqFiltDelays(4);
 phaseShift = -delay/fs * 2*pi*f;
 Htotal_compensated = Htotal.*exp(-1i*phaseShift);
 ax2 = axes(figure);

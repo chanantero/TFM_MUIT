@@ -36,12 +36,15 @@ if WFS_AcPath_previously_calculated
     end
     
     % Calculate the frequency responses
-    WFS_FR = zeros(obj.numMicro, numFreqs, obj.numWFS, numReverbTime);
-    for k = 1:obj.numWFS
-        for rt = 1:numReverbTime
-            WFS_FR(:, :, k, rt) = DFT_slow(fs*WFS_IR(:, :, k, rt).', fs, freqs).';
-        end
-    end
+%     WFS_FR = zeros(obj.numMicro, numFreqs, obj.numWFS, numReverbTime);
+%     for k = 1:obj.numWFS
+%         for rt = 1:numReverbTime
+%             WFS_FR(:, :, k, rt) = DFT_slow(fs*WFS_IR(:, :, k, rt).', fs, freqs).';
+%         end
+%     end
+    
+    oper = @(x) freqz(x, 1, freqs, fs);
+    WFS_FR = oneDimOperOverMultiDimArray( oper, WFS_IR, 2 );
     
 end
 
@@ -54,12 +57,16 @@ if NS_AcPath_previously_calculated
         end
     end
     
-    NS_FR = zeros(obj.numMicro, numFreqs, numNSpos, numReverbTime);
-    for k = 1:numNSpos
-        for rt = 1:numReverbTime
-            NS_FR(:, :, k, rt) = DFT_slow(fs*NS_IR(:, :, k, rt).', fs, freqs).';
-        end
-    end
+%     NS_FR = zeros(obj.numMicro, numFreqs, numNSpos, numReverbTime);
+%     for k = 1:numNSpos
+%         for rt = 1:numReverbTime
+%             NS_FR(:, :, k, rt) = DFT_slow(fs*NS_IR(:, :, k, rt).', fs, freqs).';
+%         end
+%     end
+    
+    oper = @(x) freqz(x, 1, freqs, fs);
+    NS_FR = oneDimOperOverMultiDimArray( oper, NS_IR, 2 );
+    
 end
 
 if WFS_AcPath_previously_calculated && NS_AcPath_previously_calculated ...
