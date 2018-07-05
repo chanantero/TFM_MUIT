@@ -1183,7 +1183,7 @@ ax = axes(figure, 'NextPlot', 'Add');
 plot(ax, sampVec*2, abs(acumI), 'Color', cmap(1,:));
 plot(ax, [0, sampVec(end)*2], abs(ideal)*ones(1, 2), '--', 'Color', cmap(1,:))
 ax.XLabel.Interpreter = 'latex';
-ax.XLabel.String = 'L (m)';
+ax.XLabel.String = 'D (m)';
 ax.YLabel.String = '$|I|$';
 ax.YLabel.Interpreter = 'latex';
 ax.YColor = cmap(1,:);
@@ -1239,8 +1239,8 @@ validInd = (LNormThreshold(2:end) - LNormThreshold(1:end-1)) >= 0;
 ini = find(validInd, 1, 'first');
 ax = axes(figure);
 plot(ax, dNorm(ini:end), LNormThreshold(ini:end))
-ax.XLabel.String = '$d/L$';
-ax.YLabel.String = '$L/\lambda$';
+ax.XLabel.String = '$d/D$';
+ax.YLabel.String = '$D/\lambda$';
 ax.XLabel.Interpreter = 'latex';
 ax.YLabel.Interpreter = 'latex';
 ax.YLim = [0, 15];

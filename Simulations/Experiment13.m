@@ -151,7 +151,7 @@ end
 
 
 % % Print
-% sel = 2:5;
-% for k = 1:numel(sel)
-%     printfig(axCanc(sel(k)).Parent, imagesPath, ['Experiment13_globalAttenReflCoef_', num2str(beta(sel(k)))], 'eps')
-% end
+sel = [1 3 5 7];
+for k = 1:numel(sel)
+    printfig(axCanc(sel(k)).Parent, imagesPath, ['Experiment13_globalAttenReflCoef_', num2str(round(beta(sel(k))*100))], 'eps')
+end
