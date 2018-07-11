@@ -1290,3 +1290,32 @@ ax.YLabel.String = '$f$ (Hz)';
 ax.XLabel.Interpreter = 'latex';
 ax.YLabel.Interpreter = 'latex';
 % printfig(ax.Parent, imagesPath, 'freqThresholdGTAC', 'eps');
+
+%% Scheme of the truncation scenario
+
+ax = axes(figure, 'NextPlot', 'Add');
+D = 1;
+d_ps = 1;
+d = 0.5;
+plot(ax, [-D/2, D/2], [0 0], 'k');
+scatter(ax, 0, -d_ps, 50, [0 0 0], 'filled');
+a = scatter(ax, 0, d, 50, [0 0 0], 'filled');
+
+drawbrace([0 0], [0 -d_ps], 10); % Add curly brace
+drawbrace([0 0], [0 d], 10); % Add curly brace
+drawbrace([0 0], [D/2 0], 10); % Add curly brace
+text(ax, 0.05, -d_ps/2, '$d_{\PosTheoSubInd[primarySource]}$');
+text(ax, -0.1, d/2, '$d$');
+text(ax, D/4, 0.1, '$\sectionTheoLength/2$');
+text(ax, 0.05, -d_ps, '$\PosTheo[primarySource]$')
+text(ax, 0.05, d, '$\PosTheo$')
+% figCoord = data2figureCoordinates( ax, [-D/2*0.9, -d_ps*0.1; -D/2*0.9, 0] );
+% annotation('textarrow', [figCoord(1, 1), figCoord(2, 1)], [figCoord(1, 2), figCoord(2, 2)], 'String', '$\sectionTheo$')
+text(ax, -D/2*0.9, -d_ps*0.1, '$\sectionTheo$')
+
+ax.Visible = 'off';
+
+% currentFolder = pwd;
+% cd(imagesPath); % Needed for inkscape to link svg files properly
+% Plot2LaTeX( ax.Parent, 'Experiment10_truncationScheme'); % 'Experiment10_truncationScheme'
+% cd(currentFolder)

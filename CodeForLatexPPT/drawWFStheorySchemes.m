@@ -138,7 +138,7 @@ t(10) = text(ax, 0.8, 0.1, '$\sectionTheo$');
 ax = axes(figure, 'NextPlot', 'Add', 'DataAspectRatio', [1 1 1]);
 
 % Create volume of integration
-[Vx, Vy, Vz] = ellipsoid(0, 0, 0, 2, 1, 1, 300);
+[Vx, Vy, Vz] = ellipsoid(0, 0, 0, 2, 1, 1, 30);
 col = [0.9490    0.9020    0.3765];
 colMat = repmat(permute(col, [1 3 2]), [size(Vx), 1]);
 s = surf(ax, Vx, Vy, Vz, colMat);
@@ -172,7 +172,7 @@ normalDir = -squeeze(s.FaceNormals(xInd, yInd, :))';
 longArrow = 0.5;
 arrow(SSpos, SSpos + normalDir*longArrow)
 
-% ax.Visible = 'off';
+ax.Visible = 'off';
 
 % % In the GUI, edit the text but without modify it just to "remind" matlab
 % % that they are text boxes. I don't know why, but if you don't do it, it
@@ -199,8 +199,92 @@ text(ax, RecPos(1), RecPos(2), RecPos(3), '$\PosTheo$');
 text(ax, SSpos(1), SSpos(2), SSpos(3), '$\PosTheo[surface]$');
 text(ax, 2, 2, 2, '$V$')
 
+% currentFolder = pwd;
+% cd(imagesPath); % Needed for inkscape to link svg files properly
+% Plot2LaTeX( ax.Parent, 'pruebaTheoScheme'); % 'KirchhoffTheoScheme'
+% cd(currentFolder)
+
+%% Rayleigh integrals scenario
+
+ax = axes(figure, 'NextPlot', 'Add', 'DataAspectRatio', [1 1 1], ...
+    'XLim', [-1 1], 'YLim', [-1 1], 'ZLim', [-0.5 1]);
+ax.View = [-20, 10];
+
+% Draw circle 
+t = linspace(0, 2*pi);
+r = 1;
+x = r*cos(t);
+y = r*sin(t);
+figure(1)
+S1 = patch(ax, x, y, 'yellow', 'FaceAlpha', 0.5);
+
+% Draw hemisphere
+theta = linspace(0, pi/2, 10)';
+phi = linspace(0, 2*pi, 20);
+x = cos(theta)*cos(phi);
+y = cos(theta)*sin(phi);
+z = pointWiseExtend(sin(theta), x);
+S2 = surf(ax, x, y, z, 'FaceColor','yellow','FaceAlpha',0.5, 'LineStyle', 'none');
+
+% Create primary source
+PSpos = [0 0 -0.5];
+ps = scatter3(ax, PSpos(1), PSpos(2), PSpos(3), 50, [0 0 0], 'filled');
+
+% Create receiving point
+RecPos = [0.5 0 0.5];
+recP = scatter3(ax, RecPos(1), RecPos(2), RecPos(3), 50, [0 0 0], 'filled');
+
+% Create secondary source point and arrow
+SSpos = [0 0 0];
+
+% Create normal arrow
+normalDir = [0 0 1];
+longArrow = 0.25;
+arrow(SSpos, SSpos + normalDir*longArrow)
 % 
-currentFolder = pwd;
-cd(imagesPath); % Needed for inkscape to link svg files properly
-Plot2LaTeX( ax.Parent, 'pruebaTheoScheme'); % 'Kirchoff2_5DTheoScheme'
-cd(currentFolder)
+% % Lighting properties
+% S2.FaceLighting = 'gouraud';
+% S2.BackFaceLighting = 'lit';
+% % s.FaceNormals = -s.FaceNormals;
+% l = light(ax, 'Position', [-100 0 0], 'Style', 'local');
+
+% Transparency
+S2.AlphaDataMapping = 'none';
+S2.FaceAlpha = 'flat';
+S2.AlphaData = 0.2*ones(size(x));
+
+t = gobjects(0);
+t = [t, text(ax, PSpos(1), PSpos(2), PSpos(3), '$\PosTheo[primarySource]$')];
+t = [t, text(ax, SSpos(1) + longArrow*normalDir(1), SSpos(2) + longArrow*normalDir(2),...
+    SSpos(3) + longArrow*normalDir(3), '$\surfaceNormal$')];
+t = [t, text(ax, RecPos(1), RecPos(2), RecPos(3), '$\PosTheo$')];
+t = [t, text(ax, SSpos(1), SSpos(2), SSpos(3), '$\PosTheo[surface]$')];
+t = [t, text(ax, 2, 2, 0, '$\surfaceTheoRayleighSemisphere$')];
+t = [t, text(ax, 0, 0, 0, '$\surfaceTheoRayleighPlane$')];
+
+% for tcurr = t
+%     outsideLimitsX = tcurr.Position(1) < ax.XLim(1) || tcurr.Position(1) > ax.XLim(2);
+%     outsideLimitsY = tcurr.Position(2) < ax.YLim(1) || tcurr.Position(2) > ax.YLim(2);
+%     outsideLimitsZ = tcurr.Position(3) < ax.ZLim(1) || tcurr.Position(3) > ax.ZLim(2);
+%     if outsideLimitsX
+%         tcurr.Position(1) = 0;
+%     end
+%     if outsideLimitsY
+%         tcurr.Position(2) = 0;
+%     end
+%     if outsideLimitsZ
+%         tcurr.Position(3) = 0;
+%     end
+% end
+
+S2.Visible = 'off';
+S1.Visible = 'off';
+S2.Visible = 'on';
+S1.Visible = 'on';
+
+ax.Visible = 'off';
+
+% currentFolder = pwd;
+% cd(imagesPath); % Needed for inkscape to link svg files properly
+% Plot2LaTeX( ax.Parent, 'pruebaTheoScheme'); % 'RayleighTheoScheme'
+% cd(currentFolder)

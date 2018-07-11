@@ -151,7 +151,24 @@ end
 
 
 % % Print
-sel = [1 3 5 7];
-for k = 1:numel(sel)
-    printfig(axCanc(sel(k)).Parent, imagesPath, ['Experiment13_globalAttenReflCoef_', num2str(round(beta(sel(k))*100))], 'eps')
-end
+% sel = [1 3 5 7];
+% for k = 1:numel(sel)
+%     printfig(axCanc(sel(k)).Parent, imagesPath, ['Experiment13_globalAttenReflCoef_', num2str(round(beta(sel(k))*100))], 'eps')
+% end
+
+%% SVG scenario of the room
+viewBox = [-WFSarrayOffset(1) -WFSarrayOffset(2) roomDim(1) roomDim(2)];
+NSangles = atan2d(centerY - NSpositions(:,2), centerX - NSpositions(:,1));
+
+objSVG = SVGdrawer('viewBox', viewBox, 'NSpositions', NSpositions,...
+    'NSangles', NSangles, 'microSymbol', 'dot', 'microSize', 0.05,...
+    'microPositions', recPositions);
+
+name = 'Experiment13_scheme';
+objSVG.drawSVG([imagesPath, name, '.svg']);
+
+currentFolder = pwd;
+cd(imagesPath); % Needed for inkscape to link svg files properly
+system(['inkscape -z "', imagesPath, name, '.svg" --export-pdf="', imagesPath, name, '.pdf"'])
+cd(currentFolder)
+
