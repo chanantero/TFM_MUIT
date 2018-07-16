@@ -25,8 +25,17 @@ obj.microPos = recPositions;
 numMicro = size(recPositions, 1);
 
 % WFS options
-obj.WFSToolObj.frequencyCorrection = frequencyCorrection; % Very important! We want to see what happens without correction
-obj.WFSToolObj.attenuationType = attenuationType;
+if exist('frequencyCorrection', 'var')
+    obj.WFSToolObj.frequencyCorrection = frequencyCorrection; % Very important! We want to see what happens without correction
+else
+    obj.WFSToolObj.frequencyCorrection = true;
+end
+
+if exist('attenuationType', 'var')
+    obj.WFSToolObj.attenuationType = attenuationType;
+else
+    obj.WFSToolObj.attenuationType = 'Ruben';
+end
 
 % NS positions
 numNSpos = size(NSpositions, 1);
