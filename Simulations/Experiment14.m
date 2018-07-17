@@ -62,10 +62,10 @@ z = 0;
 recPositions = [X(:), Y(:), Z(:)];
 
 % Frequencies
-freqs = 0:10:1000;
+freqs = 440; % 100:200:1000;
 
 % Room characteristics and impulse response of chamber
-beta = [0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.5]; % Average reflection coefficient of the walls of the chamber
+beta = [0, 0.1, 0.2, 0.4, 0.6]; % Average reflection coefficient of the walls of the chamber
 WFS_AcPath_previously_calculated = true;
 NS_AcPath_previously_calculated = true;
 appendFreeSpaceAcPaths = false;
@@ -84,71 +84,73 @@ AcousticPathCalculationScript
 %% Fragment taken from Experiment2.m. Adapt it to our case.
 % Evolution of field as a function of distance to loudspeakaer
 
-numLoudspeakers = numel(s);
-microPos = obj.microPos;
-numMicro = size(microPos, 1);
-
-distances = zeros(numMicro, numLoudspeakers);
-WFSfield = zeros(numMicro, numLoudspeakers);
-NSfield = zeros(numMicro, numLoudspeakers);
-for k = 1:numLoudspeakers
-    distances(:, k) = sqrt(sum((microPos - repmat(obj.WFSposition(k, :), numMicro, 1)).^2, 2));
-    WFSfield(:, k) = s(k).recWFScoef;
-    NSfield(:, k) = s(k).recNScoef;
-end
+numLoudspeakers = obj.numWFS;
+distances = calcDistances(recPositions, obj.WFSposition);
 
 % Fitting. Useful for later.
 models = {'a/x'}; %{'exp1', 'exp2', 'power1', 'power2', 'a*exp(-b*x)+c'};
-data = repmat(struct('x', [], 'y', []), numLoudspeakers + 1, 1);
-for indLoud = 1:numLoudspeakers
-    data(indLoud).x = distances(:, indLoud);
-    data(indLoud).y = abs(WFSfield(:, indLoud));
+data = repmat(struct('x', [], 'y', []), numFreqs, numLoudspeakers, numReverbTime);
+
+for f = 1:numFreqs
+    for rt = 1:numReverbTime
+        for indLoud = 1:numLoudspeakers
+            data(f, indLoud, rt).x = distances(:, indLoud);
+            data(f, indLoud, rt).y = abs(WFS_FR(:, f, indLoud, rt));
+        end
+    end
 end
-data(numLoudspeakers + 1).x = distances(:);
-data(numLoudspeakers + 1).y = abs(WFSfield(:));
 [params, gofs] = fitInterface( data, models );
+as = zeros(size(params{1}));
+as(:) = [params{1}.a];
+
+data = repmat(struct('x', [], 'y', []), numFreqs, numReverbTime);
+for f = 1:numFreqs
+    for rt = 1:numReverbTime
+        data(f, rt).x = distances(:);
+        data(f, rt).y = abs(mergeAndPermute(WFS_FR(:, f, :, rt), {1:4}));
+    end
+end
+[params, gofs] = fitInterface( data, models );
+asGlob = zeros(size(params{1}));
+asGlob(:) = [params{1}.a];
 
 % Magnitude
-    % Specific Loudspeaker
-ax = axes(figure, 'NextPlot', 'Add');
-indLoud = 20;
-a = abs(WFSfield(:, indLoud));
-d = distances(:, indLoud);
-dVec = 0:0.05:max(d);
-% scatter(ax, distances(:, indLoud), params{1}(indLoud).a*abs(NSfield(:, indLoud)), '.')
-plot(ax, dVec, params{1}(indLoud).a./dVec)
-scatter(ax, distances(:, indLoud), abs(WFSfield(:, indLoud)), '.')
-ax.YLim = [0 max(abs(WFSfield(:, indLoud)))];
-ax.XLabel.String = 'Distance (m)';
-ax.YLabel.String = 'Field';
-legend(ax, {'Theoretical', 'Measured'});
-printfig(ax.Parent, imagesPath, 'Experiment2_loud20_AmpByDist', 'eps');
+%     % Specific Loudspeaker
+% vecs = {1:numMicro, freqs, 1:numLoudspeakers+1, beta};
+% freq = 440; indLoud = 1; beta_curr = 0.2;
+% [~, repData] = filterArrayForRepresentation(vecs, abs(WFS_FR), 1, 'nonIndepDimValues', [freq, indLoud, beta_curr]);
+% ax = axes(figure, 'NextPlot', 'Add');
+% scatter(ax, distances(:, indLoud), repData)
+% dVec = 0:0.05:max(distances(:, indLoud));
+% [~, paramA] = filterArrayForRepresentation(vecs(2:end), as, [], 'nonIndepDimValues', [freq, indLoud, beta_curr]);
+% plot(ax, dVec, paramA./dVec);
+% ax.XLabel.String = 'Distance (m)';
+% ax.YLim = [0, max(repData)];
+% ax.YLabel.String = 'Field';
+% legend(ax, {'Measured', 'Theoretical'});
 
     % Global magnitude
+vecs = {1:numMicro, freqs, 1:numLoudspeakers, beta};
+freq = 440; beta_curr = 0.6;
+[repVectors, repData] = filterArrayForRepresentation(vecs, abs(WFS_FR), [1 3], 'nonIndepDimValues', [freq, beta_curr]);
 ax = axes(figure, 'NextPlot', 'Add');
-% scatter(ax, distances(:), abs(NSfield(:)), '.')
-scatter(ax, distances(:), abs(WFSfield(:)), '.')
+scatter(ax, distances(:), repData(:), '.')
+[~, paramA] = filterArrayForRepresentation({freqs, beta}, asGlob, [], 'nonIndepDimValues', [freq, beta_curr]);
+plot(ax, dVec, paramA./dVec);
+ax.XLabel.String = 'Distance (m)';
+ax.YLim = [0, max(repData(:))];
+ax.YLabel.String = 'Field';
 
 % Phase
-phaseReal = angle(WFSfield);
-phaseTheo = -2*pi*obj.frequency/obj.WFSToolObj.c*distances; % It is the same as: phaseTheo = angle(NSfield);
+phaseReal = angle(WFS_FR);
 
     % Specific Loudspeaker
-indLoud = 29;
-phaseRealLoud = phaseReal(:, indLoud);
-phaseTheoLoud = phaseTheo(:, indLoud);
+freq = 440; indLoud = 1; beta_curr = 0.2;
+[repVec, phaseLoud] = filterArrayForRepresentation(vecs, phaseReal, 1, 'nonIndepDimValues', [freq, indLoud, beta_curr]);
 distLoud = distances(:, indLoud);
-% [distSort, indSort] = sort(dist);
-% idealPhase = -2*pi*obj.frequency/obj.WFSToolObj.c*distSort;
-% ax = axes(figure, 'NextPlot', 'Add');
-% realPhase = idealPhase + wrapToPi(phase(indSort) - idealPhase);
-% plot(ax, distSort, rad2deg(idealPhase))
-% scatter(ax, distSort, rad2deg(realPhase), '.')
-% ax.XLabel.String = 'Distance (m)';
-% ax.YLabel.String = 'Phase (º)';
-% legend(ax, {'Theoretical', 'Measured'});
 
-    % Phase shift
+phaseTheoLoud = -2*pi*freq*distLoud/c;
+
 ax = axes(figure);
 scatter(ax, distLoud, rad2deg(wrapToPi(phaseLoud - phaseTheoLoud)), '.');
 ax.YLim = [-180, 180];
@@ -156,47 +158,56 @@ ax.YTick = -180:60:180;
 ax.YGrid = 'on';
 ax.XLabel.String = 'Distance (m)';
 ax.YLabel.String = 'Phase shift (º)';
-% printfig(ax.Parent, imagesPath, 'Experiment2_loud20_PhaseByDist', 'eps');
-
-    % Global phase
 
     % Global Phase shift
+[~, phaseRealGlob] = filterArrayForRepresentation(vecs, phaseReal, [1 3], 'nonIndepDimValues', [freq, beta_curr]);
+phaseTheo = -2*pi*freq*distances/c;
+
 ax = axes(figure);
-scatter(ax, distances(:), rad2deg(wrapToPi(phaseReal(:) - phaseTheo(:))), '.');
+scatter(ax, distances(:), rad2deg(wrapToPi(phaseRealGlob(:) - phaseTheo(:))), '.');
 ax.YLim = [-180, 180];
 ax.YTick = -180:60:180;
 ax.YGrid = 'on';
 ax.XLabel.String = 'Distance (m)';
 ax.YLabel.String = 'Phase shift (º)';
 
-     % % Other way
-% ax = axes(figure, 'NextPlot', 'Add');
-% phase = angle(WFSfield(:));
-% dist = distances(:);
-% [distSort, indSort] = sort(dist);
-% idealPhase = -2*pi*obj.frequency/obj.WFSToolObj.c*distSort;
-% realPhase = idealPhase + wrapToPi(phase(indSort) - idealPhase);
-% plot(ax, distSort, rad2deg(idealPhase))
-% scatter(ax, distSort, rad2deg(realPhase), '.')
-% ax.XLabel.String = 'Distance (m)';
-% ax.YLabel.String = 'Phase (º)';
-% legend(ax, {'Theoretical', 'Measured'});
+%% Do the same with the GTAC measured acoustic paths
+load([dataPathName, 'acousticPathsGTAC_440.mat']);
+% [acousticPath, microphonePositions] = importImpulseResponseGTAC([0 440]);
+distancesGTAC = calcDistances(microphonePositions, obj.WFSposition);
 
+% Fitting. Useful for later.
+models = {'a/x'}; %{'exp1', 'exp2', 'power1', 'power2', 'a*exp(-b*x)+c'};
+data = struct('x', distancesGTAC(:), 'y', abs(acousticPath(:)));
+[paramsGTAC, gofsGTAC] = fitInterface( data, models );
+asGTAC = paramsGTAC{1}.a;
 
-% Phase shift
-phaseShift = wrapToPi(phaseReal - phaseTheo); % The same as: phaseShift = angle(WFSfield./NSfield);
+% Global magnitude
+ax = axes(figure, 'NextPlot', 'Add');
+scatter(ax, distancesGTAC(:), abs(acousticPath(:)), '.')
+plot(ax, dVec, asGTAC./dVec);
+ax.XLabel.String = 'Distance (m)';
+ax.YLim = [0, max(repData(:))];
+ax.YLabel.String = 'Field';
 
-[meanPhaseShift, ~, stdPhaseShift] = circularDistributionParameters(phaseShift);
-meanPhaseShift = rad2deg(meanPhaseShift);
-stdPhaseShift = rad2deg(stdPhaseShift);
+% Put both graphs in one
+vecs = {1:numMicro, freqs, 1:numLoudspeakers, beta};
+freq = 440; beta_curr = 0.6;
+[~, acPathRIR] = filterArrayForRepresentation(vecs, abs(WFS_FR), [1 3], 'nonIndepDimValues', [freq, beta_curr]);
 
-ax = axes(figure);
-plot(ax, 1:numScen, meanPhaseShift, 1:numScen, meanPhaseShift + stdPhaseShift, '--', 1:numScen, meanPhaseShift - stdPhaseShift, '--')
-ax.XLabel.String = 'Loudspeakers';
-ax.YLabel.String = 'Phase Shift (º)';
+dVec = 0:0.05:max(distances(:, indLoud));
 
-globalMean = mean(phaseShift(:));
-globalStd = std(phaseShift(:));
+ax = axes(figure, 'NextPlot', 'Add');
 
-axHist = axes(figure);
-histogram(axHist, phaseShift)
+scatter(ax, distancesGTAC(:), abs(acousticPath(:)), '.')
+plot(ax, dVec, asGTAC./dVec);
+
+scatter(ax, distances(:), acPathRIR(:), '.')
+[~, paramA] = filterArrayForRepresentation({freqs, beta}, asGlob, [], 'nonIndepDimValues', [freq, beta_curr]);
+plot(ax, dVec, paramA./dVec);
+
+ax.XLabel.String = 'Distance (m)';
+ax.XLim = [0, max(distances(:))];
+ax.YLim = [0, max(repData(:))];
+ax.YLabel.String = 'Field';
+

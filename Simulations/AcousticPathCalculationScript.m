@@ -43,8 +43,14 @@ if WFS_AcPath_previously_calculated
 %         end
 %     end
     
-    oper = @(x) freqz(x, 1, freqs, fs);
-    WFS_FR = oneDimOperOverMultiDimArray( oper, WFS_IR, 2 );
+    if numFreqs > 1
+        oper = @(x) freqz(x, 1, freqs, fs);
+        WFS_FR = oneDimOperOverMultiDimArray( oper, WFS_IR, 2 );
+    else
+        oper = @(x) freqz(x, 1, [0 freqs], fs);
+        WFS_FR = oneDimOperOverMultiDimArray( oper, WFS_IR, 2 );
+        WFS_FR = WFS_FR(:, 2, :, :);
+    end
     
 end
 

@@ -94,8 +94,20 @@ for m = 1:numMicrophones
     imp = s.e_ir; % (numLoudspeakers x numSamples);
     
     % Calculate the response in the desired frequencies
-    dft = DFT_slow(sampleRate*imp.', sampleRate, frequencies); % (numFrequencies x numLoudspeakers)
-
+%     dft = DFT_slow(sampleRate*imp.', sampleRate, frequencies); % (numFrequencies x numLoudspeakers)
+    if numFrequencies > 1
+        dft = zeros(numFrequencies, numLoudspeakers);
+        for loud = 1:numLoudspeakers
+            dft(:, loud) = freqz(imp(loud,:), 1, frequencies, sampleRate);
+        end
+    else
+        dft = zeros(numFrequencies+1, numLoudspeakers);
+        for loud = 1:numLoudspeakers
+            dft(:, loud) = freqz(imp(loud,:), 1, [0, frequencies], sampleRate);
+        end
+        dft = dft(2:end, :);
+    end
+    
     acousticPath(m, :, :) = permute(dft, [3, 2 1]);
 end 
 

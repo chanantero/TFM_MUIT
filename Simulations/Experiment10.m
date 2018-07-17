@@ -68,7 +68,8 @@ end
 
 delayTheo = dist/c;
 delays = zeros(numFS, 1);
-phNumPoints = 44100;
+freqs = 0:10:1000;
+phNumPoints = numel(freqs);
 phaseResponse = zeros(numFS, phNumPoints);
 % fftNumPoints = 44100;
 % acPathFR = cell(numFS, 1);
@@ -84,7 +85,7 @@ for k = 1:numFS
     delays(k) = tVec(ind);
     
     
-    [phi, ~] = phasez(IR, 1, phNumPoints);
+    phi = phasez(IR, 1, freqs, fs);
     phaseResponse(k, :) = phi';
     
 %     plot(ax, tVec, acPathIR{k})
@@ -111,10 +112,8 @@ end
 % 
 ax = axes(figure, 'NextPlot', 'Add');
 for k = 1:numFS
-    fs = fsVec(k);
-    f = w/(2*pi)*fs;
-    phaseDelayCustom = -phaseResponse(k,:)./(2*pi*f');
-    plot(ax, f, phaseDelayCustom)
+    phaseDelayCustom = -phaseResponse(k,:)./(2*pi*freqs);
+    plot(ax, freqs, phaseDelayCustom)
 end
 plot(ax, f, delayTheo*ones(1, length(f)))
 ax.XLim = [0 1000];
@@ -123,10 +122,10 @@ ax.XLabel.String = 'Frequency (Hz)';
 
 ax = axes(figure, 'NextPlot', 'Add');
 for k = 1:numFS
-    fs = fsVec(k);
-    f = w/(2*pi)*fs;
-    idealPhaseResponse = -f*dist/c*2*pi;
-    plot(ax, f, rad2deg(phaseResponse(k, :) - idealPhaseResponse'))    
+%     fs = fsVec(k);
+%     f = w/(2*pi)*fs;
+    idealPhaseResponse = -freqs*dist/c*2*pi;
+    plot(ax, freqs, rad2deg(phaseResponse(k, :) - idealPhaseResponse))    
 end
 ax.XLim = [0 1000];
 ax.XLabel.String = 'Frequency (Hz)';
@@ -181,7 +180,8 @@ for k = 1:numFS
 end
 
 delayTheo = dist/c;
-phNumPoints = 44100;
+freqs = 0:10:1000;
+phNumPoints = numel(freqs);
 phaseResponse = cell(numFS, 1);
 for k = 1:numFS
     IRs = acPathIR{k};
@@ -190,29 +190,29 @@ for k = 1:numFS
     tVec = (0:numSamp - 1)/fs;
     phaseResponseCurr = zeros(numRec, phNumPoints);
     for r = 1:numRec
-        phi = phasez(IRs(r,:), 1, phNumPoints);
+        phi = phasez(IRs(r,:), 1, freqs, fs);
         phaseResponseCurr(r, :) = phi';
     end
     phaseResponse{k} = phaseResponseCurr;
 end
-fVecs = repmat((0:phNumPoints - 1)/(phNumPoints*2), numFS, 1).*...
-    repmat(fsVec, 1, phNumPoints);
+% fVecs = repmat((0:phNumPoints - 1)/(phNumPoints*2), numFS, 1).*...
+%     repmat(fsVec, 1, phNumPoints);
 
 ax = axes(figure, 'NextPlot', 'Add');
 lin = gobjects(numFS, numRec);
 for k = 1:numFS
-    f = fVecs(k, :);
+%     f = fVecs(k, :);
     phaseResponseCur = phaseResponse{k};
     for r = 1:numRec
-        idealPhaseResponse = -f*dist(r)/c*2*pi;
-        lin(k, r) = plot(ax, f, rad2deg(phaseResponseCur(r, :) - idealPhaseResponse));
+        idealPhaseResponse = -freqs*dist(r)/c*2*pi;
+        lin(k, r) = plot(ax, freqs, rad2deg(phaseResponseCur(r, :) - idealPhaseResponse));
     end
 end
 ax.XLim = [0 1000];
 ax.XLabel.String = 'Frequency (Hz)';
 ax.YLabel.String = '\angle{H_{real}} - \angle{H_{ideal}} (º)';
 
-activeFS = 1:5;
+activeFS = 1;
 aux = repmat({'off'}, size(lin));
 [lin(:).Visible] = aux{:};
 aux = repmat({'on'}, numRec*numel(activeFS), 1);
@@ -229,7 +229,7 @@ aux = repmat({'on'}, numFS*numel(activeRec), 1);
 
 %% Section 2: Compare acoutic path IR in near field with far field
 % The purpose is to see if rir_generator performs some kind of near far
-% field approximation, because maybe the euse of the far field condition is
+% field approximation, because maybe the use of the far field condition is
 % not realistic
 
 zPos = 1.65;
@@ -251,8 +251,8 @@ numSampIR = floor(max(dist)/c*fs * 2) + 1;
 acPathIR = rir_generator(c, fs, recPosition, NSposition, roomDim, 0, numSampIR);
 
 % Get amplitude of filter depending on frequency
-acPathFR = fft(acPathIR');
-fVec = (0:numSampIR - 1)*fs/numSampIR;
+% acPathFR = fft(acPathIR');
+% fVec = (0:numSampIR - 1)*fs/numSampIR;
 
 % sel = fVec >= 0 & fVec <= 1000;
 % acPathFRsel = acPathFR(sel, :);
@@ -260,8 +260,13 @@ fVec = (0:numSampIR - 1)*fs/numSampIR;
 %     {abs(acPathFRsel)}, {'Frequency', 'Receiver point'}, ...
 %     {'Frequency response'}, [], []);
 
+% selFreq = [100 200 400 600 800];
+% acPathSel = interp1(fVec, acPathFR, selFreq);
+
 selFreq = [100 200 400 600 800];
-acPathSel = interp1(fVec, acPathFR, selFreq);
+operation = @(IR) freqz(IR, 1, selFreq, fs);
+acPathSel = oneDimOperOverMultiDimArray( operation, acPathIR, 2 );
+acPathSel = acPathSel.';
 
 % 1st way of curve fitting
 % data.x = dist';
@@ -289,7 +294,7 @@ ax = axes(figure, 'NextPlot', 'Add');
 lFR = plot(ax, dist, abs(acPathSel)');
 lTheoFit = plot(ax, dist, aExt./distExt);
 
-indFreq = 5;
+indFreq = 1;
 aux = repmat({'off'}, size(lFR));
 [lFR(:).Visible] = aux{:};
 [lTheoFit(:).Visible] = aux{:};
@@ -300,7 +305,7 @@ aux = repmat({'on'}, numel(indFreq), 1);
 absTheo = aExt./distExt;
 rel = abs(acPathSel)'./absTheo;
 relLog = log(rel);
-exp(relLog(:, 1))
+% exp(relLog(:, 1))
 
 ax = axes(figure, 'NextPlot', 'Add');
 plot(ax, dist, relLog);
@@ -453,7 +458,7 @@ AcousticPathCalculationScript
 simulationScript;
 
 % Calculate individual and global correction factors
-sFreq = s(2, :, :, :);
+sFreq = s;
 [sFreq, corrFactInd, corrFactGlobal] = SimulationController.addCancellationParametersToStructure(sFreq);
 
 % Hisgoram
@@ -463,6 +468,23 @@ phaseCorrFactEdges = -180:180;
 axAbsInd = histogram2D( abs(corrFactInd), 2, freqs, [], absCorrFactEdges );
 axPhaseInd = histogram2D( rad2deg(angle(corrFactInd)), 2, freqs, [], [] );
 % axPhaseInd.YLim = [0 50];
+
+axAbsInd.XLabel.String = 'Frequency (Hz)';
+axAbsInd.YLabel.String = '$\abs{\correctionFactor}$';
+
+axPhaseInd.XLabel.String = 'Frequency (Hz)';
+axPhaseInd.YLabel.String = '$\angle{\correctionFactor}$';
+
+currentFolder = pwd;
+cd(imagesPath); % Needed for inkscape to link svg files properly
+options.TickLabels2Latex = true;
+Plot2LaTeX( axAbsInd.Parent, 'Experiment10_farFieldAbsInd', options);
+Plot2LaTeX( axAbsInd.Parent, 'Experiment10_farFieldPhaseInd', options);
+cd(currentFolder)
+
+% Forma normal, sin exportación de etiquetas a latex
+% printfig(axAbsInd.Parent, imagesPath, 'Experiment10_farFieldAbsInd', 'eps')
+% printfig(axPhaseInd.Parent, imagesPath, 'Experiment10_farFieldPhaseInd', 'eps')
 
 axAbsGlob = histogram2D( abs(corrFactGlobal), 2, freqs, [], [] );
 axPhaseGlob= histogram2D( rad2deg(angle(corrFactGlobal)), 2, freqs, [], []);

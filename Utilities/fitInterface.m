@@ -5,11 +5,12 @@ function [ params, gofs ] = fitInterface( data, models )
 % - models. Cell string array with numModels elements.
 
 N = numel(data);
+S = size(data);
 numModels = numel(models);
 
 [~, gof] = fit([0; 1], [0; 1], 'poly1');
-gofs = repmat(gof, N, numModels);
-fs = cell(N, numModels);
+gofs = repmat(gof, [S, numModels]); % gofs = repmat(gof, N, numModels);
+fs = cell([S, numModels]); % fs = cell(N, numModels);
 len = 0;
 for n = 1:N
     fprintf(repmat('\b', 1, len));
@@ -17,12 +18,17 @@ for n = 1:N
     fprintf(msg);
     len = numel(msg);
     
+    subs = cell(length(S), 1);
+    [subs{:}] = ind2sub(S, n);
+        
     x = data(n).x;
     y = data(n).y;
     for m = 1:numModels
-        [f, gof] = fit(x, y, models{m});        
-        fs{n, m} = f;
-        gofs(n, m) = gof;        
+        [f, gof] = fit(x, y, models{m});
+        aux = [subs; {m}];
+        ind = sub2ind([S, numModels], aux{:});
+        fs{ind} = f; % fs{n, m} = f;
+        gofs(ind) = gof; % gofs(n, m) = gof;
     end
 end
 fprintf('\n');
@@ -33,9 +39,12 @@ for m = 1:numModels
     names = coeffnames(fs{1, m});
     numParams = numel(names);
     aux = [names'; cell(1, numParams)];
-    paramStruct = repmat(struct(aux{:}), N, 1);
+    paramStruct = repmat(struct(aux{:}), S);
     for n = 1:N
-        values = coeffvalues(fs{n, m});
+        subs = cell(length(S), 1);
+        [subs{:}] = ind2sub(S, n);
+        aux = [subs; {m}];
+        values = coeffvalues(fs{aux{:}});
         for p = 1:numParams
             paramStruct(n).(names{p}) = values(p);
         end

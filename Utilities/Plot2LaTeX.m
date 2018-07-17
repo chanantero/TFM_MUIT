@@ -136,6 +136,12 @@ if nargin > 2
     if isfield(options,'Renderer') %WARNING: large size figures can become very large
         h.Renderer = options.Renderer; % set render
     end
+    
+    if isfield(options, 'TickLabels2Latex')
+        TickLabelToLatex = options.TickLabels2Latex;
+    else
+        TickLabelToLatex = true;
+    end
 end
 
 %% Find all objects with text
@@ -222,6 +228,7 @@ for i = 1:n_LegObj
 end
 
 % do similar for axes objects, XTick, YTick, ZTick
+if TickLabelToLatex
 n_AxeObj = length(AxeObj);
 for i = 1:n_AxeObj 
     n_Str = length(AxeObj(i).XTickLabel);
@@ -259,6 +266,7 @@ for i = 1:n_AxeObj
         Labels(iLabel).LabelText = LabelText(iLabel);
         AxeObj(i).ZTickLabel{j} = LabelText(iLabel);
     end
+end
 end
 
 % do similar for color bar objects
