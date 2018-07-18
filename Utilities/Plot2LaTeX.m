@@ -1,4 +1,5 @@
 function Plot2LaTeX( h, filename, options )
+% Modified by Rubén Chuliá (chanantero@hotmail.com)
 %PLOT2LATEX saves matlab figure as a pdf file in vector format for
 %inclusion into LaTeX. Requires free and open-source vector graphics 
 %editor Inkscape.
@@ -142,7 +143,15 @@ if nargin > 2
     else
         TickLabelToLatex = true;
     end
+else
+    TickLabelToLatex = true;
 end
+
+% TickLabelToLatex should always be true, as I checked. The reason for this
+% is that Plot2LaTeX edits the alignment of text so when inserted in a
+% LaTeX document, the text appears in the right position. You can set TickLabelToLatex
+% to false, but the result will always be worse. I leave it here just to
+% gain insight into how the function works in future reviews.
 
 %% Find all objects with text
 TexObj = findall(h,'Type','Text'); % normal text, titels, x y z labels
@@ -313,6 +322,8 @@ end
 fin = fopen([filename,'.svg']); % open svg file
 fout = fopen([filename,'_temp.svg'],'w'); % make a temp file for modification
 
+try
+
 StrLine_new = fgetl(fin);%skip first line
 iLine = 1; % Line number
 nFoundLabel = 0; % Counter of number of found labels
@@ -323,12 +334,13 @@ while ~feof(fin)
     
     FoundLabelText = regexp(StrLine_old,'>\S*</text','match'); %try to find label
     StrLine_new = StrLine_old;
-    if ~isempty(FoundLabelText)
+    if ~isempty(FoundLabelText) && nLabel > 0
         nFoundLabel = nFoundLabel + 1;
         iLabel = find(ismember(...
                           	{Labels.LabelText},...
                             FoundLabelText{1}(2:end-6))); % find label number
-                        
+        
+        if ~isempty(iLabel)
         % Append text alignment in prevous line
         StrPrefTemp = [StrPref(1:end-1),...
                         'text-align:', Labels(iLabel).Alignment{1},...
@@ -352,10 +364,17 @@ while ~feof(fin)
                             
         StrLine_new = StrCurrTemp{:};
         StrPref = StrPrefTemp;
+        end
     end
     fprintf(fout,'%s\n',StrPref);
 end
 fprintf(fout,'%s\n',StrLine_new);
+
+catch ME
+    fclose(fin);
+    fclose(fout);
+    rethrow(ME)
+end
 
 fclose(fin);
 fclose(fout);
@@ -364,14 +383,23 @@ movefile([filename,'_temp.svg'],[filename,'.svg'])
 Step = Step + 1;
 waitbar(Step/nStep,hWaitBar,'Saving .svg to .pdf file');
 
-DIR_FIG = [pwd,'\'];
+[pathFolder, name, ~] = fileparts(filename);
+currentFolder = pwd;
 
+if isempty(pathFolder)
+    DIR_FIG = [currentFolder,'\'];
+else
+    DIR_FIG = [pathFolder, '\'];
+end
+
+cd(DIR_FIG)
 [status,cmdout] = system(['"', DIR_INKSC, '"',...
-                ' "', DIR_FIG, filename,'.svg"', ...
+                ' "', DIR_FIG, name,'.svg"', ...
                 ' ','--export-pdf',...
-                ' "', DIR_FIG, filename,'.pdf"',...
+                ' "', DIR_FIG, name,'.pdf"',...
                 ' ','--export-latex',...
                 ' ','-export-area-drawing']);
+cd(currentFolder)
             
 % test if a .pdf and .pdf_tex file exist
 if exist([filename,'.pdf'],'file')~= 2 || exist([filename,'.pdf_tex'],'file')~= 2
@@ -384,7 +412,7 @@ end
 Step = Step + 1;
 waitbar(Step/nStep,hWaitBar,'Restoring Matlab figure');
 
-
+if nLabel > 0
 iLabel = 0;
 n_TexObj = length(TexObj);
 for i = 1:n_TexObj % 
@@ -429,6 +457,7 @@ for i = 1:n_AxeObj
         iLabel = iLabel + 1;
         ColObj(i).TickLabels{j} = Labels(iLabel).TrueText;
     end
+end
 end
 
 % restore interpreter

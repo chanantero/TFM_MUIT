@@ -21,7 +21,7 @@ ID = datestr(now, 'yyyy-mm-dd_HH-MM-SS');
 % Generate WFS array positions
 s = WFSToolSimple.generateScenario(96);
 WFSposDefault = s.loudspeakersPosition;
-rotMat = [0 1 0; -1 0 0; 0 0 1];
+rotMat = rotz(-90); % Or [0 1 0; -1 0 0; 0 0 1]; 
 WFSpositionRot = (rotMat * WFSposDefault')'; % Rotate 90º to the right
 zPos = 1.65;
 WFSoffset = [2.21 4.02 zPos];
@@ -471,16 +471,19 @@ axPhaseInd = histogram2D( rad2deg(angle(corrFactInd)), 2, freqs, [], [] );
 
 axAbsInd.XLabel.String = 'Frequency (Hz)';
 axAbsInd.YLabel.String = '$\abs{\correctionFactor}$';
+corrFactTheo = sqrt(1i*freqs/c);
+
+axAbsInd.NextPlot = 'Add';
+plot(axAbsInd, freqs, abs(corrFactTheo), 'r', 'LineWidth', 3);
 
 axPhaseInd.XLabel.String = 'Frequency (Hz)';
 axPhaseInd.YLabel.String = '$\angle{\correctionFactor}$';
 
-currentFolder = pwd;
-cd(imagesPath); % Needed for inkscape to link svg files properly
-options.TickLabels2Latex = true;
-Plot2LaTeX( axAbsInd.Parent, 'Experiment10_farFieldAbsInd', options);
-Plot2LaTeX( axAbsInd.Parent, 'Experiment10_farFieldPhaseInd', options);
-cd(currentFolder)
+axAbsInd.Parent.Name = 'CorrFact Ind Abs';
+axPhaseInd.Parent.Name = 'CorrFact Ind Phase';
+
+Plot2LaTeX( axAbsInd.Parent, [imagesPath,'Experiment10_farFieldAbsInd']);
+Plot2LaTeX( axPhaseInd.Parent, [imagesPath,'Experiment10_farFieldPhaseInd']);
 
 % Forma normal, sin exportación de etiquetas a latex
 % printfig(axAbsInd.Parent, imagesPath, 'Experiment10_farFieldAbsInd', 'eps')
@@ -490,15 +493,9 @@ axAbsGlob = histogram2D( abs(corrFactGlobal), 2, freqs, [], [] );
 axPhaseGlob= histogram2D( rad2deg(angle(corrFactGlobal)), 2, freqs, [], []);
 % axPhaseGlob.YLim = [0 50];
 
-axAbsInd.Parent.Name = 'CorrFact Ind Abs';
-axPhaseInd.Parent.Name = 'CorrFact Ind Phase';
 axAbsGlob.Parent.Name = 'CorrFact Glob Abs';
 axPhaseGlob.Parent.Name = 'CorrFact Glob Phase';
 
-corrFactTheo = sqrt(1i*freqs/c);
-
-axAbsInd.NextPlot = 'Add';
-plot(axAbsInd, freqs, abs(corrFactTheo), 'r', 'LineWidth', 3);
 axAbsGlob.NextPlot = 'Add';
 plot(axAbsGlob, freqs, abs(corrFactTheo), 'r', 'LineWidth', 3);
 

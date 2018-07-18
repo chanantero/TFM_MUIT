@@ -22,7 +22,7 @@ classdef WFSToolSimple < handle
         filtersWFS_IR % (obj.numSourcesWFSarray x numVirtualNS x numSamp). Users don't need to use it
         filterWFS_length % Set by the user (tunnable). If set to empty, the length is authomatic
         freqFilter % Impulse response of the frequency filter + hilbert filter combined
-               
+        
         % Simulation
         automaticLengthModification = true;
         
@@ -94,7 +94,7 @@ classdef WFSToolSimple < handle
         receiverRadiationPattern
         
         % Acoustic paths
-            % Frequency domain
+        % Frequency domain
         noiseSourceAcousticPath
         WFSarrayAcousticPath
         
@@ -278,13 +278,13 @@ classdef WFSToolSimple < handle
                 case 'frequency'
                     obj.simulTheo.sourceCoefficients(obj.WFSarrayIndSimulTheo, :) = value;
                 case 'time'
-            if size(value, 2) ~= obj.simulTheo.NsSignals
-                newSignals = zeros(obj.numSourcesTheo, size(value, 2));
-                newSignals(obj.WFSarrayIndSimulTheo, :) = value;
-                obj.simulTheo.sourceCoefficients = newSignals;
-            else
-                obj.simulTheo.sourceCoefficients(obj.WFSarrayIndSimulTheo, :) = value;
-            end
+                    if size(value, 2) ~= obj.simulTheo.NsSignals
+                        newSignals = zeros(obj.numSourcesTheo, size(value, 2));
+                        newSignals(obj.WFSarrayIndSimulTheo, :) = value;
+                        obj.simulTheo.sourceCoefficients = newSignals;
+                    else
+                        obj.simulTheo.sourceCoefficients(obj.WFSarrayIndSimulTheo, :) = value;
+                    end
             end
         end
         
@@ -295,7 +295,7 @@ classdef WFSToolSimple < handle
         function indDelayFreqFilter = get.indDelayFreqFilter(obj)
             [~, indDelay] = max(obj.freqFilter);
             indDelayFreqFilter = indDelay - 1;
-        end        
+        end
         
         function indDelayWFSFilters = get.indDelayWFSFilters(obj)
             if obj.frequencyCorrection
@@ -603,7 +603,7 @@ classdef WFSToolSimple < handle
                 channelNumberRight = all(size(obj.noiseSourceChannelMapping) == rightSize);
                 
                 assert(virtualRight && realRight && signalsRight && channelNumberRight,...
-                   'WFSTool2:updateEverything', 'The signals specifications and the virtual and real flags must have the same size')
+                    'WFSTool2:updateEverything', 'The signals specifications and the virtual and real flags must have the same size')
                 
                 comMat = WFSToolSimple.createCommutationMatrix(obj.virtual, obj.real);
                 obj.player.setProps('comMatrix', comMat);
@@ -755,7 +755,7 @@ classdef WFSToolSimple < handle
             [flagLouds, indLouds] = ismember(obj.loudspeakerChannelMapping, xChannelMapping);
             [xChannelInds_WFS, WFSarrayInds] = nestIndexing(indLouds, find(flagLouds), obj.loudspeakerMapping(1).destinationInd, obj.loudspeakerMapping(1).originInd);
             [xChannelInds_noise, noiseSourceInds] = nestIndexing(indLouds, find(flagLouds), obj.loudspeakerMapping(2).destinationInd, obj.loudspeakerMapping(2).originInd);
-                        
+            
             % Apply mapping
             WFSarrayAcPath = zeros(obj.numReceivers, obj.numSourcesWFSarray, numel(loudspeakerAcPathStruct.frequencies));
             WFSarrayAcPath(flagRec, WFSarrayInds, :) = loudspeakerAcPathStruct.acousticPaths(indRec, xChannelInds_WFS, :);
@@ -768,7 +768,7 @@ classdef WFSToolSimple < handle
             obj.noiseSourceAcPathStruct.acousticPaths = noiseSourceAcPath;
             
             obj.setAcousticPaths();
-
+            
         end
         
         function setLoudspeakerCoefficient(obj, loudspeakerCoefficient, xChannelMapping)
@@ -810,31 +810,31 @@ classdef WFSToolSimple < handle
                 case 'frequency'
                     % Set acoustic paths
                     obj.setAcousticPaths();
-
+                    
                     % Calculate coefficients
                     % A) Set noise source coefficients
                     obj.noiseSourceCoefficient_complete = diag(obj.noiseSourceCoefficient);
-
+                    
                     % B) Set default WFS array coefficients
                     obj.WFSarrayCoefficient = obj.getComplexCoeffWFS();
-
+                    
                     % C) Apply optimization algorithm
                     if nargin > 1
                         obj.WFS_optimisation(varargin{:});
                     end
-
+                    
                     % D) Apply real and virtual flags
                     obj.noiseSourceCoefficient_complete(:, ~obj.real) = 0;
                     obj.WFSarrayCoefficient(:, ~obj.virtual) = 0;
-                
-                case 'time'                    
+                    
+                case 'time'
                     % Get the filter for each loudspeaker
                     filtersIR = permute(obj.filtersWFS_IR, [1, 3, 2]); % Permute to make it easier to use
-                    signalLength = size(obj.noiseSourceSignalTime, 2);    
+                    signalLength = size(obj.noiseSourceSignalTime, 2);
                     
                     if obj.automaticLengthModification
                         % Extend noise source signal in the end
-                        filterLength = size(filtersIR, 2);                        
+                        filterLength = size(filtersIR, 2);
                         newSignalLength = signalLength + filterLength - 1;
                         NSsignalsExtended = [obj.noiseSourceSignalTime, zeros(obj.numNoiseSources, newSignalLength - signalLength)];
                         NSsignals = NSsignalsExtended;
@@ -842,7 +842,7 @@ classdef WFSToolSimple < handle
                     else
                         NSsignals = obj.noiseSourceSignalTime;
                     end
-
+                    
                     virtNS = find(obj.virtual);
                     numVirtNS = numel(virtNS);
                     
@@ -850,35 +850,35 @@ classdef WFSToolSimple < handle
                     % different from 0
                     attenuations = obj.getAttenuationsWFS(virtNS);
                     WFSflags = attenuations ~= 0;
-                                                          
+                    
                     wfsSignals = zeros(obj.numSourcesWFSarray, signalLength, numVirtNS);
                     for ns = 1:numVirtNS
                         indWFS = find(WFSflags(:, ns));
                         for ss = 1:numel(indWFS)
-%                             wfsSignals(indWFS(ss), :, ns) = filter(filtersIR(indWFS(ss), :, virtNS(ns)), 1, NSsignalsExtended(virtNS(ns), :));
+                            %                             wfsSignals(indWFS(ss), :, ns) = filter(filtersIR(indWFS(ss), :, virtNS(ns)), 1, NSsignalsExtended(virtNS(ns), :));
                             wfsSignals(indWFS(ss), :, ns) = fftfilt(filtersIR(indWFS(ss), :, virtNS(ns)), NSsignals(virtNS(ns), :));
                         end
                     end
                     wfsSignals = sum(wfsSignals, 3);
-                                                            
+                    
                     % Compensate for the delay introduced by the frequency
                     % filter
                     wfsSignals = wfsSignals(:, obj.indDelayWFSFilters + 1:end);
                     
-                    if obj.automaticLengthModification                        
+                    if obj.automaticLengthModification
                         NSsignals = NSsignals(:, 1:end - obj.indDelayWFSFilters);
                     else
                         wfsSignals = [wfsSignals, zeros(obj.numSourcesWFSarray, obj.indDelayWFSFilters)];
                     end
-       
+                    
                     obj.WFSarrayCoefficient = wfsSignals;
-%                     NSsignals(virtNS, :) = 0;
+                    %                     NSsignals(virtNS, :) = 0;
                     NSsignals(~obj.real, :) = 0;
                     obj.noiseSourceCoefficient_complete = NSsignals;
             end
             
         end
-               
+        
         function prepareSimulation(obj)
             % Assign to the correspondent variables of the simulator
             % object, the acoustic paths, adjust coefficients depending on
@@ -972,7 +972,7 @@ classdef WFSToolSimple < handle
                     switch sourceFilter
                         case 'NoFilter'
                             acPath = [obj.WFSarrayAcousticPath, obj.noiseSourceAcousticPath];
-                        case 'Loudspeakers'                                            
+                        case 'Loudspeakers'
                             acPath = zeros(obj.numReceivers, numSour, obj.numNoiseSources);
                             acPath(:, varInd, :) = obj.WFSarrayAcousticPath(:, obj.loudspeakerMapping(1).originInd, :);
                             acPath(:, fixedInd, :) = obj.noiseSourceAcousticPath;
@@ -1000,7 +1000,7 @@ classdef WFSToolSimple < handle
                             acPath = zeros(size(testPoints, 1), numSour, obj.numNoiseSources);
                             acPath(:, varInd, :) = acPath_default(:, obj.WFSarrayIndSimulTheo(obj.loudspeakerMapping(1).originInd), :);
                             acPath(:, fixedInd, :) = acPath_default(:, obj.noiseSourceIndSimulTheo, :);
-                    end            
+                    end
             end
             numPoints = size(acPath, 1);
             
@@ -1036,7 +1036,7 @@ classdef WFSToolSimple < handle
                 case 'time'
                     obj.filtersWFS_IR = obj.getFiltersWFS();
             end
-                           
+            
         end
         
         function updateLoudspeakerMappingVariables(obj)
@@ -1124,7 +1124,7 @@ classdef WFSToolSimple < handle
             else
                 % Optimize by selecting only those sources that are
                 % different from 0
-                attenuations = obj.getAttenuationsWFS(1:obj.numNoiseSources);               
+                attenuations = obj.getAttenuationsWFS(1:obj.numNoiseSources);
                 flags = attenuations ~= 0;
                 flags(:, ~obj.virtual) = 0;
                 WFSflags = any(flags, 2);
@@ -1135,7 +1135,7 @@ classdef WFSToolSimple < handle
                 
                 obj.simulTheo.updateField(sourceFlags);
             end
-               
+            
         end
         
         function reproduceAndRecordForAcousticPaths(obj)
@@ -1235,13 +1235,13 @@ classdef WFSToolSimple < handle
                     obj.WFSarrayAcPathStruct = struct('acousticPaths', acPath, 'frequencies', uniqueFreq);
                 case 'time'
                     obj.WFSarrayAcousticPath = simulator.calculateMonopolesIR(obj.WFSarrayPosition, obj.receiverPosition, obj.c, obj.Fs, obj.Fs*0.1);
-                   
+                    
             end
             
         end
         
         function theoricNoiseSourceAcousticPath(obj)
-
+            
             switch obj.domain
                 case 'frequency'
                     uniqueFreq = unique(obj.frequency);
@@ -1255,15 +1255,15 @@ classdef WFSToolSimple < handle
             end
             
         end
-              
+        
         function WFSflags = getActiveWFSsources(obj)
             attenuations = obj.getAttenuationsWFS(find(obj.virtual));
             WFSflags = any(attenuations ~= 0, 2);
         end
-               
+        
     end
     
-    methods(Access = private)       
+    methods(Access = private)
         
         function deleteObj(obj)
             release(obj.player);
@@ -1354,7 +1354,7 @@ classdef WFSToolSimple < handle
                 case 'numSources'
                     obj.signalsSpec = obj.reprodPanel.signals;
                     obj.noiseSourceChannelMapping = obj.reprodPanel.channelNumber;
-                                        
+                    
                     obj.changed.numNoiseSources = true;
                 case 'virtual'
                     obj.changed.virtual = true;
@@ -1689,14 +1689,14 @@ classdef WFSToolSimple < handle
             obj.frequencyCorrection = prevFreqCorrect;
             
             indDelta = floor(delays*obj.Fs) + 1;
-%             indDelta = round(delays*obj.Fs); % ejemplocar.wfs (Miguel's script) uses this method
+            %             indDelta = round(delays*obj.Fs); % ejemplocar.wfs (Miguel's script) uses this method
             
             freqFilterLength = numel(obj.freqFilter);
             minNsFilt = max(floor(delays(atten ~= 0)*obj.Fs)) + 1 + freqFilterLength;
             if isempty(obj.filterWFS_length)
                 NsFilt = minNsFilt;
             else
-                NsFilt = max(obj.filterWFS_length, minNsFilt);                
+                NsFilt = max(obj.filterWFS_length, minNsFilt);
             end
             filtersIR = zeros(obj.numSourcesWFSarray, obj.numNoiseSources, NsFilt);
             for ns = 1:obj.numNoiseSources
@@ -1708,14 +1708,14 @@ classdef WFSToolSimple < handle
             end
             
             if obj.frequencyCorrection
-            % Apply the filter for frequency dependence and the hilbert
-            % filter
-            for wfs = 1:obj.numSourcesWFSarray
-                for ns = 1:obj.numNoiseSources
-                    filtersIR(wfs, ns, :) = fftfilt(obj.freqFilter, filtersIR(wfs, ns, :)); % You can also use filter, but it is slower usually: filtersIR = filter(obj.freqFilter, 1, filtersIR, [], 3);
+                % Apply the filter for frequency dependence and the hilbert
+                % filter
+                for wfs = 1:obj.numSourcesWFSarray
+                    for ns = 1:obj.numNoiseSources
+                        filtersIR(wfs, ns, :) = fftfilt(obj.freqFilter, filtersIR(wfs, ns, :)); % You can also use filter, but it is slower usually: filtersIR = filter(obj.freqFilter, 1, filtersIR, [], 3);
+                    end
                 end
             end
-            end          
             
         end
         
@@ -1783,7 +1783,7 @@ classdef WFSToolSimple < handle
             comMat = true(numel(virtual), 1);
         end
         
-        function s = generateScenario(numLoudspeakers)
+        function s = generateScenario(numLoudspeakers, varargin)
             
             switch numLoudspeakers
                 case 0
@@ -1809,16 +1809,61 @@ classdef WFSToolSimple < handle
                     loudspeakersPosition = [x, y, z];
                     loudspeakersOrientation = [cosd(alfa), sind(alfa), zeros(numel(alfa), 1)];
                     
-                    xmin = min(x); xmax = max(x); ymin = min(y); ymax = max(y);
-                    xDim = xmax - xmin; yDim = ymax - ymin;
-                    xmargin = 0.2 * xDim; ymargin = 0.2 * yDim;
-                    roomPosition = [xmin - xmargin, ymin - ymargin, xDim + 2*xmargin, yDim + 2*ymargin];
+                    % Before
+%                      xmin = min(x); xmax = max(x); ymin = min(y); ymax = max(y);
+%                         xDim = xmax - xmin; yDim = ymax - ymin;
+%                         xmargin = 0.2 * xDim; ymargin = 0.2 * yDim;
+%                         roomPosition = [xmin - xmargin, ymin - ymargin, xDim + 2*xmargin, yDim + 2*ymargin];
                     
+                        p = inputParser;
+                        addParameter(p, 'orientation', 'vertical')
+                        addParameter(p, 'originReference', 'octagonBondingBoxCorner')
+                        parse(p, varargin{:})
+                        orientation = p.Results.orientation;
+                        originReference = p.Results.originReference;
+                        
+                        zPos = 1.65;
+                        switch orientation
+                            case 'horizontal'
+                                rotMat = rotz(-90);
+                                loudspeakersPosition = loudspeakersPosition * rotMat'; % Rotate 90º to the right
+                                loudspeakersOrientation = loudspeakersOrientation*rotMat';
+                                
+                                roomDim = [9.13, 4.48, 2.64]; % Room dimensions when X is the long edge
+                                WFSoffset = [2.21 4.02 zPos];
+                                switch originReference
+                                    case 'roomCorner'
+                                        loudspeakersPosition = loudspeakersPosition + repmat(WFSoffset, 96, 1); % Add offset
+                                        roomPosition = [0, 0, roomDim(1), roomDim(2)];
+                                    case 'octagonBondingBoxCorner'
+                                        % Leave loudspeakersPosition x and y coordinates as they are is
+                                        loudspeakersPosition(:,3) = loudspeakersPosition(:,3) + zPos;
+                                        roomPosition = [-WFSoffset(1), -WFSoffset(2), roomDim(1), roomDim(2)];
+                                end
+                            case 'vertical'
+                                roomDim = [4.48, 9.13, 2.64]; % Room dimensions when Y is the long edge
+                                WFSoffsetHoriz = [2.21 4.02 zPos];
+                                topleftcornerHoriz = [0 roomDim(1) 0];
+                                WFSoffset = (WFSoffsetHoriz - topleftcornerHoriz)*rotz(90)';
+                                switch originReference
+                                    case 'roomCorner'
+                                        loudspeakersPosition = loudspeakersPosition + repmat(WFSoffset, 96, 1); % Add offset
+                                        roomPosition = [0, 0, roomDim(1), roomDim(2)];
+                                    case 'octagonBondingBoxCorner'
+                                        loudspeakersPosition(:,3) = loudspeakersPosition(:,3) + zPos;
+                                        roomPosition = [0, 0, roomDim(1), roomDim(2)];
+                                end
+                        end
+                    
+                       if nargin == 1
+                           loudspeakersPosition(:, 3) = 0;
+                       end
                 otherwise
                     loudspeakersPosition = zeros(numLoudspeakers, 3);
                     loudspeakersOrientation = repmat([1 0 0], [numLoudspeakers, 1]);
                     roomPosition = [-1, -1, 2, 2];
             end
+            
             
             s.loudspeakersPosition = loudspeakersPosition;
             s.loudspeakersOrientation = loudspeakersOrientation;
@@ -1864,7 +1909,7 @@ classdef WFSToolSimple < handle
             end
             
         end
-          
+        
     end
     
 end

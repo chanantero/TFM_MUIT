@@ -3,6 +3,7 @@ WFSTool_Rub/images/
 WFSTool/images/
 K-Wave
 WFSTool - YU Bofei
+SFStoolbox/doc
 Data/
 */image
 *.fig
@@ -14,3 +15,4 @@ Data/
 *.zip
 *.mat
 *.pdf
+*.png
