@@ -1,7 +1,8 @@
 %% Experiment15
 
 % Created on 18th July 2018.
-% First use of SVTtoolbox.
+% First use of SVTtoolbox 
+% Documentation: http://matlab.sfstoolbox.org/en/2.4.2/
 
 %% Preamble
 pathSetUp;
@@ -28,6 +29,8 @@ conf.secondary_sources.x0 = [s.loudspeakersPosition, s.loudspeakersOrientation, 
 x0 = secondary_source_positions(conf);
 ax = axes(figure);
 figsize(540,404,'px');
+conf.plot.realloudspeakers = true;
 draw_loudspeakers(x0,conf);
 ax.XLim = [s.roomPosition(1), s.roomPosition(1) + s.roomPosition(3)];
 ax.YLim = [s.roomPosition(2), s.roomPosition(2) + s.roomPosition(4)];
+

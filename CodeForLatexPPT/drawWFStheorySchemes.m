@@ -4,7 +4,7 @@
 
 %% Kirchhoff dimensionality reduction
 
-ax = axes(figure, 'NextPlot', 'Add');
+ax = axes(figure, 'NextPlot', 'Add', 'DataAspectRatio', [1 1 1]);
 xlabel('x')
 
 % Create WFS plane
@@ -90,6 +90,13 @@ posMidArc2 = [center(1) + radius*cosd((alpha1 + alpha2)/2), center(2) + radius*s
 plot3(ax, xArc2, yArc2, zArc2, 'k:')
 
 ax.Visible = 'off';
+
+% Create normal arrow to P in section at a random point
+ind = 60;
+SSpos = [xSect(ind), ySect(ind), zSect(ind)]; % Secondary source position
+longArrow = 0.15;
+arrowRub([SSpos(1) SSpos(2) 0], [SSpos(1), SSpos(2), longArrow],...
+    'headNormal', [cosd(normalDir) sind(normalDir) 0], 'headLength', 0.05)
 
 % Add latex labels
 t = gobjects(1);
