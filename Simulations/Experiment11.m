@@ -103,11 +103,14 @@ ax = axes(figure);
 plot(ax, t, recNS_signals(13, :), t, rec_signals(13, :))
 ax.XLim = [0.2, 0.21];
 ax.XLabel.String = 'Time (s)';
+ax.YTick = [];
+legend(ax, '$\Field[ns][time]$', '$\Field[wfs][time]$')
 % printfig(ax.Parent, imagesPath, 'Experiment11_exampleNoFreqCorr', 'eps');
+% Plot2LaTeX( ax.Parent, [imagesPath, 'Experiment11_exampleNoFreqCorr'])
 
-[s, corrFactInd, corrFactGlob, attenInd, attenGlob] = SimulationController.addCancellationParametersToStructure(s);
-attenInd(2, 1, 13)
-cancInd = -10*log10(attenInd(2, 1, 13));
+[s, corrFactInd, corrFactGlob, gainInd, gainGlob, corrFactGlobAverGain, averGain] = SimulationController.addCancellationParametersToStructure(s);
+gainInd(2, 1, 13)
+cancInd = -10*log10(gainInd(2, 1, 13));
 corrFact = corrFactInd(2, 1, 13);
 
 %% SVG scenario of just one receiver measure point
@@ -174,19 +177,25 @@ y = centreY + repmat(radius, numPointsPerArc, 1).*repmat(sin(alpha), 1, numArcs)
 NSpositions = [x(:), y(:), zeros(numel(x), 1)];
 
 timeDomainActive = false;
+frequencyDomainActive = true;
 
 SetupParametersScript
 AcousticPathCalculationScript
 simulationScript
 
-[s, corrFactInd440, corrFactGlob440, attenInd440, attenGlob440] = SimulationController.addCancellationParametersToStructure(s);
+[s, corrFactInd440, corrFactGlob440, gainInd440, gainGlob440, corrFactGlobAverGain440, averGain440] = SimulationController.addCancellationParametersToStructure(s);
 % The frequency simulations are ideal, and hence we will use them.
-size(attenGlob440)
 ax = axes(figure);
-h = histogram(ax, 10*log10(attenGlob440(2, 1, :)), 5);
+h = histogram(ax, 10*log10(gainGlob440(1, 1, :)), 5, 'Normalization', 'probability');
 ax.XLim = [-5, 0];
-ax.XLabel.String = 'Attenuation (dB)';
+ax.XLabel.String = 'Global Gain (dB)';
 % printfig(ax.Parent, imagesPath, 'Experiment11_attenGlobDifNSNoFreqCor', 'eps')
+
+ax = axes(figure);
+h = histogram(ax, 10*log10(averGain(1, 1, :)), 5, 'Normalization', 'probability');
+ax.XLim = [-5, 0];
+ax.XLabel.String = 'Average Gain (dB)';
+% printfig(ax.Parent, imagesPath, 'Experiment11_gainAverDifNSNoFreqCor', 'eps')
 
 %% SVG scenario for multiple measure points and noise sources
 viewBox = [-WFSarrayOffset(1), -WFSarrayOffset(2), max(NSpositions(:, 1))+WFSarrayOffset(1)+0.5, max(NSpositions(:, 2))+WFSarrayOffset(2)+0.5];
@@ -221,81 +230,119 @@ simulationScript
 recWFS_signals = rec_signals - recNS_signals;
 
 % Perform FFT
-numSamp = size(recNS_signals, 2);
-t = (0:numSamp-1)/fs;
-f = (0:numSamp-1)/(numSamp/fs);
-sel = f >= 0 & f <= 1000;
-fsel = f(sel);
-
-recNS = fft(recNS_signals, [], 2); %/fs;
-recNS = recNS(:, sel, :, :);
-recWFS = fft(recWFS_signals, [], 2); %/fs;
-recWFS = recWFS(:, sel, :, :);
-corrFact = -recNS./recWFS;
+freqs = 10:10:1000;
+oper = @(x) freqz(x, 1, freqs, fs);
+recNS = oneDimOperOverMultiDimArray(oper, recNS_signals, 2);
+recWFS = oneDimOperOverMultiDimArray(oper, recWFS_signals, 2);
 
 % In order to calculate the global cancellation, it is convenient to create
 % a structure array
-ss = repmat(s(1), [numel(fsel), numNSpos]);
-for fIter = 1:numel(fsel)
+ss = repmat(s(1), [numel(freqs), numNSpos]);
+for fIter = 1:numel(freqs)
     for ns = 1:numNSpos
         ss(fIter, ns).recCoef = recNS(:, fIter, 1, ns) + recWFS(:, fIter, 1, ns);
         ss(fIter, ns).recNScoef = recNS(:, fIter, 1, ns); 
         ss(fIter, ns).recWFScoef = recWFS(:, fIter, 1, ns);
-        ss(fIter, ns).Frequency = fsel(fIter);
+        ss(fIter, ns).Frequency = freqs(fIter);
     end
 end
 
-[ss, corrFactInd, corrFactGlob, attenInd, attenGlob] = SimulationController.addCancellationParametersToStructure(ss);
+[ss, corrFactInd, corrFactGlob, gainInd, gainGlob, corrFactGlobAverGain, gainAver] = SimulationController.addCancellationParametersToStructure(ss);
 
-vecs = {fsel, 1:numNSpos};
+vecs = {freqs, 1:numNSpos};
 indepDim = 1;
-ax = drawArray(vecs, 10*log10(attenGlob), indepDim, 'nonIndepDimIndices', 1);
+ax = drawArray(vecs, 10*log10(gainAver), indepDim, 'nonIndepDimIndices', 1);
 ax.XLabel.String = 'Frequency (Hz)';
-ax.YLabel.String = 'Attenuation (dB)';
+ax.YLabel.String = 'Average Gain (dB)';
+% printfig(ax.Parent, imagesPath, 'Experiment11_gainAverOneNSChirp', 'eps')
+
+vecs = {freqs, 1:numNSpos};
+indepDim = 1;
+ax = drawArray(vecs, 10*log10(gainGlob), indepDim, 'nonIndepDimIndices', 1);
+ax.XLabel.String = 'Frequency (Hz)';
+ax.YLabel.String = 'Global Gain (dB)';
 % printfig(ax.Parent, imagesPath, 'Experiment11_globalCancOneNSChirp', 'eps')
 
 %% Explanation of frequency dependent histograms
-vecs = {fsel, 1:numNSpos};
+vecs = {freqs, 1:numNSpos};
 indepDim = 2;
-[repVectors, repData] = filterArrayForRepresentation(vecs, 10*log10(attenGlob), indepDim, 'nonIndepDimValues', 440);
+[repVectors, repData] = filterArrayForRepresentation(vecs, 10*log10(gainAver), indepDim, 'nonIndepDimValues', 440);
 
-[counts, edges] = histcounts(repData, 5);
+[counts, edges] = histcounts(repData, 5, 'Normalization', 'probability');
 ax = axes(figure);
 bar3cRub(counts', edges, [0 1], ax);
-ax.XLabel.String = 'Attenuation (dB)';
-ax.DataAspectRatio = [1 1 2];
-colorbar(ax)
-% printfig(ax.Parent, imagesPath, 'Experiment11_attenGlobDifNSchirp3Dhist', 'eps')
+ax.XLabel.String = 'Average gain (dB)';
+ax.DataAspectRatio(2) = ax.DataAspectRatio(1);
+ax.YTick = [];
+% printfig(ax.Parent, imagesPath, 'Experiment11_gainAverDifNSchirp3Dhist', 'eps')
 
 ax.View = [-90, 90];
-% printfig(ax.Parent, imagesPath, 'Experiment11_attenGlobDifNSchirp3DhistAbove', 'eps')
+colorbar(ax);
+% printfig(ax.Parent, imagesPath, 'Experiment11_gainAverDifNSchirp3DhistAbove', 'eps')
 
-% Represent the 2D histogram of the attenuation
+% Represent the 2D histogram of the global gain
 freqEdges = 0:20:1000;
-attenEdges = -10:5;
-ax = histogram2D(10*log10(attenGlob), 1, fsel, freqEdges, attenEdges, 'visual3D', true);
+gainEdges = -10:5;
+ax = histogram2D(10*log10(gainGlob), 1, freqs, freqEdges, gainEdges);
 ax.XLabel.String = 'Frequency (Hz)';
-ax.YLabel.String = 'Attenuation (dB)';
+ax.YLabel.String = 'Global gain (dB)';
 colorbar(ax);
 % printfig(ax.Parent, imagesPath, 'Experiment11_DifNSchirpGlobAtten', 'eps')
 
-% Represent the 2D histogram of the correction factor
-corrFact = sqrt(1i*fsel/c);
+% Represent the 2D histogram of the average gain
+freqEdges = 0:20:1000;
+gainEdges = -10:5;
+ax = histogram2D(10*log10(gainAver), 1, freqs, freqEdges, gainEdges); % 'visual3D', true
+ax.XLabel.String = 'Frequency (Hz)';
+ax.YLabel.String = 'Average gain (dB)';
+colorbar(ax);
+% printfig(ax.Parent, imagesPath, 'Experiment11_DifNSchirpGainAver', 'eps')
 
+
+% Represent the 2D histogram of the correction factor
+corrFact = sqrt(1i*freqs/c);
+
+% Correction factor to minimize the average gain
 corrFactEdges = 0:0.1:2;
-ax = histogram2D(abs(corrFactGlob), 1, fsel, freqEdges, corrFactEdges);
+ax = histogram2D(abs(corrFactGlobAverGain), 1, freqs, freqEdges, corrFactEdges);
 ax.XLabel.String = 'Frequency (Hz)';
 ax.YLabel.String = '|\Psi|';
 colorbar(ax);
 ax.NextPlot = 'Add';
-plot(ax, fsel, abs(corrFact), 'r', 'LineWidth', 5)
+plot(ax, freqs, abs(corrFact), 'r', 'LineWidth', 5)
+l = legend(ax.Children(1), '$\Big |\sqrt{\frac{jk}{2\pi}}\Big |$');
+l.Interpreter = 'latex';
+l.FontSize = 18;
+% printfig(ax.Parent, imagesPath, 'Experiment11_DifNSchirpGlobCorrAverGainFactAbs', 'eps')
+
+corrFactEdgesPhase = 0:50;
+ax = histogram2D(rad2deg(angle(corrFactGlobAverGain)), 1, freqs, freqEdges, corrFactEdgesPhase);
+ax.XLabel.String = 'Frequency (Hz)';
+ax.YLabel.String = '$\angle{\Psi}$';
+ax.YLabel.Interpreter = 'latex';
+colorbar(ax);
+ax.NextPlot = 'Add';
+plot(ax, freqs, rad2deg(angle(corrFact)), 'r', 'LineWidth', 5)
+l = legend(ax.Children(1), '$\angle{\sqrt{\frac{jk}{2\pi}}}$');
+l.Interpreter = 'latex';
+l.FontSize = 18;
+% printfig(ax.Parent, imagesPath, 'Experiment11_DifNSchirpGlobCorrAverGainFactPhase', 'eps')
+
+% Correction factor to minimize the global gain
+corrFactEdges = 0:0.1:2;
+ax = histogram2D(abs(corrFactGlob), 1, freqs, freqEdges, corrFactEdges);
+ax.XLabel.String = 'Frequency (Hz)';
+ax.YLabel.String = '|\Psi|';
+colorbar(ax);
+ax.NextPlot = 'Add';
+plot(ax, freqs, abs(corrFact), 'r', 'LineWidth', 5)
 l = legend(ax.Children(1), '$\Big |\sqrt{\frac{jk}{2\pi}}\Big |$');
 l.Interpreter = 'latex';
 l.FontSize = 18;
 % printfig(ax.Parent, imagesPath, 'Experiment11_DifNSchirpGlobCorrFactAbs', 'eps')
 
 corrFactEdgesPhase = 0:1:50;
-ax = histogram2D(rad2deg(angle(corrFactGlob)), 1, fsel, freqEdges, corrFactEdgesPhase);
+ax = histogram2D(rad2deg(angle(corrFactGlob)), 1, freqs, freqEdges, corrFactEdgesPhase);
 ax.XLabel.String = 'Frequency (Hz)';
 ax.YLabel.String = '|\Psi|';
 colorbar(ax);

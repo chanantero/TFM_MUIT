@@ -1,15 +1,11 @@
 ax = axes(figure);
 
-currentFolder = pwd;
-cd(imagesPath); % Needed for inkscape to link svg files properly
-options.TickLabels2Latex = false;
-Plot2LaTeX(ax.Parent, 'PruebaPlot2LaTeX', options)
-cd(currentFolder)
 
 ax.XTickLabel{1} = '$0.3131$';
 ax.XTickLabel{2} = '$\alpha$';
 ax.TickLabelInterpreter= 'latex';
 printfig(ax.Parent, imagesPath, 'PruebaPrintFigLatex', 'svg')
+saveas(ax.Parent, [imagesPath, 'PruebaSaveAsLatex'], 'svg')
 ax.TickLabelInterpreter= 'tex';
 printfig(ax.Parent, imagesPath, 'PruebaPrintFigTex', 'svg')
 ax.TickLabelInterpreter= 'none';

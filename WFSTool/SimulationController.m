@@ -719,12 +719,17 @@ classdef SimulationController < handle
             s.OptimizationOptions = p.Results.OptimOptions;
         end
         
-        function [s, corrFactInd, corrFactGlobal, attenInd, attenGlob] = addCancellationParametersToStructure(s)
+        function [s, corrFactInd, corrFactGlobal, gainInd, gainGlobal, corrFactGlobalAverGain, gainAver] = addCancellationParametersToStructure(s)
             for k = 1:numel(s)
                 s(k).corrFactIndividual = -s(k).recNScoef./s(k).recWFScoef;
                 s(k).corrFactGlobal = -s(k).recWFScoef\s(k).recNScoef;
-                s(k).attenuationIndividual = abs(s(k).recCoef./s(k).recNScoef).^2;
-                s(k).attenuationGlobal = sum(abs(s(k).recCoef).^2)./sum(abs(s(k).recNScoef).^2);
+                s(k).gainIndividual = abs(s(k).recCoef./s(k).recNScoef).^2;
+                s(k).gainGlobal = sum(abs(s(k).recCoef).^2)./sum(abs(s(k).recNScoef).^2);
+                s(k).gainAverage = mean(abs(s(k).recCoef./s(k).recNScoef).^2);
+                H = s(k).recWFScoef./s(k).recNScoef;
+                numMicro = length(s(k).recCoef);
+                s(k).corrFactGlobalAverGain = H\(-ones(numMicro, 1)); % -sum(conj(s(k).recWFScoef./s(k).recNScoef))/sum(abs(s(k).recWFScoef./s(k).recNScoef).^2);
+%                 s(k).corrFactGlobalAverGain = -sum(conj(s(k).recWFScoef./s(k).recNScoef))/sum(abs(s(k).recWFScoef./s(k).recNScoef).^2);
             end
             
             numMicro = numel(s(1).recCoef);
@@ -739,12 +744,17 @@ classdef SimulationController < handle
             corrFactGlobal = zeros(size(s)); % Global correction factor
             corrFactGlobal(:) = [s.corrFactGlobal];
             
-%             cancInd = 
-            attenInd = zeros([numMicro, size(s)]);
-            attenInd(:) = [s.attenuationIndividual];
-            attenInd = permute(attenInd, [2:ndims(s) + 1, 1]);
-            attenGlob = zeros(size(s));
-            attenGlob(:) = [s.attenuationGlobal];            
+            gainInd = zeros([numMicro, size(s)]);
+            gainInd(:) = [s.gainIndividual];
+            gainInd = permute(gainInd, [2:ndims(s) + 1, 1]);
+            gainGlobal = zeros(size(s));
+            gainGlobal(:) = [s.gainGlobal];
+            
+            corrFactGlobalAverGain = zeros(size(s));
+            corrFactGlobalAverGain(:) = [s.corrFactGlobalAverGain];
+            
+            gainAver = zeros(size(s));
+            gainAver(:) = [s.gainAverage];
         end
     end
     

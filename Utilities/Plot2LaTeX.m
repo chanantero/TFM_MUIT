@@ -1,38 +1,38 @@
 function Plot2LaTeX( h, filename, options )
 % Modified by Rubén Chuliá (chanantero@hotmail.com)
 %PLOT2LATEX saves matlab figure as a pdf file in vector format for
-%inclusion into LaTeX. Requires free and open-source vector graphics 
+%inclusion into LaTeX. Requires free and open-source vector graphics
 %editor Inkscape.
 %
 %   PLOT2LATEX(h,filename) saves figure with handle h to a file specified by
 %   filename, without extention. Filename can contain a relative location
-%   (e.g. 'images\title') to save the figure to different location. 
+%   (e.g. 'images\title') to save the figure to different location.
 %
-%   PLOT2LATEX(h,filename, options) saves figure with specified options. 
-%   The y-offset of all text can be modified using options.yCorrFactor. 
-%   The default is options.yCorrFactor = 0.8. The units are px. With 
-%   options.Renderer the renderer of the figure can be specified: 
+%   PLOT2LATEX(h,filename, options) saves figure with specified options.
+%   The y-offset of all text can be modified using options.yCorrFactor.
+%   The default is options.yCorrFactor = 0.8. The units are px. With
+%   options.Renderer the renderer of the figure can be specified:
 %   ('opengl', 'painters').
 %
-%   PLOT2LATEX requires a installation of Inkscape. The program's 
-%   location has to be 'hard coded' into this matlab file if it differs 
-%   from 'c:\Program Files (x86)\Inkscape\Inkscape.exe'. Please specify 
-%   your inscape file location by modifying DIR_INKSC variable on the 
-%   first line of the actual code. 
+%   PLOT2LATEX requires a installation of Inkscape. The program's
+%   location has to be 'hard coded' into this matlab file if it differs
+%   from 'c:\Program Files (x86)\Inkscape\Inkscape.exe'. Please specify
+%   your inscape file location by modifying DIR_INKSC variable on the
+%   first line of the actual code.
 %
 %   PLOT2LATEX saves the figures to .svg format. It invokes Inkscape to
 %   save the svg to a .pdf and .pdf_tex file to be incorporated into LaTeX
-%   document using \begin{figure} \input{image.pdf_tex} \end{figure}. 
-%   More information on the svg to pdf conversion can be found here: 
+%   document using \begin{figure} \input{image.pdf_tex} \end{figure}.
+%   More information on the svg to pdf conversion can be found here:
 %   ftp://ftp.fu-berlin.de/tex/CTAN/info/svg-inkscape/InkscapePDFLaTeX.pdf
-%   
-%   PLOT2LATEX produces three files: .svg, .pdf, .pfd_tex. The .svg-file 
+%
+%   PLOT2LATEX produces three files: .svg, .pdf, .pfd_tex. The .svg-file
 %   contains vector image. The .pdf-file contains figure without the text.
 %   The .pdf_tex-file contains the text including locations and other
 %   type setting.
 %
 %   The produced .svg file can be manually modified in Inkscape and
-%   included into the .tex file using the using the built-in "save to pdf" 
+%   included into the .tex file using the using the built-in "save to pdf"
 %   functionality of Inkscape.
 %
 %   PLOT2LATEX saves the figure to a svg and pdf file with the
@@ -59,23 +59,23 @@ function Plot2LaTeX( h, filename, options )
 %   Limitation:
 %   - Text resize is still done in PLOT2LATEX. The LaTeX fonts in matlab do
 %   not correspond completely with the LaTeX font size.
-%   - Legend size is not always correct, use \hspace or \vspace in matlab 
+%   - Legend size is not always correct, use \hspace or \vspace in matlab
 %   legend to achieve a nicer fit. Requires some iterations.
 %   - Rotating 3D images using toolbar does not work, using view([]) works.
 %   - Text boxes wiht LaTeX code which is not interpretable by matlab
 %   results in too long text boxes.
 %   - Very large figures sometimes result in very large waiting times.
 %   - Older versions than matlab 2014b are not supported.
-%   - PLOT2LATEX currently does not work with titles consisting of multiple 
+%   - PLOT2LATEX currently does not work with titles consisting of multiple
 %   lines.
 %   - PLOT2LATEX does not work with annotation textbox objects.
 %   - PLOT2LATEX does not suport colored text.
 %
 %   Trouble shooting
 %   - For Unix users: use the installation folder such as:
-%   '/Applications/Inkscape.app/Contents/Resources/script ' as location. 
-%   - For Unix users: For some users the bash profiles do not allow to call 
-%   Inkscape in Matlab via bash. Therefore change the bash profile in Matlab 
+%   '/Applications/Inkscape.app/Contents/Resources/script ' as location.
+%   - For Unix users: For some users the bash profiles do not allow to call
+%   Inkscape in Matlab via bash. Therefore change the bash profile in Matlab
 %   to something similar as setenv('DYLD_LIBRARY_PATH','/usr/local/bin/').
 %   The bash profile location can be found by using '/usr/bin/env bash'
 
@@ -106,10 +106,10 @@ function Plot2LaTeX( h, filename, options )
 
 %% Config and checks
 %   Specify location of your inkscape installation
-DIR_INKSC = 'c:\Program Files\Inkscape\Inkscape.exe'; 
+DIR_INKSC = 'c:\Program Files\Inkscape\Inkscape.exe';
 
 % initize waitbar
-nStep = 5; Step = 0; 
+nStep = 5; Step = 0;
 hWaitBar = waitbar(Step/nStep,'Initializing');
 
 %test if installation is correct
@@ -118,7 +118,7 @@ if ~exist(DIR_INKSC,'file')
 end
 
 if verLessThan('matlab', '8.4.0.')
-	error('Older versions than Matlab 2014b are not supported')
+    error('Older versions than Matlab 2014b are not supported')
 end
 
 if ~strcmp(h.Type,'figure')
@@ -151,7 +151,46 @@ end
 % is that Plot2LaTeX edits the alignment of text so when inserted in a
 % LaTeX document, the text appears in the right position. You can set TickLabelToLatex
 % to false, but the result will always be worse. I leave it here just to
-% gain insight into how the function works in future reviews.
+% gain insight into how the function works in future reviews. Before
+% executing the function ChangeInterpreter, the saved svg makes number as
+% paths. But after executing it, it exports all the text as text. It is a
+% line of future research.
+
+h2 = copyobj(h, 0);
+
+axText = findall(h, 'Type', 'Axes');
+
+%% Configure the figure that will be exported as path to svg
+TexObj = findall(h2,'Type','Text'); % normal text, titels, x y z labels
+LegObj = findall(h2,'Type','Legend'); % legend objects
+axPath = findall(h2,'Type','Axes');  % axes containing x y z ticklabel
+ColObj = findall(h2,'Type','Colorbar'); % containg color bar tick
+
+for k = 1:numel(TexObj)
+    TexObj(k).String = [];
+end
+
+for k = 1:numel(LegObj)
+    pos = LegObj(k).Position;
+    LegObj(k).String = {''};
+    drawnow
+    LegObj(k).Position = pos;
+end
+
+for k = 1:numel(ColObj)
+    ColObj(k).TickLabels = [];
+end
+
+if TickLabelToLatex
+    for k = 1:numel(axPath)
+        axPath(k).XTickLabel = [];
+        axPath(k).YTickLabel = [];
+    end
+end
+
+% Export
+ChangeInterpreter(h2, 'Latex') % In order to be exported as path
+saveas(h2, [filename, '_path'], 'svg')
 
 %% Find all objects with text
 TexObj = findall(h,'Type','Text'); % normal text, titels, x y z labels
@@ -186,14 +225,14 @@ for i = 1:n_TexObj % do for text, titles and axes labels
     
     % find text aligment
     Labels(iLabel).Alignment = PosAligmentSVG(...
-                                    find(ismember(...
-                                        PosAligmentMAT,...
-                                        TexObj(i).HorizontalAlignment)));
-	% find achor aligment svg uses this
+        find(ismember(...
+        PosAligmentMAT,...
+        TexObj(i).HorizontalAlignment)));
+    % find achor aligment svg uses this
     Labels(iLabel).Anchor = PosAnchSVG(...
-                                find(ismember(...
-                                    PosAligmentMAT,...
-                                    TexObj(i).HorizontalAlignment)));
+        find(ismember(...
+        PosAligmentMAT,...
+        TexObj(i).HorizontalAlignment)));
     % generate label
     Labels(iLabel).LabelText = LabelText(iLabel);
     
@@ -207,7 +246,7 @@ end
 % do similar for legend objects
 n_LegObj = length(LegObj);
 iLegEntry = 0;
-for i = 1:n_LegObj 
+for i = 1:n_LegObj
     n_Str = length(LegObj(i).String);
     
     iLegEntry = iLegEntry + 1;
@@ -226,60 +265,60 @@ for i = 1:n_LegObj
     Labels(iLabel).LabelText = LegObj(i).String{1}; % write as label
     
     for j = 2:n_Str % do short as possible label for other entries
-       iLegEntry = iLegEntry + 1;
-       iLabel = iLabel + 1;
-       Labels(iLabel).TrueText = LegObj(i).String{j};
-       Labels(iLabel).Alignment = PosAligmentSVG(1);
-       Labels(iLabel).Anchor = PosAnchSVG(1);
-       Labels(iLabel).LabelText = LegText(iLegEntry);
-       LegObj(i).String{j} = LegText(iLegEntry);
+        iLegEntry = iLegEntry + 1;
+        iLabel = iLabel + 1;
+        Labels(iLabel).TrueText = LegObj(i).String{j};
+        Labels(iLabel).Alignment = PosAligmentSVG(1);
+        Labels(iLabel).Anchor = PosAnchSVG(1);
+        Labels(iLabel).LabelText = LegText(iLegEntry);
+        LegObj(i).String{j} = LegText(iLegEntry);
     end
 end
 
 % do similar for axes objects, XTick, YTick, ZTick
-if TickLabelToLatex
-n_AxeObj = length(AxeObj);
-for i = 1:n_AxeObj 
-    n_Str = length(AxeObj(i).XTickLabel);
-    for j = 1:n_Str
-        iLabel = iLabel + 1;
-        Labels(iLabel).TrueText = AxeObj(i).XTickLabel{j};
-        Labels(iLabel).Alignment = PosAligmentSVG(2);
-        Labels(iLabel).Anchor = PosAnchSVG(2);
-        Labels(iLabel).LabelText = LabelText(iLabel);
-        AxeObj(i).XTickLabel{j} = LabelText(iLabel);
-    end
-    
-    isRightAx = strcmp(AxeObj(i).YAxisLocation,'right'); % exeption for yy-plot
-    n_Str = length(AxeObj(i).YTickLabel);
-    for j = 1:n_Str
-        iLabel = iLabel + 1;
-        Labels(iLabel).TrueText = AxeObj(i).YTickLabel{j};
-        if isRightAx % exeption for yy-plot, aligment is left for the right axis
-            Labels(iLabel).Alignment = PosAligmentSVG(1);
-            Labels(iLabel).Anchor = PosAnchSVG(1);
-        else % normal y labels are right aligned
+if TickLabelToLatex 
+    n_AxeObj = length(AxeObj);
+    for i = 1:n_AxeObj
+        n_Str = length(AxeObj(i).XTickLabel);
+        for j = 1:n_Str
+            iLabel = iLabel + 1;
+            Labels(iLabel).TrueText = AxeObj(i).XTickLabel{j};
+            Labels(iLabel).Alignment = PosAligmentSVG(2);
+            Labels(iLabel).Anchor = PosAnchSVG(2);
+            Labels(iLabel).LabelText = LabelText(iLabel);
+            AxeObj(i).XTickLabel{j} = LabelText(iLabel);
+        end
+        
+        isRightAx = strcmp(AxeObj(i).YAxisLocation,'right'); % exeption for yy-plot
+        n_Str = length(AxeObj(i).YTickLabel);
+        for j = 1:n_Str
+            iLabel = iLabel + 1;
+            Labels(iLabel).TrueText = AxeObj(i).YTickLabel{j};
+            if isRightAx % exeption for yy-plot, aligment is left for the right axis
+                Labels(iLabel).Alignment = PosAligmentSVG(1);
+                Labels(iLabel).Anchor = PosAnchSVG(1);
+            else % normal y labels are right aligned
+                Labels(iLabel).Alignment = PosAligmentSVG(3);
+                Labels(iLabel).Anchor = PosAnchSVG(3);
+            end
+            Labels(iLabel).LabelText = LabelText(iLabel);
+            AxeObj(i).YTickLabel{j} = LabelText(iLabel);
+        end
+        
+        n_Str = length(AxeObj(i).ZTickLabel);
+        for j = 1:n_Str
+            iLabel = iLabel + 1;
+            Labels(iLabel).TrueText = AxeObj(i).ZTickLabel{j};
             Labels(iLabel).Alignment = PosAligmentSVG(3);
             Labels(iLabel).Anchor = PosAnchSVG(3);
+            Labels(iLabel).LabelText = LabelText(iLabel);
+            AxeObj(i).ZTickLabel{j} = LabelText(iLabel);
         end
-        Labels(iLabel).LabelText = LabelText(iLabel);
-        AxeObj(i).YTickLabel{j} = LabelText(iLabel);
     end
-    
-    n_Str = length(AxeObj(i).ZTickLabel);
-    for j = 1:n_Str
-        iLabel = iLabel + 1;
-        Labels(iLabel).TrueText = AxeObj(i).ZTickLabel{j};
-        Labels(iLabel).Alignment = PosAligmentSVG(3);
-        Labels(iLabel).Anchor = PosAnchSVG(3);
-        Labels(iLabel).LabelText = LabelText(iLabel);
-        AxeObj(i).ZTickLabel{j} = LabelText(iLabel);
-    end
-end
 end
 
 % do similar for color bar objects
-n_ColObj = length(ColObj); 
+n_ColObj = length(ColObj);
 for i = 1:n_ColObj
     isAxIn = strcmp(ColObj(i).AxisLocation,'in'); % find internal external text location
     isAxEast = strcmp(ColObj(i).Location,'east'); % find location
@@ -303,7 +342,8 @@ end
 nLabel = iLabel;
 
 % set text interpreter to plain text
-ChangeInterpreter(h,'none');  
+ChangeInterpreter(h,'none');
+
 %% Save to fig and SVG
 Step = Step + 1;
 waitbar(Step/nStep,hWaitBar,'Saving figure to .svg file');
@@ -323,53 +363,53 @@ fin = fopen([filename,'.svg']); % open svg file
 fout = fopen([filename,'_temp.svg'],'w'); % make a temp file for modification
 
 try
-
-StrLine_new = fgetl(fin);%skip first line
-iLine = 1; % Line number
-nFoundLabel = 0; % Counter of number of found labels
-while ~feof(fin)
-    StrPref = StrLine_new; % process new line
-    iLine = iLine + 1;
-    StrLine_old = fgetl(fin);
     
-    FoundLabelText = regexp(StrLine_old,'>\S*</text','match'); %try to find label
-    StrLine_new = StrLine_old;
-    if ~isempty(FoundLabelText) && nLabel > 0
-        nFoundLabel = nFoundLabel + 1;
-        iLabel = find(ismember(...
-                          	{Labels.LabelText},...
-                            FoundLabelText{1}(2:end-6))); % find label number
+    StrLine_new = fgetl(fin);%skip first line
+    iLine = 1; % Line number
+    nFoundLabel = 0; % Counter of number of found labels
+    while ~feof(fin)
+        StrPref = StrLine_new; % process new line
+        iLine = iLine + 1;
+        StrLine_old = fgetl(fin);
         
-        if ~isempty(iLabel)
-        % Append text alignment in prevous line
-        StrPrefTemp = [StrPref(1:end-1),...
-                        'text-align:', Labels(iLabel).Alignment{1},...
-                        ';text-anchor:', Labels(iLabel).Anchor{1}, '"'];
-                    
-        % correct x - position offset
-        StrPrefTemp = regexprep(StrPrefTemp,'x="\S*"','x="0"');
-        
-        % correct y - position offset, does not work correctly
-        [startIndex,endIndex] = regexp(StrPrefTemp,'y="\S*"');
-        yOffset = str2double(StrPrefTemp((startIndex+3):(endIndex-1)));
-        StrPrefTemp = regexprep(...
-                            StrPrefTemp,...
-                            'y="\S*"',...
-                            ['y="', num2str(yOffset*yCorrFactor), '"']); 
-        
-        % Replace label with original string
-        StrCurrTemp = strrep(StrLine_old, ...
-                                FoundLabelText,...
-                                ['>',Labels(iLabel).XMLText,'</text']);
-                            
-        StrLine_new = StrCurrTemp{:};
-        StrPref = StrPrefTemp;
+        FoundLabelText = regexp(StrLine_old,'>\S*</text','match'); %try to find label
+        StrLine_new = StrLine_old;
+        if ~isempty(FoundLabelText) && nLabel > 0
+            nFoundLabel = nFoundLabel + 1;
+            iLabel = find(ismember(...
+                {Labels.LabelText},...
+                FoundLabelText{1}(2:end-6))); % find label number
+            
+            if ~isempty(iLabel)
+                % Append text alignment in prevous line
+                StrPrefTemp = [StrPref(1:end-1),...
+                    'text-align:', Labels(iLabel).Alignment{1},...
+                    ';text-anchor:', Labels(iLabel).Anchor{1}, '"'];
+                
+                % correct x - position offset
+                StrPrefTemp = regexprep(StrPrefTemp,'x="\S*"','x="0"');
+                
+                % correct y - position offset, does not work correctly
+                [startIndex,endIndex] = regexp(StrPrefTemp,'y="\S*"');
+                yOffset = str2double(StrPrefTemp((startIndex+3):(endIndex-1)));
+                StrPrefTemp = regexprep(...
+                    StrPrefTemp,...
+                    'y="\S*"',...
+                    ['y="', num2str(yOffset*yCorrFactor), '"']);
+                
+                % Replace label with original string
+                StrCurrTemp = strrep(StrLine_old, ...
+                    FoundLabelText,...
+                    ['>',Labels(iLabel).XMLText,'</text']);
+                
+                StrLine_new = StrCurrTemp{:};
+                StrPref = StrPrefTemp;
+            end
         end
+        fprintf(fout,'%s\n',StrPref);
     end
-    fprintf(fout,'%s\n',StrPref);
-end
-fprintf(fout,'%s\n',StrLine_new);
-
+    fprintf(fout,'%s\n',StrLine_new);
+    
 catch ME
     fclose(fin);
     fclose(fout);
@@ -394,13 +434,13 @@ end
 
 cd(DIR_FIG)
 [status,cmdout] = system(['"', DIR_INKSC, '"',...
-                ' "', DIR_FIG, name,'.svg"', ...
-                ' ','--export-pdf',...
-                ' "', DIR_FIG, name,'.pdf"',...
-                ' ','--export-latex',...
-                ' ','-export-area-drawing']);
+    ' "', DIR_FIG, name,'.svg"', ...
+    ' ','--export-pdf',...
+    ' "', DIR_FIG, name,'.pdf"',...
+    ' ','--export-latex',...
+    ' ','-export-area-drawing']);
 cd(currentFolder)
-            
+
 % test if a .pdf and .pdf_tex file exist
 if exist([filename,'.pdf'],'file')~= 2 || exist([filename,'.pdf_tex'],'file')~= 2
     cmdout
@@ -413,51 +453,53 @@ Step = Step + 1;
 waitbar(Step/nStep,hWaitBar,'Restoring Matlab figure');
 
 if nLabel > 0
-iLabel = 0;
-n_TexObj = length(TexObj);
-for i = 1:n_TexObj % 
-    iLabel = iLabel + 1;                           
-    TexObj(i).String = Labels(iLabel).TrueText;
-end
-
-n_LegObj = length(LegObj);
-for i = 1:n_LegObj
-    n_Str = length(LegObj(i).String);
-    for j = 1:n_Str
-       iLabel = iLabel + 1;
-       LegObj(i).String{j} = Labels(iLabel).TrueText;
-    end
-end
-
-n_AxeObj = length(AxeObj);
-for i = 1:n_AxeObj
-    n_Str = length(AxeObj(i).XTickLabel);
-    for j = 1:n_Str
+    iLabel = 0;
+    n_TexObj = length(TexObj);
+    for i = 1:n_TexObj %
         iLabel = iLabel + 1;
-        AxeObj(i).XTickLabel{j} = Labels(iLabel).TrueText;
+        TexObj(i).String = Labels(iLabel).TrueText;
     end
     
-    n_Str = length(AxeObj(i).YTickLabel);
-    for j = 1:n_Str
-        iLabel = iLabel + 1;
-        AxeObj(i).YTickLabel{j} = Labels(iLabel).TrueText;
+    n_LegObj = length(LegObj);
+    for i = 1:n_LegObj
+        n_Str = length(LegObj(i).String);
+        for j = 1:n_Str
+            iLabel = iLabel + 1;
+            LegObj(i).String{j} = Labels(iLabel).TrueText;
+        end
     end
     
-    n_Str = length(AxeObj(i).ZTickLabel);
-    for j = 1:n_Str
-        iLabel = iLabel + 1;
-        AxeObj(i).ZTickLabel{j} = Labels(iLabel).TrueText;
+    if TickLabelToLatex
+        n_AxeObj = length(AxeObj);
+        for i = 1:n_AxeObj
+            n_Str = length(AxeObj(i).XTickLabel);
+            for j = 1:n_Str
+                iLabel = iLabel + 1;
+                AxeObj(i).XTickLabel{j} = Labels(iLabel).TrueText;
+            end
+            
+            n_Str = length(AxeObj(i).YTickLabel);
+            for j = 1:n_Str
+                iLabel = iLabel + 1;
+                AxeObj(i).YTickLabel{j} = Labels(iLabel).TrueText;
+            end
+            
+            n_Str = length(AxeObj(i).ZTickLabel);
+            for j = 1:n_Str
+                iLabel = iLabel + 1;
+                AxeObj(i).ZTickLabel{j} = Labels(iLabel).TrueText;
+            end
+        end
     end
-end
-
-n_AxeObj = length(ColObj);
-for i = 1:n_AxeObj
-    n_Str = length(ColObj(i).TickLabels);
-    for j = 1:n_Str
-        iLabel = iLabel + 1;
-        ColObj(i).TickLabels{j} = Labels(iLabel).TrueText;
+    
+    n_AxeObj = length(ColObj);
+    for i = 1:n_AxeObj
+        n_Str = length(ColObj(i).TickLabels);
+        for j = 1:n_Str
+            iLabel = iLabel + 1;
+            ColObj(i).TickLabels{j} = Labels(iLabel).TrueText;
+        end
     end
-end
 end
 
 % restore interpreter
@@ -468,43 +510,51 @@ end
 
 function Str = LabelText(iLabel)
 % LABELTEXT generates labels based on label number
-    Str = 'X000';
-    idStr = num2str(iLabel);
-    nStr = length(idStr);
-    Str(end - nStr + 1 : end ) = idStr;
+Str = 'X000';
+idStr = num2str(iLabel);
+nStr = length(idStr);
+Str(end - nStr + 1 : end ) = idStr;
 end
 
 function Str = LegText(iLedEntry)
 % LEGTEXT generates legend labels based on legend entry number
-    Str = num2str(iLedEntry);
+Str = num2str(iLedEntry);
 end
 
 function ChangeInterpreter(h,Interpreter)
 % CHANGEINTERPRETER puts interpeters in figure h to Interpreter
 
-    TexObj = findall(h,'Type','Text');
-    LegObj = findall(h,'Type','Legend');
-    AxeObj = findall(h,'Type','Axes');  
-    ColObj = findall(h,'Type','Colorbar');
-    
-    Obj = [TexObj;LegObj]; % Tex and Legend opbjects can be treated similar
-    
-    n_Obj = length(Obj);
-    for i = 1:n_Obj
-        Obj(i).Interpreter = Interpreter;
-    end
-    
-    Obj = [AxeObj;ColObj]; % Axes and colorbar opbjects can be treated similar
-    
-    n_Obj = length(Obj);
-    for i = 1:n_Obj
-        Obj(i).TickLabelInterpreter = Interpreter;
-    end
+if strcmp('Interpreter', 'none')
+    saveas(h, 'prueba_a','svg');
+end
+TexObj = findall(h,'Type','Text');
+LegObj = findall(h,'Type','Legend');
+AxeObj = findall(h,'Type','Axes');
+ColObj = findall(h,'Type','Colorbar');
+
+Obj = [TexObj;LegObj]; % Tex and Legend opbjects can be treated similar
+
+
+
+n_Obj = length(Obj);
+for i = 1:n_Obj
+    Obj(i).Interpreter = Interpreter;
+end
+
+Obj = [AxeObj;ColObj]; % Axes and colorbar opbjects can be treated similar
+
+n_Obj = length(Obj);
+for i = 1:n_Obj
+    Obj(i).TickLabelInterpreter = Interpreter;
+end
+if strcmp('Interpreter', 'none')
+    saveas(h,'prueba_b','svg');
+end
 end
 
 function strXML = EscapeXML(str)
 % ESCAPEXML repaces special characters(<,>,',",&) -> (&lt;,&gt;,&apos;,&quot;,&amp;)
-    escChar = {'&','<','>','''','"'};
-    repChar = {'&amp;','&lt;','&gt;','&apos;','&quot;'};
-    strXML = regexprep(str,escChar,repChar);
+escChar = {'&','<','>','''','"'};
+repChar = {'&amp;','&lt;','&gt;','&apos;','&quot;'};
+strXML = regexprep(str,escChar,repChar);
 end

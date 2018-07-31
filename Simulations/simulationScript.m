@@ -3,7 +3,12 @@
 freqFiltFR = zeros(numFreqFilters, numFreqs);
 for k = 1:numFreqFilters
 %     freqFiltFR(k, :) = DFT_slow(fs*freqFilters{k}', fs, freqs).';
-    freqFiltFR(k, :) = freqz(freqFilters{k}, 1, freqs, fs);
+    if numFreqs == 1
+        aux = freqz(freqFilters{k}, 1, [0 freqs], fs);
+        freqFiltFR(k, 1) = aux(2);
+    else
+        freqFiltFR(k, :) = freqz(freqFilters{k}, 1, freqs, fs);
+    end
 end
 phaseShifts = -freqFiltDelays/fs * 2*pi*freqs;
 

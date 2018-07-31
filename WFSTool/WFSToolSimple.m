@@ -1837,7 +1837,7 @@ classdef WFSToolSimple < handle
                                         roomPosition = [0, 0, roomDim(1), roomDim(2)];
                                     case 'octagonBondingBoxCorner'
                                         % Leave loudspeakersPosition x and y coordinates as they are is
-                                        loudspeakersPosition(:,3) = loudspeakersPosition(:,3) + zPos;
+                                        %loudspeakersPosition(:,3) = loudspeakersPosition(:,3) + zPos;
                                         roomPosition = [-WFSoffset(1), -WFSoffset(2), roomDim(1), roomDim(2)];
                                 end
                             case 'vertical'
@@ -1850,7 +1850,7 @@ classdef WFSToolSimple < handle
                                         loudspeakersPosition = loudspeakersPosition + repmat(WFSoffset, 96, 1); % Add offset
                                         roomPosition = [0, 0, roomDim(1), roomDim(2)];
                                     case 'octagonBondingBoxCorner'
-                                        loudspeakersPosition(:,3) = loudspeakersPosition(:,3) + zPos;
+                                        %loudspeakersPosition(:,3) = loudspeakersPosition(:,3) + zPos;
                                         roomPosition = [0, 0, roomDim(1), roomDim(2)];
                                 end
                         end

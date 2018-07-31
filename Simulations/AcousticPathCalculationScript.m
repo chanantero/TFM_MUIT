@@ -70,9 +70,14 @@ if NS_AcPath_previously_calculated
 %         end
 %     end
     
-    oper = @(x) freqz(x, 1, freqs, fs);
-    NS_FR = oneDimOperOverMultiDimArray( oper, NS_IR, 2 );
-    
+    if numFreqs > 1
+        oper = @(x) freqz(x, 1, freqs, fs);
+        NS_FR = oneDimOperOverMultiDimArray( oper, NS_IR, 2 );
+    else
+        oper = @(x) freqz(x, 1, [0 freqs], fs);
+        NS_FR = oneDimOperOverMultiDimArray( oper, NS_IR, 2 );
+        NS_FR = NS_FR(:, 2, :, :);
+    end
 end
 
 if WFS_AcPath_previously_calculated && NS_AcPath_previously_calculated ...
