@@ -32,18 +32,15 @@ ax.YLabel.String = 'Eje y';
 legend(ax, 'hopoa')
 colorbar
 
-TexObj = findall(h,'Type','Text'); % normal text, titels, x y z labels
-LegObj = findall(h,'Type','Legend'); % legend objects
-axPath = findall(h,'Type','Axes');  % axes containing x y z ticklabel
-ColObj = findall(h,'Type','Colorbar'); % containg color bar tick
+options.TickLabels2Latex = false;
+Plot2LaTeX(h, [imagesPath, 'pruebaPlot2LaTeX'], options)
 
-for k = 1:numel(TexObj)
-    TexObj(k).String = [];
-end
+fout = fopen([imagesPath, 'pruebaPlot2LaTeX_pathCopy.svg'], 'r+');
 
-for k = 1:numel(LegObj)
-    pos = LegObj(k).Position;
-    LegObj(k).String = {''};
-    drawnow
-    LegObj(k).Position = pos;
-end
+% Find the position of [filename, '_path.svg] where we must begin to write
+% the latex text
+str = fread(fout);
+strfind(str, '</g></svg>')
+pos = regexp(char(str'), '<\s*/g\s*>\s*<\s*/svg\s*>');
+fseek(fout, pos-1, 'bof');
+line = fgetl(fout);

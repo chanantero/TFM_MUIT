@@ -158,6 +158,8 @@ end
 
 h2 = copyobj(h, 0);
 
+axText = findall(h, 'Type', 'Axes');
+
 %% Configure the figure that will be exported as path to svg
 TexObj = findall(h2,'Type','Text'); % normal text, titels, x y z labels
 LegObj = findall(h2,'Type','Legend'); % legend objects
@@ -189,8 +191,6 @@ end
 % Export
 ChangeInterpreter(h2, 'Latex') % In order to be exported as path
 saveas(h2, [filename, '_path'], 'svg')
-saveas(h2, [filename, '_pathCopy'], 'svg')
-close(h2)
 
 %% Find all objects with text
 TexObj = findall(h,'Type','Text'); % normal text, titels, x y z labels
@@ -358,18 +358,9 @@ for iLabel = 1:nLabel
     Labels(iLabel).XMLText = EscapeXML(Labels(iLabel).TrueText);
 end
 
+
 fin = fopen([filename,'.svg']); % open svg file
-% fout = fopen([filename,'_temp.svg'],'w'); % make a temp file for modification
-fout = fopen([filename, '_path.svg'], 'r+');
-
-% Find the position of [filename, '_path.svg] where we must begin to write
-% the latex text and move pointer to that position
-str = fread(fout)';
-pos = regexp(char(str), '><\s*/g\s*>\s*<\s*/svg\s*>');
-fseek(fout, pos-1, 'bof');
-
-DOM = xmlread([filename,'.svg']);
-DOMpath = xmlread([filename,'_path.svg']);
+fout = fopen([filename,'_temp.svg'],'w'); % make a temp file for modification
 
 try
     
@@ -413,76 +404,21 @@ try
                 
                 StrLine_new = StrCurrTemp{:};
                 StrPref = StrPrefTemp;
-                fprintf(fout,'%s\n',StrPref);
-                fprintf(fout,'%s>\n',StrLine_new);
             end
         end
+        fprintf(fout,'%s\n',StrPref);
     end
-    fprintf(fout, '%s', str(pos:end));
+    fprintf(fout,'%s\n',StrLine_new);
+    
 catch ME
     fclose(fin);
     fclose(fout);
     rethrow(ME)
 end
 
-
-% try
-%     
-%     StrLine_new = fgetl(fin);%skip first line
-%     iLine = 1; % Line number
-%     nFoundLabel = 0; % Counter of number of found labels
-%     while ~feof(fin)
-%         StrPref = StrLine_new; % process new line
-%         iLine = iLine + 1;
-%         StrLine_old = fgetl(fin);
-%         
-%         FoundLabelText = regexp(StrLine_old,'>\S*</text','match'); %try to find label
-%         StrLine_new = StrLine_old;
-%         if ~isempty(FoundLabelText) && nLabel > 0
-%             nFoundLabel = nFoundLabel + 1;
-%             iLabel = find(ismember(...
-%                 {Labels.LabelText},...
-%                 FoundLabelText{1}(2:end-6))); % find label number
-%             
-%             if ~isempty(iLabel)
-%                 % Append text alignment in prevous line
-%                 StrPrefTemp = [StrPref(1:end-1),...
-%                     'text-align:', Labels(iLabel).Alignment{1},...
-%                     ';text-anchor:', Labels(iLabel).Anchor{1}, '"'];
-%                 
-%                 % correct x - position offset
-%                 StrPrefTemp = regexprep(StrPrefTemp,'x="\S*"','x="0"');
-%                 
-%                 % correct y - position offset, does not work correctly
-%                 [startIndex,endIndex] = regexp(StrPrefTemp,'y="\S*"');
-%                 yOffset = str2double(StrPrefTemp((startIndex+3):(endIndex-1)));
-%                 StrPrefTemp = regexprep(...
-%                     StrPrefTemp,...
-%                     'y="\S*"',...
-%                     ['y="', num2str(yOffset*yCorrFactor), '"']);
-%                 
-%                 % Replace label with original string
-%                 StrCurrTemp = strrep(StrLine_old, ...
-%                     FoundLabelText,...
-%                     ['>',Labels(iLabel).XMLText,'</text']);
-%                 
-%                 StrLine_new = StrCurrTemp{:};
-%                 StrPref = StrPrefTemp;
-%             end
-%         end
-%         fprintf(fout,'%s\n',StrPref);
-%     end
-%     fprintf(fout,'%s\n',StrLine_new);
-    
-% catch ME
-%     fclose(fin);
-%     fclose(fout);
-%     rethrow(ME)
-% end
-
 fclose(fin);
 fclose(fout);
-movefile([filename,'_path.svg'],[filename,'.svg'])
+movefile([filename,'_temp.svg'],[filename,'.svg'])
 %% Invoke Inkscape to generate PDF + LaTeX
 Step = Step + 1;
 waitbar(Step/nStep,hWaitBar,'Saving .svg to .pdf file');
