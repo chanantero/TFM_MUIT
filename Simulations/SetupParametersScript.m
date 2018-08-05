@@ -55,8 +55,10 @@ if ~exist('predefSignals', 'var')
     predefSignals = false;
 end
 
-if ~exist('predefRoomDim', 'var')
+if ~exist('roomDim', 'var')
     predefRoomDim = false;
+else
+    predefRoomDim = true;
 end
 
 if ~exist('predefNumSampIR', 'var')

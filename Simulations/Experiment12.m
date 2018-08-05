@@ -133,9 +133,9 @@ for k = 1:Nmag
     hMags{k} = hMag;
     delaysMag(k) = delayMag;
 end
-% [hHilbert, delayHilbert] = getFrequencyFilter( [], hilbertFiltOrder, fs );
-% delta = zeros(size(hHilbert));
-% delta(delayHilbert + 1) = 1;
+[hHilbert, delayHilbert] = getFrequencyFilter( [], hilbertFiltOrder, fs );
+delta = zeros(size(hHilbert));
+delta(delayHilbert + 1) = 1;
 
 hTotals = cell(Nmag, 1);
 delays = zeros(Nmag, 1);
@@ -360,7 +360,7 @@ simulationScript
 %     end
 % end
 
-[sExt, corrFactInd, corrFactGlob, attenInd, attenGlob] =...
+[sExt, corrFactInd, corrFactGlob, attenInd, attenGlob, corrFactAver, gainAver] =...
     SimulationController.addCancellationParametersToStructure(s);
 
 freqEdges = 0:20:1000;
@@ -383,6 +383,28 @@ end
 %     printfig(axCanc(sel(k)).Parent, imagesPath, ['Experiment12_globalAttenMagnOrder_', num2str(magnFiltOrder(sel(k)))], 'eps')
 % end
 % delaysMag/fs*c
+
+% Average gain
+freqEdges = 0:20:1000;
+gainEdges = -20:5;
+vecs = {magnFiltOrder, freqs, 1:numNSpos};
+axGainAver = gobjects(numFreqFilters, 1);
+for k = 1:numFreqFilters
+    [~, gainAverCurrent] = filterArrayForRepresentation(vecs, gainAver, [2 3], 'nonIndepDimIndices', k);
+    ax = histogram2D(10*log10(gainAverCurrent), 1, freqs, freqEdges, gainEdges);
+    ax.XLabel.String = 'Frequency (Hz)';
+    ax.YLabel.String = 'Average Gain (dB)';
+    ax.Title.String = ['N = ', num2str(magnFiltOrder(k))];
+    colorbar(ax);
+    axGainAver(k) = ax;
+end
+
+% % Print
+sel = 2:8;
+for k = 1:numel(sel)
+    printfig(axGainAver(sel(k)).Parent, imagesPath, ['Experiment12_GainAverMagnOrder_', num2str(magnFiltOrder(sel(k)))], 'eps')
+end
+delaysMag/fs*c
 
 %% Test Hilbert filter. How does number of coefficients and performance relate?
 magnFiltOrder = 2^10;
@@ -517,6 +539,7 @@ legend(axHilb, str)
 %%% Simulation %%%
 if ~exist('obj', 'var') || ~isvalid(obj)
     obj = SimulationController;
+    obj.WFSToolObj.fig.HandleVisibility = 'off';
 end
 
 % Constants
@@ -601,7 +624,7 @@ AcousticPathCalculationScript
 simulationScript
 
 %%% Analysis
-[sExt, corrFactInd, corrFactGlob, attenInd, attenGlob] =...
+[sExt, corrFactInd, corrFactGlob, attenInd, attenGlob, corrFactAver, averGain] =...
     SimulationController.addCancellationParametersToStructure(s);
 
 freqEdges = 0:20:1000;
@@ -612,7 +635,7 @@ for k = 1:numFreqFilters
     [~, attenGlobCurrent] = filterArrayForRepresentation(vecs, attenGlob, [2 3], 'nonIndepDimIndices', k);
     ax = histogram2D(10*log10(attenGlobCurrent), 1, freqs, freqEdges, attenEdges);
     ax.XLabel.String = 'Frequency (Hz)';
-    ax.YLabel.String = 'Attenuation (dB)';
+    ax.YLabel.String = 'Global gain (dB)';
     ax.Title.String = ['N = ', num2str(hilbertFiltOrder(k))];
     ax.Parent.Name = ['N = ', num2str(hilbertFiltOrder(k))];
     colorbar(ax);
@@ -625,3 +648,25 @@ end
 %     printfig(axCanc(sel(k)).Parent, imagesPath, ['Experiment12_globalAttenHilbOrder_', num2str(hilbertFiltOrder(sel(k)))], 'eps')
 % end
 % delaysHilb/fs*c
+
+freqEdges = 0:20:1000;
+attenEdges = -20:5;
+vecs = {hilbertFiltOrder, freqs, 1:numNSpos};
+axGainAver = gobjects(numFreqFilters, 1);
+for k = 1:numFreqFilters
+    [~, averGainCurrent] = filterArrayForRepresentation(vecs, averGain, [2 3], 'nonIndepDimIndices', k);
+    ax = histogram2D(10*log10(averGainCurrent), 1, freqs, freqEdges, attenEdges);
+    ax.XLabel.String = 'Frequency (Hz)';
+    ax.YLabel.String = 'Average gain (dB)';
+    ax.Title.String = ['N = ', num2str(hilbertFiltOrder(k))];
+    ax.Parent.Name = ['N = ', num2str(hilbertFiltOrder(k))];
+    colorbar(ax);
+    axGainAver(k) = ax;
+end
+
+% Print
+sel = 8:11;
+for k = 1:numel(sel)
+    printfig(axGainAver(sel(k)).Parent, imagesPath, ['Experiment12_gainAverHilbOrder_', num2str(hilbertFiltOrder(sel(k)))], 'eps')
+end
+delaysHilb/fs*c

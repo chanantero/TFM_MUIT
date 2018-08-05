@@ -113,15 +113,18 @@ end
 
 if nargout > 1
     % Generate receiver positions according to the official paper
-    d = 0.18; % Separation between two contiguous loudspeakers. Size of one loudspeaker
-    nb = 8; % Bottom and upper sides of the octogon (2 sides)
-    nd = 8; % Diagonal sides of the octogon (4 sides)
-    nl = 24; % Lateral side of the octogon (2 sides)
-    betabd = 45; % Deviation angle between bottom/upper and diagonal sides
     
-    [ x, y, ~ ] = octogon(d, nb, nd, nl, betabd);
-    z = zeros(numel(x), 1);
-    WFSarrayPosition = [x, y, z];
+%     d = 0.18; % Separation between two contiguous loudspeakers. Size of one loudspeaker
+%     nb = 8; % Bottom and upper sides of the octogon (2 sides)
+%     nd = 8; % Diagonal sides of the octogon (4 sides)
+%     nl = 24; % Lateral side of the octogon (2 sides)
+%     betabd = 45; % Deviation angle between bottom/upper and diagonal sides
+%     
+%     [ x, y, ~ ] = octogon(d, nb, nd, nl, betabd);
+%     z = zeros(numel(x), 1);
+%     WFSarrayPosition = [x, y, z];
+    s = WFSToolSimple.generateScenario(96, 'orientation', 'vertical', 'originReference', 'octagonBondingBoxCorner');
+    WFSarrayPosition = s.loudspeakersPosition;
     
     numMicroX = 15; numMicroY = 24;
     incrX = 0.2; incrY = -0.2;

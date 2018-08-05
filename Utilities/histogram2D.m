@@ -5,6 +5,7 @@ p = inputParser;
 addOptional(p, 'xEdges', [])
 addOptional(p, 'yEdges', [])
 addParameter(p, 'visual3D', false)
+addParameter(p, 'axes', [])
 
 parse(p, varargin{:});
 
@@ -32,7 +33,12 @@ N = histcounts2(xValuesMat, A, xEdges, yEdges);
 
 Nnorm = N./repmat(sum(N, 2), [1, size(N, 2)]);
 
-ax = axes(figure);
+if ismember('axes', p.UsingDefaults)
+    ax = axes(figure);
+else
+    ax = p.Results.axes;
+end
+
 if ~visual3D
     C = zeros(length(xEdges), length(yEdges));
     C(1:end-1, 1:end-1) = Nnorm;

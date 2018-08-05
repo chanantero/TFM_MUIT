@@ -25,8 +25,9 @@ printfig(ax.Parent, imagesPath, 'PruebaB', 'svg');
 
 h = figure;
 ax = axes(h);
-plot(ax, cos(0:0.1:2*pi));
-ax.Title.String = 'título';
+% plot(ax, cos(0:0.1:2*pi));
+ax.Title.String = 'titulo';
+ax.Title.Interpreter = 'none';
 ax.XLabel.String = 'Eje x';
 ax.YLabel.String = 'Eje y';
 legend(ax, 'hopoa')
@@ -34,13 +35,3 @@ colorbar
 
 options.TickLabels2Latex = false;
 Plot2LaTeX(h, [imagesPath, 'pruebaPlot2LaTeX'], options)
-
-fout = fopen([imagesPath, 'pruebaPlot2LaTeX_pathCopy.svg'], 'r+');
-
-% Find the position of [filename, '_path.svg] where we must begin to write
-% the latex text
-str = fread(fout);
-strfind(str, '</g></svg>')
-pos = regexp(char(str'), '<\s*/g\s*>\s*<\s*/svg\s*>');
-fseek(fout, pos-1, 'bof');
-line = fgetl(fout);

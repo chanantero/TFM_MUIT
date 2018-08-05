@@ -1851,7 +1851,7 @@ classdef WFSToolSimple < handle
                                         roomPosition = [0, 0, roomDim(1), roomDim(2)];
                                     case 'octagonBondingBoxCorner'
                                         %loudspeakersPosition(:,3) = loudspeakersPosition(:,3) + zPos;
-                                        roomPosition = [0, 0, roomDim(1), roomDim(2)];
+                                        roomPosition = [-WFSoffset(1), -WFSoffset(2), roomDim(1), roomDim(2)];
                                 end
                         end
                     

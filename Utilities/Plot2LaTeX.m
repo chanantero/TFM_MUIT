@@ -276,7 +276,7 @@ for i = 1:n_LegObj
 end
 
 % do similar for axes objects, XTick, YTick, ZTick
-if TickLabelToLatex 
+if TickLabelToLatex
     n_AxeObj = length(AxeObj);
     for i = 1:n_AxeObj
         n_Str = length(AxeObj(i).XTickLabel);
@@ -315,6 +315,11 @@ if TickLabelToLatex
             AxeObj(i).ZTickLabel{j} = LabelText(iLabel);
         end
     end
+else
+    for k = 1:length(AxeObj)
+        AxeObj(k).XTickLabel = [];
+        AxeObj(k).YTickLabel = [];
+    end
 end
 
 % do similar for color bar objects
@@ -350,6 +355,7 @@ waitbar(Step/nStep,hWaitBar,'Saving figure to .svg file');
 
 % savefig(h,[filename,'_temp']); % to see the intermediate situation
 saveas(h,filename,'svg'); % export to svg
+saveas(h,[filename, 'Copy'],'svg'); % export to svg
 %% Modify SVG file to replace labels with original text
 Step = Step + 1;
 waitbar(Step/nStep,hWaitBar,'Restoring text in .svg file');
@@ -358,130 +364,71 @@ for iLabel = 1:nLabel
     Labels(iLabel).XMLText = EscapeXML(Labels(iLabel).TrueText);
 end
 
-fin = fopen([filename,'.svg']); % open svg file
-% fout = fopen([filename,'_temp.svg'],'w'); % make a temp file for modification
-fout = fopen([filename, '_path.svg'], 'r+');
-
-% Find the position of [filename, '_path.svg] where we must begin to write
-% the latex text and move pointer to that position
-str = fread(fout)';
-pos = regexp(char(str), '><\s*/g\s*>\s*<\s*/svg\s*>');
-fseek(fout, pos-1, 'bof');
-
-DOM = xmlread([filename,'.svg']);
-DOMpath = xmlread([filename,'_path.svg']);
-
 try
+    fin = fopen([filename,'.svg'], 'r'); % open svg file
+    strNormal = char(fread(fin)');
+    fclose(fin);
     
-    StrLine_new = fgetl(fin);%skip first line
-    iLine = 1; % Line number
-    nFoundLabel = 0; % Counter of number of found labels
-    while ~feof(fin)
-        StrPref = StrLine_new; % process new line
-        iLine = iLine + 1;
-        StrLine_old = fgetl(fin);
-        
-        FoundLabelText = regexp(StrLine_old,'>\S*</text','match'); %try to find label
-        StrLine_new = StrLine_old;
-        if ~isempty(FoundLabelText) && nLabel > 0
-            nFoundLabel = nFoundLabel + 1;
-            iLabel = find(ismember(...
-                {Labels.LabelText},...
-                FoundLabelText{1}(2:end-6))); % find label number
-            
-            if ~isempty(iLabel)
-                % Append text alignment in prevous line
-                StrPrefTemp = [StrPref(1:end-1),...
-                    'text-align:', Labels(iLabel).Alignment{1},...
-                    ';text-anchor:', Labels(iLabel).Anchor{1}, '"'];
-                
-                % correct x - position offset
-                StrPrefTemp = regexprep(StrPrefTemp,'x="\S*"','x="0"');
-                
-                % correct y - position offset, does not work correctly
-                [startIndex,endIndex] = regexp(StrPrefTemp,'y="\S*"');
-                yOffset = str2double(StrPrefTemp((startIndex+3):(endIndex-1)));
-                StrPrefTemp = regexprep(...
-                    StrPrefTemp,...
-                    'y="\S*"',...
-                    ['y="', num2str(yOffset*yCorrFactor), '"']);
-                
-                % Replace label with original string
-                StrCurrTemp = strrep(StrLine_old, ...
-                    FoundLabelText,...
-                    ['>',Labels(iLabel).XMLText,'</text']);
-                
-                StrLine_new = StrCurrTemp{:};
-                StrPref = StrPrefTemp;
-                fprintf(fout,'%s\n',StrPref);
-                fprintf(fout,'%s>\n',StrLine_new);
-            end
-        end
+    [startInd, endInd, tokens] = regexp(strNormal, '<g[^>]*?><text[^>]*>(\S*?)</text\s*>\s*</g\s*>', 'start', 'end', 'tokens', 'all');
+    
+    % For each label, find the substring than contains it
+    numTexts = length(startInd);
+    textFragments = cell(numTexts, 1);
+    textContent = cell(numTexts, 1);
+    for t = 1:numTexts
+        textFragments{t} = strNormal(startInd(t):endInd(t));
+        textContent{t} = tokens{t}{1};
     end
-    fprintf(fout, '%s', str(pos:end));
+    labels = {Labels.LabelText};
+    [isFound, index] = ismember(labels, textContent);
+    LabelsFound = Labels(isFound);
+    index = index(isFound);
+    
+    % Substitute the label by the original text
+    numLabels = length(LabelsFound);
+    newTextFragments = cell(numLabels, 1);
+    for l = 1:numLabels
+        text = textFragments{index(l)};
+        % Substitute the label by the original text
+        text = strrep(text, LabelsFound(l).LabelText, LabelsFound(l).XMLText);
+        
+        % Add some parameters to the style attribute
+        en = regexp(text, '<g[^>]*style=".*?"', 'end');
+        text = [text(1:en-1), ' text-align:', LabelsFound(l).Alignment{1},...
+            '; text-anchor:', LabelsFound(l).Anchor{1}, text(en:end)];
+        
+        % Change the value of x and y coordinates
+        text = regexprep(text, 'x="\S*"', 'x="0"');
+        
+        [token, tokenExtents] = regexp(text,'<text[^>]*?y="(\S*)"', 'tokens', 'tokenExtents');
+        yOffsetStr = token{1}{1};
+        yOffsetStrStartInd = tokenExtents{1}(1);
+        yOffsetStrEndInd = tokenExtents{1}(2);
+        yOffset = str2double(yOffsetStr);
+        text = [text(1:yOffsetStrStartInd-1), num2str(yOffset*yCorrFactor), text(yOffsetStrEndInd+1:end)];
+        
+        newTextFragments{l} = text;
+    end
+    newTextFragment = strjoin(newTextFragments, '\n');
+    
+    % Write newTextFragments in fout
+    fout = fopen([filename, '_path.svg'], 'r');
+    strPath = char(fread(fout)');
+    fclose(fout);
+    
+    start = regexp(strPath, '</g\s*>\s*</svg\s*>', 'start');
+    strPath = [strPath(1:start-1), newTextFragment, strPath(start:end)];
+    
+    fout = fopen([filename, '_path.svg'], 'w');
+    fwrite(fout, strPath);
+    fclose(fout);
+    
 catch ME
     fclose(fin);
     fclose(fout);
     rethrow(ME)
 end
 
-
-% try
-%     
-%     StrLine_new = fgetl(fin);%skip first line
-%     iLine = 1; % Line number
-%     nFoundLabel = 0; % Counter of number of found labels
-%     while ~feof(fin)
-%         StrPref = StrLine_new; % process new line
-%         iLine = iLine + 1;
-%         StrLine_old = fgetl(fin);
-%         
-%         FoundLabelText = regexp(StrLine_old,'>\S*</text','match'); %try to find label
-%         StrLine_new = StrLine_old;
-%         if ~isempty(FoundLabelText) && nLabel > 0
-%             nFoundLabel = nFoundLabel + 1;
-%             iLabel = find(ismember(...
-%                 {Labels.LabelText},...
-%                 FoundLabelText{1}(2:end-6))); % find label number
-%             
-%             if ~isempty(iLabel)
-%                 % Append text alignment in prevous line
-%                 StrPrefTemp = [StrPref(1:end-1),...
-%                     'text-align:', Labels(iLabel).Alignment{1},...
-%                     ';text-anchor:', Labels(iLabel).Anchor{1}, '"'];
-%                 
-%                 % correct x - position offset
-%                 StrPrefTemp = regexprep(StrPrefTemp,'x="\S*"','x="0"');
-%                 
-%                 % correct y - position offset, does not work correctly
-%                 [startIndex,endIndex] = regexp(StrPrefTemp,'y="\S*"');
-%                 yOffset = str2double(StrPrefTemp((startIndex+3):(endIndex-1)));
-%                 StrPrefTemp = regexprep(...
-%                     StrPrefTemp,...
-%                     'y="\S*"',...
-%                     ['y="', num2str(yOffset*yCorrFactor), '"']);
-%                 
-%                 % Replace label with original string
-%                 StrCurrTemp = strrep(StrLine_old, ...
-%                     FoundLabelText,...
-%                     ['>',Labels(iLabel).XMLText,'</text']);
-%                 
-%                 StrLine_new = StrCurrTemp{:};
-%                 StrPref = StrPrefTemp;
-%             end
-%         end
-%         fprintf(fout,'%s\n',StrPref);
-%     end
-%     fprintf(fout,'%s\n',StrLine_new);
-    
-% catch ME
-%     fclose(fin);
-%     fclose(fout);
-%     rethrow(ME)
-% end
-
-fclose(fin);
-fclose(fout);
 movefile([filename,'_path.svg'],[filename,'.svg'])
 %% Invoke Inkscape to generate PDF + LaTeX
 Step = Step + 1;
