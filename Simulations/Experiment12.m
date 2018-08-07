@@ -670,3 +670,123 @@ for k = 1:numel(sel)
     printfig(axGainAver(sel(k)).Parent, imagesPath, ['Experiment12_gainAverHilbOrder_', num2str(hilbertFiltOrder(sel(k)))], 'eps')
 end
 delaysHilb/fs*c
+
+%% Pure delay filter
+
+if ~exist('obj', 'var') || ~isvalid(obj)
+    obj = SimulationController;
+    obj.WFSToolObj.fig.HandleVisibility = 'off';
+end
+
+% Constants
+
+c = 340;
+WFSfilterLength = 22050;
+zPos = 1.65;
+WFSarrayOffset = [0.46 2.21 zPos]; % [x, y, z] coordinates. Useful for generating acoustic path IR.
+roomDim = [4.48, 9.13, 2.64];
+
+% Noise source coefficient
+amplitude = 1;
+phase = 0;
+
+% Microphone positions
+% Rectangular grid
+marginRatio = 0.6;
+numPointsX = 5;
+numPoinstY = 5;
+extRectXmin = min(obj.WFSposition(:, 1));
+extRectXmax = max(obj.WFSposition(:, 1));
+extRectYmin = min(obj.WFSposition(:, 2));
+extRectYmax = max(obj.WFSposition(:, 2));
+octagonRectPos = [extRectXmin, extRectYmin, extRectXmax - extRectXmin, extRectYmax - extRectYmin];
+gridXLength = octagonRectPos(3)*marginRatio;
+gridYLength = octagonRectPos(4)*marginRatio;
+centerX = (extRectXmax + extRectXmin)/2;
+centerY = (extRectYmax + extRectYmin)/2;
+gridMinX = centerX - gridXLength/2;
+gridMaxX = centerX + gridXLength/2;
+gridMinY = centerY - gridYLength/2;
+gridMaxY = centerY + gridYLength/2;
+xLim = [gridMinX, gridMaxX ]; yLim = [gridMinY, gridMaxY];
+x = linspace(xLim(1), xLim(2), numPointsX);
+y = linspace(yLim(1), yLim(2), numPoinstY);
+z = 0;
+[X, Y, Z] = ndgrid(x, y, z);
+recPositions = [X(:), Y(:), Z(:)];
+
+% Positions of the noise source
+% Quarter of a circle
+numPointsPerArc = 4;
+radius = [3.6 4 4.4 4.8];
+numArcs = numel(radius);
+xOctagon = obj.WFSposition(:, 1);
+yOctagon = obj.WFSposition(:, 2);
+centreX = (max(xOctagon) + min(xOctagon))/2;
+centreY = (max(yOctagon) + min(yOctagon))/2;
+alphaMax = pi/2;
+alphaMin = 0;
+alpha = linspace(alphaMin, alphaMax, numPointsPerArc)';
+x = centreX + repmat(radius, numPointsPerArc, 1).*repmat(cos(alpha), 1, numArcs);
+y = centreY + repmat(radius, numPointsPerArc, 1).*repmat(sin(alpha), 1, numArcs);
+NSpositions = [x(:), y(:), zeros(numel(x), 1)];
+
+% Frequencies
+freqs = 0:10:1000;
+
+% Room characteristics and impulse response of chamber
+beta = 0; % Average reflection coefficient of the walls of the chamber
+WFS_AcPath_previously_calculated = true;
+NS_AcPath_previously_calculated = true;
+appendFreeSpaceAcPaths = false;
+
+% WFS options
+frequencyCorrection = true;
+attenuationType = 'Ruben';
+
+% Simulation options
+timeDomainActive = true;
+fakeTimeProcessing = true;
+frequencyDomainActive = false;
+automaticLengthModification = false;
+
+f0 = 500; % Hz. Central frequency that will be optimized.
+delayFilt = 7/(8*f0);
+magnFiltOrder = 2^10;
+fs = 44100;
+[hMag, delayMag] = getFrequencyFilter( magnFiltOrder, [], fs );
+delayFiltSamp = round(delayFilt*fs);
+hDelay = zeros(1, delayFiltSamp + 1);
+hDelay(delayFiltSamp + 1) = 1;
+
+hTotal = conv(hDelay, hMag);
+delay = delayMag + delayFiltSamp;
+
+a = freqz(hTotal, 1, freqs, fs);
+ax = axes(figure);
+plot(ax, freqs, abs(a));
+yyaxis('right')
+plot(ax, freqs, rad2deg(unwrap(angle(a)) + 2*pi*freqs*delayMag/fs));
+
+% Filter variables for the time WFS filter
+freqFilters = {hTotal};
+freqFiltDelays = delayMag;
+
+SetupParametersScript
+AcousticPathCalculationScript
+simulationScript
+
+%%% Analysis
+[sExt, corrFactInd, corrFactGlob, attenInd, attenGlob, corrFactAver, averGain] =...
+    SimulationController.addCancellationParametersToStructure(s);
+
+freqStep = freqs(2) - freqs(1);
+freqEdges = [freqs, freqs(end) + freqStep] - freqStep/2;% 0:20:1000;
+attenEdges = -20:10;
+ax = histogram2D(10*log10(averGain), 2, freqs, freqEdges, attenEdges);
+ax.XLabel.String = 'Frequency (Hz)';
+ax.YLabel.String = 'Average gain (dB)';
+ax.Title.String = ['f = ', num2str(f0), ' Hz'];
+colorbar(ax);
+
+printfig(ax.Parent, imagesPath, 'Experiment12_simpleDelay500', 'eps')

@@ -221,6 +221,7 @@ for f = 1:numFreqs
     data(f).y = abs(acPath(:, f));
 end
 [params, gofs] = fitInterface( data, models );
+aParam = [params{1}.a]';
 
 dataAll = struct('x', repmat(distances, [numFreqs, 1]), 'y', abs(acPath(:)));
 [paramAll, gofsGlob] = fitInterface( dataAll, models );
@@ -233,18 +234,18 @@ dataAll = struct('x', repmat(distances, [numFreqs, 1]), 'y', abs(acPath(:)));
 % E) 2D histogram. x axis: frequency. y axis: distance. z/color axis: mean/deviation/std.
 
 % A) Fixed frequency, all distances. Histogram/scatter. x axis: distance. y axis: magnitude.
-repFreqs = freqs;
+repFreqs = [450];
 numRepFreqs = length(repFreqs);
 dVec = min(distances):0.05:max(distances);
 distEdges = linspace(min(distances), max(distances), 30);
-magEdges = linspace(0, max(abs(acPath(:))), 50);
+magEdges = linspace(0, max(abs(acPath(:))), 100);
 axsA = gobjects(length(repFreqs), 1);
 for f = 1:numRepFreqs
     [~, indFreq] = min(abs(repFreqs(f) - freqs));
     repArr = abs(acPath(:, indFreq));
     ax = axes(figure, 'NextPlot', 'Add');
-    scatter(ax, distances, repArr, '.')
-%     histogram2D(repArr, 1, distances, distEdges, magEdges, 'axes', ax);
+%     scatter(ax, distances, repArr, 1, '.')
+    histogram2D(repArr, 1, distances, distEdges, magEdges, 'axes', ax);
     plot(ax, dVec, params{1}(indFreq).a./dVec, 'r', 'LineWidth', 3)
     ax.XLim = [min(distances), max(distances)];
     ax.YLim = [0 max(abs(acPath(:)))];
@@ -254,7 +255,8 @@ for f = 1:numRepFreqs
     legend(ax.Children(1), {'Ideal free-space'});
     axsA(f) = ax;
 end
-close all
+
+% ax.YLim = [0 0.25];
 
 % % Print
 % for f = 1:numRepFreqs
@@ -279,6 +281,7 @@ ax.YLim = [0 max(abs(acPath(:)))];
 ax.XLabel.String = 'Frequency (Hz)';
 ax.YLabel.String = '$|H|$'; ax.YLabel.Interpreter = 'latex';
 ax.Title.String = sprintf('indLoud = %d, indMicro = %d, distance = %g', indLoud, indMicro, distances(indDist));
+
 
 % C) All frequencies, all distances. Histogram/scatter. x axis: distance. y axis: magnitude.
 ax = axes(figure, 'NextPlot', 'Add');
@@ -329,8 +332,250 @@ bar3cRub(rep, distEdges, freqEdges, ax);
 % Trabajar con las variables WFS_FR y WFS_IR, aunque es mejor generarlas
 % aquí con rir_generator. Haría que el código fuese más independiente. Sí,
 % haz eso.
+beta = [0.5 0.6 0.7 0.8 0.9]; % Average reflection coefficient of the walls of the chamber
+numReverbTime = length(beta);
+Beta = beta(:)*ones(1, 6);
+fs = 44100/4;
+c = 340;
+numSampIR = round(max(distances)/c*fs)*2;
+roomDim = [4.48, 9.13, 2.64];
+WFSarrayOffset = [0.4600    2.2100    1.6500];
+r = microphonePositions + repmat(WFSarrayOffset, numMicro, 1); % Receiver position [x y z] (m)
+wfsPos = WFSarrayPosition + repmat(WFSarrayOffset, numLoud, 1);
 
+WFS_IR = zeros(numMicro, numSampIR, numLoud, numReverbTime);
+for l = 1:numLoud
+    for rt = 1:numReverbTime
+        fprintf('Loudspeaker %d/%d. Beta %d/%d.\n', l, numLoud, rt, numReverbTime)
+        WFS_IR(:, :, l, rt) = rir_generator(c, fs, r, wfsPos(l, :), roomDim, Beta(rt, :), numSampIR);
+    end
+end
+
+if numFreqs > 1
+    oper = @(x) freqz(x, 1, freqs, fs);
+    WFS_FR = oneDimOperOverMultiDimArray( oper, WFS_IR, 2 );
+else
+    oper = @(x) freqz(x, 1, [0 freqs], fs);
+    WFS_FR = oneDimOperOverMultiDimArray( oper, WFS_IR, 2 );
+    WFS_FR = WFS_FR(:, 2, :, :);
+end
+
+acPathRIR = mergeAndPermute(WFS_FR, {[1, 3], 2, 4});
+
+% Fitting
+models = {'a/x'}; %{'exp1', 'exp2', 'power1', 'power2', 'a*exp(-b*x)+c'};
+data = repmat(struct('x', [], 'y', []), [numFreqs, numReverbTime]);
+for rt = 1:numReverbTime
+    for f = 1:numFreqs
+        data(f, rt).x = distances;
+        data(f, rt).y = abs(acPathRIR(:, f, rt));
+    end
+end
+[paramsRIR, gofsRIR] = fitInterface( data, models );
+aParamRIR = zeros(size(paramsRIR{1}));
+aParamRIR(:) = [paramsRIR{1}.a];
+
+% A) Fixed frequency, all distances. Histogram/scatter. x axis: distance. y axis: magnitude.
+repFreqs = [450];
+numRepFreqs = length(repFreqs);
+dVec = min(distances):0.05:max(distances);
+distEdges = linspace(min(distances), max(distances), 30);
+magEdges = linspace(0, max(abs(acPathRIR(:))), 100);
+axsA = gobjects(length(repFreqs), numReverbTime);
+for rt = 1:numReverbTime
+    for f = 1:numRepFreqs
+        [~, indFreq] = min(abs(repFreqs(f) - freqs));
+        repArr = abs(acPathRIR(:, indFreq, rt));
+        ax = axes(figure, 'NextPlot', 'Add');
+%         scatter(ax, distances, repArr, '.')
+        histogram2D(repArr, 1, distances, distEdges, magEdges, 'axes', ax);
+        plot(ax, dVec, aParamRIR(indFreq, rt)./dVec, 'r', 'LineWidth', 3)
+        ax.XLim = [min(distances), max(distances)];
+        ax.YLim = [0 max(abs(acPathRIR(:)))];
+%         ax.YLim = [0 0.25*aParamRIR(indFreq, rt)/params{1}(indFreq).a]; % You must use the same repFreqs as in the A) section of the measured impulse responses
+        ax.XLabel.String = 'Distance (m)';
+        ax.YLabel.String = '$|H|$'; ax.YLabel.Interpreter = 'latex';
+        ax.Title.String = sprintf('$\\beta = %g$. %gHz', beta(rt), repFreqs(f));
+        ax.Title.Interpreter = 'latex';
+        legend(ax.Children(1), {'Ideal free-space'});
+        axsA(f, rt) = ax;
+    end
+end
+
+% Represent the real and simulated information together for comparison
+acPath_norm = zeros(size(acPath));
+acPathRIR_norm = zeros(size(acPathRIR));
+for f = 1:numFreqs
+    acPath_norm(:, f) = acPath(:, f)/aParam(indFreq);
+    for rt = 1:numReverbTime
+        acPathRIR_norm(:, f, rt) = acPathRIR(:, f, rt)/aParamRIR(indFreq, rt);
+    end
+end
+
+repFreqs = [450];
+numRepFreqs = length(repFreqs);
+dVec = min(distances):0.05:max(distances);
+distEdges = linspace(min(distances), max(distances), 30);
+magEdges = linspace(0, max(abs(acPath_norm(:))), 100);
+yLim = [0 max(abs(acPath_norm(:)))];
+xLim = [min(distances), max(distances)];
+axsA = gobjects(length(repFreqs), 1);
+axsARIR = gobjects(length(repFreqs), numReverbTime);
+for f = 1:numRepFreqs
+    [~, indFreq] = min(abs(repFreqs(f) - freqs));
+    repArr = abs(acPath_norm(:, indFreq));
+    ax = axes(figure, 'NextPlot', 'Add');
+%     scatter(ax, distances, repArr, 1, '.')
+    histogram2D(repArr, 1, distances, distEdges, magEdges, 'axes', ax);
+    plot(ax, dVec, 1./dVec, 'r', 'LineWidth', 3)
+    ax.XLim = xLim;
+    ax.YLim = yLim;
+    ax.XLabel.String = 'Distance (m)';
+    ax.YLabel.String = '$|H|$'; ax.YLabel.Interpreter = 'latex';
+    ax.Title.String = sprintf('%gHz', repFreqs(f));
+    legend(ax.Children(1), {'Ideal free-space'});
+    axsA(f) = ax;
+    
+    for rt = 1:numReverbTime
+        [~, indFreq] = min(abs(repFreqs(f) - freqs));
+        repArr = abs(acPathRIR_norm(:, indFreq, rt));
+        ax = axes(figure, 'NextPlot', 'Add');
+%         scatter(ax, distances, repArr, '.')
+        histogram2D(repArr, 1, distances, distEdges, magEdges, 'axes', ax);
+        plot(ax, dVec, 1./dVec, 'r', 'LineWidth', 3)
+        ax.XLim = xLim;
+        ax.YLim = yLim;
+        ax.XLabel.String = 'Distance (m)';
+        ax.YLabel.String = '$|H|$'; ax.YLabel.Interpreter = 'latex';
+        ax.Title.String = sprintf('$\\beta = %g$. %gHz', beta(rt), repFreqs(f));
+        ax.Title.Interpreter = 'latex';
+        legend(ax.Children(1), {'Ideal free-space'});
+        axsARIR(f, rt) = ax;
+    end
+end
+
+for k = 1:numel(axsA)
+    axsA(k).YLim = [0, 4];
+end
+for k = 1:numel(axsARIR)
+    axsARIR(k).YLim = [0, 4];
+end
+
+GTACestimatedBeta = 0.8;
+selFreq = 450;
+[~, ind] = min(abs(GTACestimatedBeta - beta));
+[~, indFreq] = min(abs(selFreq - repFreqs));
+% printfig(axsARIR(indFreq, ind).Parent, imagesPath, 'Experiment13_RIRMagnDist08', 'eps');
 
 % Generate the average gain histogram for the reflection coefficient of the most similar simulated
 % impulse response
+if ~exist('obj', 'var') || ~isvalid(obj)
+    obj = SimulationController;
+    obj.WFSToolObj.fig.HandleVisibility = 'off';
+end
 
+% Constants
+WFSfilterLength = 22050;
+zPos = 1.65;
+WFSarrayOffset = [0.46 2.21 zPos]; % [x, y, z] coordinates. Useful for generating acoustic path IR.
+roomDim = [4.48, 9.13, 2.64];
+fs = 44100;
+c = 340;
+
+% Frequency filters
+magnFiltOrder = 2^10;
+hilbertFiltOrder = 2^13;
+[freqFilter, freqFiltDelay] = getFrequencyFilter(magnFiltOrder, hilbertFiltOrder, fs);
+freqFilters = {freqFilter};
+freqFiltDelays = freqFiltDelay;
+
+% Noise source coefficient
+amplitude = 1;
+phase = 0;
+
+% Microphone positions
+% Rectangular grid
+marginRatio = 0.6;
+numPointsX = 5;
+numPoinstY = 5;
+extRectXmin = min(obj.WFSposition(:, 1));
+extRectXmax = max(obj.WFSposition(:, 1));
+extRectYmin = min(obj.WFSposition(:, 2));
+extRectYmax = max(obj.WFSposition(:, 2));
+octagonRectPos = [extRectXmin, extRectYmin, extRectXmax - extRectXmin, extRectYmax - extRectYmin];
+gridXLength = octagonRectPos(3)*marginRatio;
+gridYLength = octagonRectPos(4)*marginRatio;
+centerX = (extRectXmax + extRectXmin)/2;
+centerY = (extRectYmax + extRectYmin)/2;
+gridMinX = centerX - gridXLength/2;
+gridMaxX = centerX + gridXLength/2;
+gridMinY = centerY - gridYLength/2;
+gridMaxY = centerY + gridYLength/2;
+xLim = [gridMinX, gridMaxX ]; yLim = [gridMinY, gridMaxY];
+x = linspace(xLim(1), xLim(2), numPointsX);
+y = linspace(yLim(1), yLim(2), numPoinstY);
+z = 0;
+[X, Y, Z] = ndgrid(x, y, z);
+recPositions = [X(:), Y(:), Z(:)];
+
+% Positions of the noise source
+% Circle arc
+numPointsPerArc = 4;
+radius = [3.6 4 4.4 4.8];
+numArcs = numel(radius);
+xOctagon = obj.WFSposition(:, 1);
+yOctagon = obj.WFSposition(:, 2);
+centreX = (max(xOctagon) + min(xOctagon))/2;
+centreY = (max(yOctagon) + min(yOctagon))/2;
+x1 = centreX + WFSarrayOffset(1);
+x2 = roomDim(1) - (centreX + WFSarrayOffset(1));
+alphaMax = -pi/2 - asin(x1/max(radius)) + deg2rad(1);
+alphaMin = -pi/2 + asin(x2/max(radius)) - deg2rad(1);
+alpha = linspace(alphaMin, alphaMax, numPointsPerArc)';
+x = centreX + repmat(radius, numPointsPerArc, 1).*repmat(cos(alpha), 1, numArcs);
+y = centreY + repmat(radius, numPointsPerArc, 1).*repmat(sin(alpha), 1, numArcs);
+NSpositions = [x(:), y(:), zeros(numel(x), 1)];
+
+% Frequencies
+freqs = 0:10:1000;
+
+% Room characteristics and impulse response of chamber
+beta = GTACestimatedBeta; % Average reflection coefficient of the walls of the chamber
+WFS_AcPath_previously_calculated = true;
+NS_AcPath_previously_calculated = true;
+appendFreeSpaceAcPaths = false;
+
+% WFS options
+frequencyCorrection = true;
+attenuationType = 'Ruben';
+
+% Simulation options
+timeDomainActive = true;
+fakeTimeProcessing = true;
+frequencyDomainActive = false;
+automaticLengthModification = false;
+
+SetupParametersScript
+AcousticPathCalculationScript
+simulationScript
+
+[sExt, corrFactInd, corrFactGlob, attenInd, attenGlob, corrFactAver, gainAver] =...
+    SimulationController.addCancellationParametersToStructure(s);
+
+freqEdges = 0:20:1000;
+attenEdges = -20:5;
+vecs = {1, freqs, 1:numNSpos, beta};
+axGainAver = gobjects(numFreqFilters, 1);
+for k = 1:numReverbTime
+    [~, gainAverCurrent] = filterArrayForRepresentation(vecs, gainAver, [2 3], 'nonIndepDimIndices', [1, k]);
+    ax = histogram2D(10*log10(gainAverCurrent), 1, freqs, freqEdges, attenEdges);
+    ax.XLabel.String = 'Frequency (Hz)';
+    ax.YLabel.String = 'Average gain (dB)';
+    ax.Title.String = ['$\beta = ', num2str(beta(k)), '$'];
+    ax.Title.Interpreter = 'latex';
+    colorbar(ax);
+    axGainAver(k) = ax;
+end
+
+% Print
+printfig(axGainAver.Parent, imagesPath, ['Experiment13_gainAverReflCoefSimil_', num2str(round(beta*100))], 'eps')

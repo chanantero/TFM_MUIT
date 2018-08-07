@@ -11,7 +11,7 @@ bytesSortedRel = bytesSorted/total;
 
 acumRel = cumsum(bytesSortedRel);
 
-ind = acumRel < 0.9;
+ind = 1:find(acumRel > 0.9, 1, 'first');
 
 ax = axes(figure);
 p = pie(ax, bytesSortedRel(ind), namesSorted(ind));

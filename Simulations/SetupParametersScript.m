@@ -1,9 +1,19 @@
 %% Setup parameters
 
 % Noise source variables
-obj.amplitude = amplitude;
-obj.amplitude(2) = -amplitude;
-obj.phase = phase;
+if exist('amplitude', 'var')
+    obj.amplitude = amplitude;
+    obj.amplitude(2) = -amplitude;
+else
+    obj.amplitude = 1;
+    obj.amplitude(2) = -1;
+end
+
+if exist('phase', 'var')
+    obj.phase = phase;
+else
+    obj.phase = 0;
+end
 
 % Default values. They don't matter, but do not touch just in case.
 obj.NSposition = [3.35 -0.2 0]; % Assumed real position
@@ -12,7 +22,9 @@ obj.Fs = fs;
 
 % Frequency filter
 % obj.WFSToolObj.freqFilter = hTotal;
-numFreqFilters = numel(freqFilters);
+if exist('freqFilters', 'var')
+    numFreqFilters = numel(freqFilters);
+end
 if ~exist('WFSfilterLength', 'var')
     predefWFSfilterLength = false;
 else

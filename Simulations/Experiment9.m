@@ -849,7 +849,7 @@ axCorrDiff.XLim = [0, 1000];
 % Execute the System set up section first. Then perform a simulation with
 % ejemplocarwfs to generate the scenario variables that will be emulated
 
-fopt = 460; % Frequency at which we are going to optimize (Hz)
+fopt = 500; % Frequency at which we are going to optimize (Hz)
 corrFactTheoOpt = sqrt(1i*fopt/c);
 delay = (2*pi - angle(corrFactTheoOpt))/(2*pi*fopt);
 ind = floor(delay*fs) + 1;
