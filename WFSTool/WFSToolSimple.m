@@ -279,7 +279,7 @@ classdef WFSToolSimple < handle
                     obj.simulTheo.sourceCoefficients(obj.WFSarrayIndSimulTheo, :) = value;
                 case 'time'
                     if size(value, 2) ~= obj.simulTheo.NsSignals
-                        newSignals = zeros(obj.numSourcesTheo, size(value, 2));
+                        newSignals = zeros(obj.numSourcesTheo, size(value, 2), class(value));
                         newSignals(obj.WFSarrayIndSimulTheo, :) = value;
                         obj.simulTheo.sourceCoefficients = newSignals;
                     else

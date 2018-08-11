@@ -6,7 +6,7 @@ function y = fftfilt_modified(b, x, nfft)
 % - b. Filters. (nb, numFilters or 1, numOutputSignals)
 % The result is the signals filtered by the filters, and summing the
 % contributions of all signals:
-% - y. Resulting sigals. (nx, N). 
+% - y. Resulting signals. (nx, numOutputSignals). 
 
 %FFTFILT Overlap-add method for FIR filtering using FFT.
 %   Y = FFTFILT(B,X) filters X, with the FIR filter specified by the vector

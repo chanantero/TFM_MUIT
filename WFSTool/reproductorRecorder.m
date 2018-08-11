@@ -416,6 +416,7 @@ classdef reproductorRecorder < matlab.System
                 obj.setProps('frequency', 1, k);
                 obj.setProps('FsGenerator', 44100, k);
                 obj.setProps('customSignal', [], k);
+                obj.setProps('signalFunc', '', k);
             end
             
             for k = 1:obj.numPlayers

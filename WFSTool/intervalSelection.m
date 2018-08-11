@@ -11,6 +11,9 @@ function [newIntervalLimits, indIntervals, outOfRange] = intervalSelection(inter
 % Output arguments:
 % - newIntervalLimits.
 % - indIntervals. Interval indices included in the selection
+% - outOfRange. 0 when it is not out of range. -1 when the selected
+% fragment occurs before all intervals. 1 when the selected fragment occurs
+% after all intervals.
 
 numIntervals = size(intervalLimits, 1);
 
@@ -54,12 +57,14 @@ if ~isempty(newIntervalLimits)
     newIntervalLimits(1, 1) = max(startMarker, lowLimit);
     newIntervalLimits(end, 2) = min(endMarker, upperLimit);
     
-    outOfRange = false;
+    outOfRange = 0;
 else
-    if lastInterval == 0 || firstInterval == numVecIntervals + 1
-        outOfRange = true;
+    if lastInterval == 0
+        outOfRange = -1;
+    elseif firstInterval == numVecIntervals + 1
+        outOfRange = 1;
     else
-        outOfRange = false;
+        outOfRange = 0;
     end
 end
 

@@ -94,10 +94,13 @@ for p = 1:numPulses
     ind = startPulse:endPulse-1;
     t = (ind + offsetSample)/sampleRate;
     
-    for c = 1:numChannels
-        pulse = genTones(coefMat(p, c, :), freq, t);
+    iszero = coefMat(p, :, :) == 0;
+    nonZeroChannels = find(any(~iszero, 3));
+    numNonZeroChannels = length(nonZeroChannels);
+    for c = 1:numNonZeroChannels
+        pulse = genTones(coefMat(p, nonZeroChannels(c), :), freq, t);
         
-        signal(ind + 1, c) = signal(ind + 1, c) + pulse.*windMask; % Si solo está pulse.*windMask, no se pueden solapar los pulsos. Con signal(ind + 1, c) + pulse.*windMask, sí puede haber solapamiento.
+        signal(ind + 1, nonZeroChannels(c)) = signal(ind + 1, nonZeroChannels(c)) + pulse.*windMask; % Si solo está pulse.*windMask, no se pueden solapar los pulsos. Con signal(ind + 1, c) + pulse.*windMask, sí puede haber solapamiento.
     end
 end
 
@@ -106,15 +109,38 @@ end
 function pulse = genTones(coefficients, frequencies, time)
 numFrequencies = numel(frequencies);
 numSamples = numel(time);
+time = time(:);
 
-aux = zeros(numSamples, numFrequencies);
-for f = 1:numFrequencies
-    amp = abs(coefficients(f));
-    phase = angle(coefficients(f));
-    aux(:, f) = amp*cos(2*pi*frequencies(f)*time + phase);
+memoryFriendly = false;
+try
+    aux = zeros(numSamples, numFrequencies);
+catch ME
+    memoryFriendly = true;
 end
 
-pulse = sum(aux, 2);
+iszero = coefficients == 0;
+
+if memoryFriendly
+    pulse = zeros(numSamples, 1);
+    for f = 1:numFrequencies
+        if ~iszero(f)
+            amp = abs(coefficients(f));
+            phase = angle(coefficients(f));
+            pulse = pulse + amp*cos(2*pi*frequencies(f)*time + phase);
+        end
+    end
+else
+    for f = 1:numFrequencies
+        if ~iszero(f)
+            amp = abs(coefficients(f));
+            phase = angle(coefficients(f));
+            aux(:, f) = amp*cos(2*pi*frequencies(f)*time + phase);
+        end
+    end
+    pulse = sum(aux, 2);
+end
+
+
 
 end
 

@@ -19,7 +19,7 @@ if ~predefNumSampIR
         dist(:, ns) = sqrt(sum((recPositions - repmat(NSpositions(ns, :), [numMicro, 1])).^2, 2));
     end
     maxDist = max(dist(:));
-    numSampIR = 2^ceil(log2(maxDist/c*fs)); % Number of samples
+    numSampIR = 2^ceil(log2(maxDist/c*fs))*2; % Number of samples
 end
 
 if ~predefWFSfilterLength

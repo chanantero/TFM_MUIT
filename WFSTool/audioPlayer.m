@@ -55,20 +55,20 @@ classdef audioPlayer < matlab.System
             obj.deviceWriter = audioDeviceWriter;
         end
         
-        function devices = getAvailableDevices(obj)
-%             devices = getAudioDevices(obj.deviceWriter);
-            
-            % If there is not set method for driver, use the next two lines
-            aux = audioDeviceWriter('Driver', obj.driver);
-            devices = getAudioDevices(aux);
-        end
+%         function devices = getAvailableDevices(obj)
+% %             devices = getAudioDevices(obj.deviceWriter);
+%             
+%             % If there is not set method for driver, use the next two lines
+%             aux = audioDeviceWriter('Driver', obj.driver);
+%             devices = getAudioDevices(aux);
+%         end
         
         function devices = getAudioDevices(obj)
-%             devices = getAudioDevices(obj.deviceWriter);
+            devices = getAudioDevices(obj.deviceWriter);
             
-            % If there is not set method for driver, use the next two lines
-            aux = audioDeviceWriter('Driver', obj.driver);
-            devices = getAudioDevices(aux);
+%             % If there is not set method for driver, use the next two lines
+%             aux = audioDeviceWriter('Driver', obj.driver);
+%             devices = getAudioDevices(aux);
         end
         
         function numChannels = get.numChannels(obj)
