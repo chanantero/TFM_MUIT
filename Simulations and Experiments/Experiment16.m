@@ -114,8 +114,15 @@ for chanBlock = 1:numChanBlocks
     subindSimultChan = repmat(simultChanInd, [numBlocks, 1]);
 
     inds = sub2ind([numChanBlocks, numTotalChan, numFreqs], chanBlock*ones(size(subindSimultChan)), subindSimultChan, freqInd(:, 1:length(simultChanInd)));
-    coefMat(inds) = exp(1i*rand*2*pi);
+    coefMat(inds) = exp(1i*rand(size(inds))*2*pi);
 end
+
+% The time of the adquisition of a tone affect the signal to noise ratio?
+% The longer the time, the higher the ratio. So, we can scale the tone
+% coefficients in order to avoid saturation, and then compensate it by
+% measuring during more time
+maxPossible = repmat(sum(abs(coefMat), 3), [1, 1, numFreqs]);
+coefMat(maxPossible ~= 0) = coefMat(maxPossible ~= 0)./maxPossible(maxPossible ~= 0);
 
 pulseDur = (1/freqStep)*10 + 2;
 silenceBetweenPulses = 3;
@@ -180,7 +187,7 @@ plot(ax, signalEx(:, 1))
 %% Reproduce and record frequency response test signal
 
 % Load frequency response test signal parameters
-IDload = '2018-08-11_19-02-13';
+IDload = '2018-08-12_12-56-46';
 signalStructLoaded = load([dataPathName, 'signalStruct_', IDload, '.mat']);
 freqStep = signalStructLoaded.freqs(2) - signalStructLoaded.freqs(1);
 T = 1/freqStep;
@@ -192,100 +199,137 @@ numFreqs = length(freqs);
 coefMat = signalStructLoaded.coefMat;
 info = audioinfo([dataPathName, 'acousticPathReprodSignal_', IDload, '.wav']);
 sampleRate = info.SampleRate;
-
-% Reproduce
 filename = [dataPathName, 'acousticPathReprodSignal_', IDload, '.wav'];
-repRecObj = reproductorRecorder;
-repRecObj.setProps('mode', originType('file'), 1);
-repRecObj.setProps('enableProc', false);
-% filename = 'C:\Users\Rubén\Music\Salsa\Flor Pálida - Marc Anthony.mp3';
-repRecObj.setProps('audioFileName', filename, 1);
-repRecObj.executeOrder('play');
 
-% Reproduce in simulation
-[y, Fs] = audioread(filename, 'native');
-
-zPos = 1.65;
-WFSarrayOffset = [0.46 2.21 zPos]; % [x, y, z] coordinates. Useful for generating acoustic path IR.
-roomDim = [4.48, 9.13, 2.64];
-fs = sampleRate;
-c = 340;
-
-extRectXmin = min(obj.WFSposition(:, 1));
-extRectXmax = max(obj.WFSposition(:, 1));
-extRectYmin = min(obj.WFSposition(:, 2));
-extRectYmax = max(obj.WFSposition(:, 2));
-centerX = (extRectXmax + extRectXmin)/2;
-centerY = (extRectYmax + extRectYmin)/2;
-recPositions = [centerX, centerY, 0];
-
-% Room characteristics and impulse response of chamber
-beta = 0; % Average reflection coefficient of the walls of the chamber
-WFS_AcPath_previously_calculated = true;
-NS_AcPath_previously_calculated = true;
-appendFreeSpaceAcPaths = false;
-
-% Irrelevant variables that are necessary in order to SetupParameterScript
-% to work
-amplitude = 1;
-phase = 0;
-freqFilters = {};
-NSpositions = [0 0 0];
-
-SetupParametersScript
-AcousticPathCalculationScript
-
-obj.domain = 'time';
-
-WFSacPathIR = permute(WFS_IR(:, :, :, 1), [1, 3, 2]);
-obj.setAcousticPaths('WFS', WFSacPathIR);
-
-fragLength = 2^12; % fragment length in samples
-numSamp = size(y, 1);
-numFrag = ceil(numSamp/fragLength); % number of fragments
-previousSufix = zeros(numMicro, numSampIR - 1);
-recSignal = zeros(numMicro, numSamp); % Recorded signal. (numMicros x numSamples)
-for f = 1:numFrag
-    fprintf('%d/%d\n', f, numFrag);
-    selSamp = 1 + fragLength*(f - 1):min(fragLength*f, numSamp); % The min() is for the last iteration
-    frag = [y(selSamp, :)', zeros(numChannels, numSampIR-1)];
-    obj.WFSToolObj.WFSarrayCoefficient = frag;
-    obj.WFSToolObj.simulTheo.updateField();
-    recFrag = obj.WFSToolObj.simulField;
-    recFrag(:, 1:numSampIR-1) = recFrag(:, 1:numSampIR-1) + previousSufix; % Add previous sufix
-    previousSufix = recFrag(:, end - (numSampIR - 1) + 1:end); % Set sufix for next loop iteration
-    recSignal(:, selSamp) = recFrag(:, 1:length(selSamp)); % Save the signal without the sufix. We use length(selSamp) and not fragLength for the last iteration
+simulatedReproduction = true;
+if ~simulatedReproduction
+    % Reproduce
+    repRecObj = reproductorRecorder;
+    repRecObj.setProps('mode', originType('file'), 1);
+    repRecObj.setProps('enableProc', false);
+    % filename = 'C:\Users\Rubén\Music\Salsa\Flor Pálida - Marc Anthony.mp3';
+    repRecObj.setProps('audioFileName', filename, 1);
+    repRecObj.executeOrder('play');
+else
+    % Reproduce in simulation
+    [signal, Fs] = audioread(filename, 'native');
+    
+    zPos = 1.65;
+    WFSarrayOffset = [0.46 2.21 zPos]; % [x, y, z] coordinates. Useful for generating acoustic path IR.
+    roomDim = [4.48, 9.13, 2.64];
+    fs = sampleRate;
+    c = 340;
+    
+    extRectXmin = min(obj.WFSposition(:, 1));
+    extRectXmax = max(obj.WFSposition(:, 1));
+    extRectYmin = min(obj.WFSposition(:, 2));
+    extRectYmax = max(obj.WFSposition(:, 2));
+    centerX = (extRectXmax + extRectXmin)/2;
+    centerY = (extRectYmax + extRectYmin)/2;
+    recPositions = [centerX, centerY, 0];
+    
+    % Room characteristics and impulse response of chamber
+    beta = 0; % Average reflection coefficient of the walls of the chamber
+    WFS_AcPath_previously_calculated = true;
+    NS_AcPath_previously_calculated = true;
+    appendFreeSpaceAcPaths = false;
+    
+    % Irrelevant variables that are necessary in order to SetupParameterScript
+    % to work
+    amplitude = 1;
+    phase = 0;
+    freqFilters = {};
+    NSpositions = [0 0 0];
+    
+    SetupParametersScript
+    AcousticPathCalculationScript
+    
+    obj.domain = 'time';
+    
+    WFSacPathIR = permute(WFS_IR(:, :, :, 1), [1, 3, 2]);
+    obj.setAcousticPaths('WFS', WFSacPathIR);
+    
+    fragLength = 2^12; % fragment length in samples
+    numSamp = size(signal, 1);
+    numFrag = ceil(numSamp/fragLength); % number of fragments
+    previousSufix = zeros(numMicro, numSampIR - 1);
+    recSignal = zeros(numMicro, numSamp); % Recorded signal. (numMicros x numSamples)
+    for f = 1:numFrag
+        fprintf('%d/%d\n', f, numFrag);
+        selSamp = 1 + fragLength*(f - 1):min(fragLength*f, numSamp); % The min() is for the last iteration
+        frag = [signal(selSamp, :)', zeros(numChannels, numSampIR-1)];
+        obj.WFSToolObj.WFSarrayCoefficient = frag;
+        obj.WFSToolObj.simulTheo.updateField();
+        recFrag = obj.WFSToolObj.simulField;
+        recFrag(:, 1:numSampIR-1) = recFrag(:, 1:numSampIR-1) + previousSufix; % Add previous sufix
+        previousSufix = recFrag(:, end - (numSampIR - 1) + 1:end); % Set sufix for next loop iteration
+        recSignal(:, selSamp) = recFrag(:, 1:length(selSamp)); % Save the signal without the sufix. We use length(selSamp) and not fragLength for the last iteration
+    end
 end
 
 % Crop signal with an adequate duration
 numMicros = size(recSignal, 1);
-
 margin = 1;
 
 numPulses = size(pulseLimits, 1);
-FR = zeros(numMicros, numChannels, numFreqs);
+transSpec = zeros(numChannels, numFreqs);
+recSpec = zeros(numMicros, numChannels, numFreqs);
+coefMatFlag = permute(coefMat ~= 0, [3 2 1]);
 for p = 1:numPulses
     start = pulseLimits(p, 1) + margin;
-    ending = pulseLimits(p, 2) - margin;
+    ending = start + floor((pulseLimits(p, 2) - margin - start)/T);
     
     startIndex = floor(start*sampleRate) + 1;
     endIndex = floor(ending*sampleRate) + 1;
     
+    % Calculate the transmitted signals spectra
+    activeChannels = find(any(coefMat(p, :, :) ~= 0, 3)); % Active channels in this pulse
+    for c = 1:length(activeChannels)
+        fragment = signal(startIndex:endIndex, activeChannels(c));
+        transSpec(activeChannels(c), :) = freqz(fragment, 1, freqs, sampleRate);
+    end
+    
+    % Calculate the received signals spectra    
     for m = 1:numMicros
         fragment = recSignal(m, startIndex:endIndex);
         X = freqz(fragment, 1, freqs, sampleRate); % (1 x numFreqs)
         
-        % Cómo guardar la información si de cada canal tenemos solo
-        % información de algunas frecuencias?
-        % Idea, da igua, llena la matriz y los valores a 0 se entiende que
-        % han de interpolarse
-        
-        coefMatFlag = permute(coefMat(p, :, :) ~= 0, [3 2 1]);
         for c = 1:numChannels
-            FR(m, c, coefMatFlag(:, c)) = X(coefMatFlag(:, c));
+            activeFreq = coefMatFlag(:, c, p);
+            recSpec(m, c, activeFreq) = X(activeFreq);
         end       
     end
 end
+FR = recSpec./repmat(permute(transSpec, [3 1 2]), [numMicros, 1, 1]);
+
+ax = axes(figure);
+plot(ax, freqs, squeeze(abs(FR(1, 1:2, :))))
+plot(ax, freqs, squeeze(abs(transSpec(1:5, :))))
 
 % Check the result is equal to the old form of doing it. All must be
 % simulated (by now) of course.
+recFlag = any(coefMat ~= 0, 1);
+FRtheo = permute(WFS_FR, [1, 3, 2]);
+rel = zeros(size(FR));
+rel(recFlag) = FR(recFlag)./FRtheo(recFlag);
+max(abs(rel(recFlag)))
+min(abs(rel(recFlag)))
+max(angle(rel(recFlag)))
+min(angle(rel(recFlag)))
+% And they are!!! :D
+
+% Each channel has associated a vector of frequencies and a vector of
+% frequency responses
+% We can complete missing frequencies by interpolating
+FRint = zeros(size(recSpec));
+for m = 1:numMicros
+    for c = 1:numChannels
+        nonZero = recFlag(m, c, :); % recSpec(m, c, :) ~= 0;
+        magn = interp1(freqs(nonZero), abs(squeeze(FR(m, c, nonZero))), freqs, 'linear');
+        phase = interp1(freqs(nonZero), angle(squeeze(FR(m, c, nonZero))), freqs, 'linear');
+        FRint(m, c, :) = magn*exp(1i*phase);
+    end
+end
+FRint = permute(FRint, [3 2 1]);
+
+% Now what?
