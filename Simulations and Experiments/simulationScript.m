@@ -10,7 +10,11 @@ for k = 1:numFreqFilters
         freqFiltFR(k, :) = freqz(freqFilters{k}, 1, freqs, fs);
     end
 end
-phaseShifts = -freqFiltDelays/fs * 2*pi*freqs;
+if isempty(freqFiltDelays)
+    phaseShifts = double.empty(0, length(freqs));
+else
+    phaseShifts = -freqFiltDelays/fs * 2*pi*freqs;
+end
 
 % Signals
 if timeDomainActive && ~fakeTimeProcessing
@@ -79,8 +83,8 @@ for rt = 1:numReverbTime
     end
     
     if timeDomainActive
-    obj.domain= 'time';
-    obj.setAcousticPaths('WFS', WFSacPathIR);
+        obj.domain= 'time';
+        obj.setAcousticPaths('WFS', WFSacPathIR);
     end
     
     obj.domain= 'frequency';
