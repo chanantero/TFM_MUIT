@@ -850,10 +850,17 @@ classdef WFSToolSimple < handle
                     % different from 0
                     attenuations = obj.getAttenuationsWFS(virtNS);
                     WFSflags = attenuations ~= 0;
-                    
+                                        
                     wfsSignals = zeros(obj.numSourcesWFSarray, signalLength, numVirtNS);
                     for ns = 1:numVirtNS
+                        if obj.frequency correction
+                            filtersIR = getFiltersWFS();
+                            nsSignalFreqFilt = fftfilt(filtersIR = getFiltersWFS
+                            obj.frequencyCorrection = true;
+                        end
                         indWFS = find(WFSflags(:, ns));
+                        
+                        
                         for ss = 1:numel(indWFS)
                             %                             wfsSignals(indWFS(ss), :, ns) = filter(filtersIR(indWFS(ss), :, virtNS(ns)), 1, NSsignalsExtended(virtNS(ns), :));
                             wfsSignals(indWFS(ss), :, ns) = fftfilt(filtersIR(indWFS(ss), :, virtNS(ns)), NSsignals(virtNS(ns), :));

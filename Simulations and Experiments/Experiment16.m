@@ -226,7 +226,7 @@ else
     extRectYmax = max(obj.WFSposition(:, 2));
     centerX = (extRectXmax + extRectXmin)/2;
     centerY = (extRectYmax + extRectYmin)/2;
-    recPositions = [centerX, centerY, 0];
+    recPositions = [centerX, centerY, 0; centerX, centerY + 1, 0];
     
     % Room characteristics and impulse response of chamber
     beta = 0; % Average reflection coefficient of the walls of the chamber
@@ -310,31 +310,33 @@ end
 FR = recSpec./repmat(permute(transSpec, [3 1 2]), [numMicros, 1, 1]);
 
 ax = axes(figure);
-plot(ax, freqs, squeeze(abs(FR(1, 1, :))))
+plot(ax, freqs, squeeze(abs(FR(1, 1:2, :))))
 plot(ax, freqs, squeeze(abs(recSpec(1, 1:2, :))))
 plot(ax, freqs, squeeze(abs(transSpec(1:2, :))))
 
 % Check the result is equal to the old form of doing it. All must be
 % simulated (by now) of course.
-wfsInd = obj.WFSToolObj.loudspeakerMapping(1).originInd;
-wfsToLoudsInd = obj.WFSToolObj.loudspeakerMapping(1).destinationInd;
-nsInd = obj.WFSToolObj.loudspeakerMapping(2).originInd;
-nsToLoudsInd = obj.WFSToolObj.loudspeakerMapping(2).destinationInd;
-FRtheo = zeros(numMicros, numChannels, numFreqs);
-FRtheo(:, wfsToLoudsInd, :) = permute(WFS_FR(:, :, wfsInd), [1, 3, 2]);
-FRtheo(:, nsToLoudsInd, :) = permute(NS_FR(:, :, nsInd), [1, 3, 2]);
-recFlag = any(coefMat ~= 0, 1);
-rel = ones(size(FR));
-rel(recFlag) = FR(recFlag)./FRtheo(recFlag);
-histogram(abs(rel(recFlag)))
-histogram(angle(rel(recFlag)))
-max(abs(rel(recFlag)))
-min(abs(rel(recFlag)))
-max(angle(rel(recFlag)))
-min(angle(rel(recFlag)))
-% And they are!!! :D
-WFS_FR_a = WFS_FR;
-NS_FR_a = NS_FR;
+if simulatedReproduction
+    wfsInd = obj.WFSToolObj.loudspeakerMapping(1).originInd;
+    wfsToLoudsInd = obj.WFSToolObj.loudspeakerMapping(1).destinationInd;
+    nsInd = obj.WFSToolObj.loudspeakerMapping(2).originInd;
+    nsToLoudsInd = obj.WFSToolObj.loudspeakerMapping(2).destinationInd;
+    FRtheo = zeros(numMicros, numChannels, numFreqs);
+    FRtheo(:, wfsToLoudsInd, :) = permute(WFS_FR(:, :, wfsInd), [1, 3, 2]);
+    FRtheo(:, nsToLoudsInd, :) = permute(NS_FR(:, :, nsInd), [1, 3, 2]);
+    recFlag = any(coefMat ~= 0, 1);
+    rel = ones(size(FR));
+    rel(recFlag) = FR(recFlag)./FRtheo(recFlag);
+    histogram(abs(rel(recFlag)))
+    histogram(angle(rel(recFlag)))
+    max(abs(rel(recFlag)))
+    min(abs(rel(recFlag)))
+    max(angle(rel(recFlag)))
+    min(angle(rel(recFlag)))
+    % And they are!!! :D
+    WFS_FR_a = WFS_FR;
+    NS_FR_a = NS_FR;
+end
 
 % Each channel has associated a vector of frequencies and a vector of
 % frequency responses
@@ -342,7 +344,7 @@ NS_FR_a = NS_FR;
 FRint = zeros(size(recSpec));
 for m = 1:numMicros
     for c = 1:numChannels
-        nonZero = recFlag(m, c, :); % recSpec(m, c, :) ~= 0;
+        nonZero = recSpec(m, c, :) ~= 0;
         magn = interp1(freqs(nonZero), abs(squeeze(FR(m, c, nonZero))), freqs, 'linear');
         phase = interp1(freqs(nonZero), unwrap(angle(squeeze(FR(m, c, nonZero)))), freqs, 'linear');
         FRint(m, c, :) = magn.*exp(1i*phase);
@@ -352,8 +354,6 @@ end
 %% Estimation of results based on measured acoustic path responses
 
 % ---- No optimization ----
-
-
 % Set parameters
 NSpositions = [3.35 -0.2 0]; % Assumed real position
 amplitude = 1;
@@ -372,7 +372,7 @@ if simulScriptFlag
     extRectYmax = max(obj.WFSposition(:, 2));
     centerX = (extRectXmax + extRectXmin)/2;
     centerY = (extRectYmax + extRectYmin)/2;
-    recPositions = [centerX, centerY, 0];
+    recPositions = [centerX, centerY, 0; centerX, centerY + 1, 0]; % The actual positions don't really matter, but the number of receiver positions must be the same as microphones
     
     % Room characteristics and impulse response of chamber
     beta = 0;
@@ -402,48 +402,154 @@ if simulScriptFlag
     % recWFScoef_freq
     % WFScoef_freq
     
-    % The resulting signals are based on the assuption that on all frequencies,
-    % the amplitude is 1 and the phase is 0. Now we must multiply this
-    % frequency response by the spectrum of the signal at the given
-    % frequencies.
     [sExt, corrFactInd, corrFactGlob, gainInd, gainGlob, corrFactAver, gainAver] =...
         SimulationController.addCancellationParametersToStructure(s);
+    
+%     ax = axes(figure);
+%     plot(ax, freqs, 10*log10(gainAver));
+%     plot(ax, freqs, abs(corrFactAver))
+    
 else
     % No completado
     wfsChan = obj.WFSToolObj.loudspeakerMapping(1).destinationInd; % Not pretty sure
     nsChan = obj.WFSToolObj.loudspeakerMapping(2).destinationInd;
-    WFS_FR = permute(FRint, [1, 3, 2]);
-    WFS_FR(:, :, nsChan) = 0;
-    NS_FR = permute(FRint(:, nsChan, :), [1, 3, 2]);
+    WFS_FR = FRint;
+    WFS_FR(:, nsChan, :) = 0;
+    NS_FR = FRint(:, nsChan, :);
     
-    % WFS calculation of WFS coefficients
+    % WFS calculation of WFS coefficients and simulation
     obj.NSposition = NSpositions;
+    obj.domain = 'frequency';
+    field = zeros(1, numFreqs);
+    fieldNS = zeros(1, numFreqs);
+    fieldWFS = zeros(1, numFreqs);
+    
     for f = 1:numFreqs
         obj.frequency = freqs(f);
         obj.WFSToolObj.WFScalculation();
+        WFScoef = obj.WFScoef;
+        fieldNS(f) = NS_FR(:, :, f)*obj.NSRcoef;
+        fieldWFS(f) = WFS_FR(:,:,f)*WFScoef;
+        field(f) = fieldNS(f) + fieldWFS(f);
     end
-    
-    % Simulate
-    
+        
     % Calculation of gain
-    
+    % Make it automatic by generating an s structure and using
+    s = repmat(obj.generateBasicExportStructure, numFreqs, 1);
+    for f = 1:numFreqs
+        s(f).recCoef = field(f);
+        s(f).recNScoef = fieldNS(f);
+        s(f).recWFScoef = fieldWFS(f);
+    end
+    [sExt, corrFactInd, corrFactGlob, gainInd, gainGlob, corrFactAver, gainAver] =...
+        SimulationController.addCancellationParametersToStructure(s);   
 end
 
-ax = axes(figure);
-plot(ax, freqs, gainGlob);
-
-plot(ax, freqs, angle(corrFactInd))
-
 % ---- Volume optimization ----
+% Choose frequencies high enough so we are not in the low-frequency zone
+minFreq = 500;
+maxFreq = 850;
 
+sel = freqs >= minFreq & freqs <= maxFreq;
+fieldWFSaux = recWFScoef_freq(:, sel);
+fieldNSaux = recNScoef_freq(:, sel);
+corrFact = -fieldWFSaux(:)\fieldNSaux(:);
+corrVol = real(corrFact);
 
 % ---- Volume and noise source location optimization ----
-
+% Completar
+% selFreqs = find(sel);
+% for f = 1:length(selFreqs)
+%     obj.frequency = selFreqs(f);
+%     
+%     obj.findBestVirtualSourceParameters2;
+% end
 
 %% Reproduction and recording of different cases
+% s should be of size (numMicros, numFreqs)
 
+% ---- No optimization ----
+
+% Define chirp signal
+freqs = 0;
+durSign = 4; % Duration of tone for time processing
+t = (0:ceil(durSign*fs)-1)/fs;
+NSsignal = chirp(t, min(freqs), durSign, max(freqs));
+% Simulate only the noise source
+obj.WFSToolObj.virtual = [false; false];
+obj.WFSToolObj.freqFilter = 1;
+obj.WFSToolObj.WFScalculation();
+obj.WFSToolObj.simulate();
+recNS_signal = obj.WFSToolObj.simulField;
+recNScoef_time(:, f, ns, rt) = exp(1i*preDelayPhaseShift) * signal2pulseCoefficientMatrix([0 durSign], fcurr, 1, recNS_signal', fs).';
+
+recNS_signals(:, :, f, ns, rt) = recNS_signal;
+                    
+obj.WFSToolObj.virtual = [false; true];
+% Simulate all together
+obj.WFSToolObj.freqFilter = freqFilters{filt};
+obj.WFSToolObj.updateFiltersWFS();
+obj.WFSToolObj.WFScalculation();
+obj.WFSToolObj.simulate();
+rec_signal = obj.WFSToolObj.simulField;
+
+% Identify IQ component
+recWFScoef_time(:, f, ns, rt, filt) = exp(1i*preDelayPhaseShift) * signal2pulseCoefficientMatrix([0 durSign], fcurr, 1, (rec_signal - recNS_signal)', fs);
+recCoef_time(:, f, ns, rt, filt) = exp(1i*preDelayPhaseShift) * signal2pulseCoefficientMatrix([0 durSign], fcurr, 1, rec_signal', fs);
+WFScoef_time(:, f, ns, rt, filt) = exp(1i*preDelayPhaseShift) * signal2pulseCoefficientMatrix([0 durSign], fcurr, 1, obj.WFSToolObj.WFSarrayCoefficient', fs);
+
+rec_signals(:, :, f, ns, rt, filt) = rec_signal;
+                        
+
+% 3 pulses:
+% - Only noise.
+% - Only WFS.
+% - Both.
+coefMat = zeros(3, numChannels, numFreqs); % (3 x 96 x numFreqs)
+WFScoefMat = [s.WFScoef];
+NScoefMat = [s.NSVcoef];
+nsIndOrig = obj.WFSToolObj.loudspeakerMapping(2).originInd;
+wfsIndOrig = obj.WFSToolObj.loudspeakerMapping(1).originInd;
+coefMat(1, nsChan, :) = permute(NScoefMat(nsIndOrig, :), [3 1 2]);
+coefMat(2, wfsChan, :) = permute(WFScoefMat(wfsIndOrig, :), [3 1 2]);
+coefMat(3, nsChan, :) = permute(NScoefMat(nsIndOrig, :), [3 1 2]);
+coefMat(3, wfsChan, :) = permute(WFScoefMat(wfsIndOrig, :), [3 1 2]);
+
+pulseLimits = [1 3; 4 6; 7 9];
+
+sampleRate = 44100/4;
+signalFunction = @(startSample, endSample) pulseCoefMat2signal(coefMat, pulseLimits,...
+    freqs, sampleRate, startSample, endSample, 'type_pulseLimits', 'time');
+
+obj.WFSToolObj.reproduceSignalFunction(signalFunction, sampleRate);
+recField = obj.WFSToolObj.recorded;
+
+% ---- Optimized volume ----
+coefMat = zeros(3, numChannels, numFreqs); % (3 x 96 x numFreqs)
+WFScoefMat = [s.WFScoef];
+NScoefMat = [s.NSVcoef];
+coefMat(1, nsChan, :) = permute(NScoefMat(nsIndOrig, :), [3 1 2]);
+coefMat(2, wfsChan, :) = permute(WFScoefMat*corrVol(wfsIndOrig, :), [3 1 2]);
+coefMat(3, nsChan, :) = permute(NScoefMat(nsIndOrig, :), [3 1 2]);
+coefMat(3, wfsChan, :) = permute(WFScoefMat*corrVol(wfsIndOrig, :), [3 1 2]);
+
+pulseLimits = [1 3; 4 6; 7 9];
+
+sampleRate = 44100/4;
+signalFunction = @(startSample, endSample) pulseCoefMat2signal(coefMat, pulseLimits,...
+    freqs, sampleRate, startSample, endSample, 'type_pulseLimits', 'time');
+
+obj.WFSToolObj.reproduceSignalFunction(signalFunction, sampleRate);
+recFieldCorrVol = obj.WFSToolObj.recorded;
+
+% ---- Optimized volume and noise source location ----
+% No completado
 
 %% Comparison of measures and estimations. They should be similar.
+
+% Get the received signal frequency spectrum
+
+% Compare it with the theoretical one
 
 
 %% View of results

@@ -573,6 +573,62 @@ classdef SimulationController < handle
             
         end
         
+        function findBestVirtualSourceParameters2(obj)
+            % Completar...
+            % Find the theoric position for the virtual noise source that, applying
+            % WFS cancellation and volume correction minimize the
+            % magnitude of the resulting field using the experimental acoustic path
+            
+            % Optimize
+            % The objective function accepts parameters as input arguments. It
+            % returns the squared absolute value of the resulting field
+            objectiveFunction = @(parameters) sum(abs(sum(noiseSourceParam2Field(parameters), 2)).^2);
+            x0 = [obj.NSRposition, obj.amplitudeR, obj.phaseR]; % Initial value of parameters
+            [xOpt, ~] = fminunc(objectiveFunction, x0); % Optimize
+            
+            % Set the parameters
+            optPosition = xOpt(1:3);
+            optAmplitude = xOpt(4);
+            optPhase = xOpt(5);
+            obj.WFSToolObj.amplitude(2) = optAmplitude;
+            obj.WFSToolObj.phase(2) = optPhase;
+            obj.WFSToolObj.noiseSourcePosition(2, :) = optPosition;
+            obj.WFSToolObj.updateReprodPanelBasedOnVariables();
+            
+                        
+            % Simulate with the experimental acoustic path to see what is the resulting
+            % field with these optimized theoric parameters of the virtual source
+            obj.WFSToolObj.simulate();
+                      
+            s = obj.generateBasicExportStructure();
+            s.Type = 'OptVirtualNS';
+                        
+            obj.cancelResults = [obj.cancelResults; s];
+            
+            function field = noiseSourceParam2Field(virtualNSparam)
+                
+                virtualNSparam = num2cell(virtualNSparam);
+                [x, y, z] = virtualNSparam{:};
+                
+                % Set virtual noise source (2nd source) parameters
+                pos = [x, y, z];
+                obj.WFSToolObj.noiseSourcePosition(2, :) = pos;
+                
+                % WFS calculation
+                obj.WFSToolObj.WFScalculation();
+                
+                % Simulate
+                obj.WFSToolObj.simulate();
+                
+                % Calculate optimum volume
+                
+                % Output
+                field = obj.WFSToolObj.simulField;
+                
+            end
+            
+        end
+        
         function [NSposOpt, fVal] = findBestNoiseSourcePosition(obj)
             % The acoustic paths of the WFS array and the transmitted
             % signals are given, so the virtual noise source parameters are
