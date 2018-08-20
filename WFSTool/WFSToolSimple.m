@@ -853,17 +853,15 @@ classdef WFSToolSimple < handle
                                         
                     wfsSignals = zeros(obj.numSourcesWFSarray, signalLength, numVirtNS);
                     for ns = 1:numVirtNS
-                        if obj.frequency correction
-                            filtersIR = getFiltersWFS();
-                            nsSignalFreqFilt = fftfilt(filtersIR = getFiltersWFS
-                            obj.frequencyCorrection = true;
+                        if obj.frequencyCorrection
+                            nsSignal = fftfilt(obj.freqFilter, NSsignals(virtNS(ns), :));
+                        else
+                            nsSignal = NSsignals(virtNS(ns), :);
                         end
                         indWFS = find(WFSflags(:, ns));
-                        
-                        
+                                    
                         for ss = 1:numel(indWFS)
-                            %                             wfsSignals(indWFS(ss), :, ns) = filter(filtersIR(indWFS(ss), :, virtNS(ns)), 1, NSsignalsExtended(virtNS(ns), :));
-                            wfsSignals(indWFS(ss), :, ns) = fftfilt(filtersIR(indWFS(ss), :, virtNS(ns)), NSsignals(virtNS(ns), :));
+                            wfsSignals(indWFS(ss), :, ns) = fftfilt(filtersIR(indWFS(ss), :, virtNS(ns)), nsSignal);
                         end
                     end
                     wfsSignals = sum(wfsSignals, 3);
@@ -879,7 +877,6 @@ classdef WFSToolSimple < handle
                     end
                     
                     obj.WFSarrayCoefficient = wfsSignals;
-                    %                     NSsignals(virtNS, :) = 0;
                     NSsignals(~obj.real, :) = 0;
                     obj.noiseSourceCoefficient_complete = NSsignals;
             end
@@ -1714,15 +1711,17 @@ classdef WFSToolSimple < handle
                 end
             end
             
-            if obj.frequencyCorrection
-                % Apply the filter for frequency dependence and the hilbert
-                % filter
-                for wfs = 1:obj.numSourcesWFSarray
-                    for ns = 1:obj.numNoiseSources
-                        filtersIR(wfs, ns, :) = fftfilt(obj.freqFilter, filtersIR(wfs, ns, :)); % You can also use filter, but it is slower usually: filtersIR = filter(obj.freqFilter, 1, filtersIR, [], 3);
-                    end
-                end
-            end
+%             From now (19/08/2018) on, the frequency filtering will be
+%             performed in WFScalculation directly for efficiency purposes.
+%             if obj.frequencyCorrection
+%                 % Apply the filter for frequency dependence and the hilbert
+%                 % filter
+%                 for wfs = 1:obj.numSourcesWFSarray
+%                     for ns = 1:obj.numNoiseSources
+%                         filtersIR(wfs, ns, :) = fftfilt(obj.freqFilter, filtersIR(wfs, ns, :)); % You can also use filter, but it is slower usually: filtersIR = filter(obj.freqFilter, 1, filtersIR, [], 3);
+%                     end
+%                 end
+%             end
             
         end
         

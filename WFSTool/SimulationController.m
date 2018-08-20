@@ -103,26 +103,41 @@ classdef SimulationController < handle
         end
         
         function microCoef = get.microCoef(obj)
-            microCoef = sum(obj.WFSToolObj.simulField, 2);
+            switch obj.domain
+                case 'frequency'
+                    microCoef = sum(obj.WFSToolObj.simulField, 2);
+                case 'time'
+                    microCoef = obj.WFSToolObj.simulField;
+            end
         end
         
         function microCoefNS = get.microCoefNS(obj)
             
-            simulField = obj.WFSToolObj.simulField;
-            if isempty(simulField)
-                microCoefNS = double.empty(obj.numWFS, 0);
-            else
-                microCoefNS = simulField(:, 1);
+            switch obj.domain
+                case 'frequency'
+                    simulField = obj.WFSToolObj.simulField;
+                    if isempty(simulField)
+                        microCoefNS = double.empty(obj.numWFS, 0);
+                    else
+                        microCoefNS = simulField(:, 1);
+                    end
+                case 'time'
+                    microCoefNS = [];
             end
             
         end
         
         function microCoefWFS = get.microCoefWFS(obj)
-            simulField = obj.WFSToolObj.simulField;
-            if isempty(simulField)
-                microCoefWFS = double.empty(obj.numWFS, 0);
-            else
-                microCoefWFS = simulField(:, 2);
+            switch obj.domain
+                case 'frequency'
+                    simulField = obj.WFSToolObj.simulField;
+                    if isempty(simulField)
+                        microCoefWFS = double.empty(obj.numWFS, 0);
+                    else
+                        microCoefWFS = simulField(:, 2);
+                    end
+                case 'time'
+                    microCoefWFS = [];
             end
         end
         
@@ -272,11 +287,21 @@ classdef SimulationController < handle
         end
         
         function WFScoef = get.WFScoef(obj)
-            WFScoef = obj.WFSToolObj.WFSarrayCoefficient(:, 2);
+            switch obj.domain
+                case 'frequency'
+                    WFScoef = obj.WFSToolObj.WFSarrayCoefficient(:, 2);
+                case 'time'
+                    WFScoef = obj.WFSToolObj.WFSarrayCoefficient;
+            end
         end
         
         function set.WFScoef(obj, value)
-            obj.WFSToolObj.WFSarrayCoefficient(:, 2) = value;
+            switch obj.domain
+                case 'frequency'
+                    obj.WFSToolObj.WFSarrayCoefficient(:, 2) = value;
+                case 'time'
+                    obj.WFSToolObj.WFSarrayCoefficient = value;
+            end
         end
         
         function ax = get.ax(obj)

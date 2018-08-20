@@ -210,6 +210,7 @@ if ~simulatedReproduction
     % filename = 'C:\Users\Rubén\Music\Salsa\Flor Pálida - Marc Anthony.mp3';
     repRecObj.setProps('audioFileName', filename, 1);
     repRecObj.executeOrder('play');
+    recSignal = repRecObj.recorded{1}.';
 else
     % Reproduce in simulation
     [signal, Fs] = audioread(filename, 'native');
@@ -402,12 +403,14 @@ if simulScriptFlag
     % recWFScoef_freq
     % WFScoef_freq
     
-    [sExt, corrFactInd, corrFactGlob, gainInd, gainGlob, corrFactAver, gainAver] =...
+    sSimul = s;
+    
+    [sExtTheo, corrFactInd, corrFactGlob, gainInd, gainGlob, corrFactAver, gainAver] =...
         SimulationController.addCancellationParametersToStructure(s);
     
-%     ax = axes(figure);
-%     plot(ax, freqs, 10*log10(gainAver));
-%     plot(ax, freqs, abs(corrFactAver))
+    ax = axes(figure);
+    plot(ax, freqs, 10*log10(gainAver));
+    plot(ax, freqs, abs(corrFactAver))
     
 else
     % No completado
@@ -420,29 +423,30 @@ else
     % WFS calculation of WFS coefficients and simulation
     obj.NSposition = NSpositions;
     obj.domain = 'frequency';
-    field = zeros(1, numFreqs);
-    fieldNS = zeros(1, numFreqs);
-    fieldWFS = zeros(1, numFreqs);
+    fieldNS = zeros(numMicros, numFreqs);
+    fieldWFS = zeros(numMicros, numFreqs);
     
     for f = 1:numFreqs
         obj.frequency = freqs(f);
         obj.WFSToolObj.WFScalculation();
         WFScoef = obj.WFScoef;
-        fieldNS(f) = NS_FR(:, :, f)*obj.NSRcoef;
-        fieldWFS(f) = WFS_FR(:,:,f)*WFScoef;
-        field(f) = fieldNS(f) + fieldWFS(f);
+        fieldNS(:, f) = NS_FR(:, :, f)*obj.NSRcoef;
+        fieldWFS(:, f) = WFS_FR(:,:,f)*WFScoef;
     end
+    field = fieldNS + fieldWFS;
         
     % Calculation of gain
     % Make it automatic by generating an s structure and using
     s = repmat(obj.generateBasicExportStructure, numFreqs, 1);
     for f = 1:numFreqs
-        s(f).recCoef = field(f);
-        s(f).recNScoef = fieldNS(f);
-        s(f).recWFScoef = fieldWFS(f);
+        s(f).recCoef = field(:, f);
+        s(f).recNScoef = fieldNS(:, f);
+        s(f).recWFScoef = fieldWFS(:, f);
     end
     [sExt, corrFactInd, corrFactGlob, gainInd, gainGlob, corrFactAver, gainAver] =...
-        SimulationController.addCancellationParametersToStructure(s);   
+        SimulationController.addCancellationParametersToStructure(s);
+    
+    sSimul = s;
 end
 
 % ---- Volume optimization ----
@@ -466,92 +470,232 @@ corrVol = real(corrFact);
 % end
 
 %% Reproduction and recording of different cases
-% s should be of size (numMicros, numFreqs)
-
-% ---- No optimization ----
 
 % Define chirp signal
-freqs = 0;
 durSign = 4; % Duration of tone for time processing
-t = (0:ceil(durSign*fs)-1)/fs;
-NSsignal = chirp(t, min(freqs), durSign, max(freqs));
-% Simulate only the noise source
-obj.WFSToolObj.virtual = [false; false];
-obj.WFSToolObj.freqFilter = 1;
-obj.WFSToolObj.WFScalculation();
-obj.WFSToolObj.simulate();
-recNS_signal = obj.WFSToolObj.simulField;
-recNScoef_time(:, f, ns, rt) = exp(1i*preDelayPhaseShift) * signal2pulseCoefficientMatrix([0 durSign], fcurr, 1, recNS_signal', fs).';
+t = (0:ceil(durSign*sampleRate)-1)/sampleRate;
+NSsignal = chirp(t, min(freqs), durSign, max(freqs) + 50);
 
-recNS_signals(:, :, f, ns, rt) = recNS_signal;
-                    
-obj.WFSToolObj.virtual = [false; true];
-% Simulate all together
-obj.WFSToolObj.freqFilter = freqFilters{filt};
+% Frequency filters
+magnFiltOrder = 2^11;
+hilbertFiltOrder = 2^12;
+[freqFilter, freqFiltDelay] = getFrequencyFilter(magnFiltOrder, hilbertFiltOrder, sampleRate);
+
+% Calculate WFS signals
+obj.domain = 'time';
+obj.NScoef = NSsignal;
+obj.NSVcoef = -NSsignal;
+
+obj.WFSToolObj.freqFilter = freqFilter;
+
+% freqFilterResp = freqz(freqFilter, 1, freqs, sampleRate);
+% ax = axes(figure);
+% plot(ax, freqs, abs(freqFilterResp))
+
+obj.WFSToolObj.frequencyCorrection = true;
+attenuationType = 'Ruben';
 obj.WFSToolObj.updateFiltersWFS();
 obj.WFSToolObj.WFScalculation();
-obj.WFSToolObj.simulate();
-rec_signal = obj.WFSToolObj.simulField;
 
-% Identify IQ component
-recWFScoef_time(:, f, ns, rt, filt) = exp(1i*preDelayPhaseShift) * signal2pulseCoefficientMatrix([0 durSign], fcurr, 1, (rec_signal - recNS_signal)', fs);
-recCoef_time(:, f, ns, rt, filt) = exp(1i*preDelayPhaseShift) * signal2pulseCoefficientMatrix([0 durSign], fcurr, 1, rec_signal', fs);
-WFScoef_time(:, f, ns, rt, filt) = exp(1i*preDelayPhaseShift) * signal2pulseCoefficientMatrix([0 durSign], fcurr, 1, obj.WFSToolObj.WFSarrayCoefficient', fs);
-
-rec_signals(:, :, f, ns, rt, filt) = rec_signal;
-                        
-
-% 3 pulses:
-% - Only noise.
-% - Only WFS.
-% - Both.
-coefMat = zeros(3, numChannels, numFreqs); % (3 x 96 x numFreqs)
-WFScoefMat = [s.WFScoef];
-NScoefMat = [s.NSVcoef];
-nsIndOrig = obj.WFSToolObj.loudspeakerMapping(2).originInd;
+numSamp = length(NSsignal);
+customSignal = zeros(numSamp, numChannels);
 wfsIndOrig = obj.WFSToolObj.loudspeakerMapping(1).originInd;
-coefMat(1, nsChan, :) = permute(NScoefMat(nsIndOrig, :), [3 1 2]);
-coefMat(2, wfsChan, :) = permute(WFScoefMat(wfsIndOrig, :), [3 1 2]);
-coefMat(3, nsChan, :) = permute(NScoefMat(nsIndOrig, :), [3 1 2]);
-coefMat(3, wfsChan, :) = permute(WFScoefMat(wfsIndOrig, :), [3 1 2]);
+wfsIndDest = obj.WFSToolObj.loudspeakerMapping(1).destinationInd;
+nsIndDest = obj.WFSToolObj.loudspeakerMapping(2).destinationInd;
+customSignal(:, nsIndDest) = NSsignal(:);
+customSignal(:, wfsIndDest) = obj.WFScoef(wfsIndOrig, :).';
 
-pulseLimits = [1 3; 4 6; 7 9];
-
-sampleRate = 44100/4;
-signalFunction = @(startSample, endSample) pulseCoefMat2signal(coefMat, pulseLimits,...
-    freqs, sampleRate, startSample, endSample, 'type_pulseLimits', 'time');
-
-obj.WFSToolObj.reproduceSignalFunction(signalFunction, sampleRate);
-recField = obj.WFSToolObj.recorded;
+% Reproduce and record:
+if ~simulatedReproduction
+    repRecObj = reproductorRecorder;
+    repRecObj.setProps('mode', originType('custom'), 1);
+    repRecObj.setProps('enableProc', false);
+    repRecObj.setProps('Fs_player', sampleRate, 1);
+    repRecObj.setProps('Fs_recorder', sampleRate, 1);
+    
+% ---- No optimization ----
+    
+    % - Only noise source
+    aux = customSignal;
+    aux(:, wfsIndDest) = 0;
+    repRecObj.setProps('customSignal', aux, 1);
+    repRecObj.executeOrder('play');
+    recSignalNS = repRecObj.recorded{1}.';
+    
+    % - Only WFS
+    aux = customSignal;
+    aux(:, nsIndDest) = 0;
+    repRecObj.setProps('customSignal', aux);
+    repRecObj.executeOrder('play');
+    recSignalWFS = repRecObj.recorded{1}.';
+    
+    % - All
+    repRecObj.setProps('customSignal', customSignal);
+    repRecObj.executeOrder('play');
+    recSignal = repRecObj.recorded{1}.';
+    
+% ---- Optimized volume ----
+    customSignal(:, wfsIndDest) = corrVol*obj.WFScoef(wfsIndOrig, :).';
+    
+    % - Only noise source
+    aux = customSignal;
+    aux(:, wfsIndDest) = 0;
+    repRecObj.setProps('customSignal', aux);
+    repRecObj.executeOrder('play');
+    recSignalNScorrVol = repRecObj.recorded{1}.';
+    
+    % - Only WFS
+    aux = customSignal;
+    aux(:, nsIndDest) = 0;
+    repRecObj.setProps('customSignal', aux);
+    repRecObj.executeOrder('play');
+    recSignalWFScorrVol = repRecObj.recorded{1}.';
+    
+    % - All
+    repRecObj.setProps('customSignal', customSignal);
+    repRecObj.executeOrder('play');
+    recSignalCorrVol = repRecObj.recorded{1}.';
+    
+% ---- Optimized volume and noise source location ----
+    % No completado
+else
+    
+    % Room characteristics and impulse response of chamber
+    beta = 0; % Average reflection coefficient of the walls of the chamber
+    WFS_AcPath_previously_calculated = true;
+    NS_AcPath_previously_calculated = true;
+    appendFreeSpaceAcPaths = false;
+        
+    SetupParametersScript
+    AcousticPathCalculationScript
+    
+    obj.domain = 'time';
+    
+    WFSacPathIR = permute(WFS_IR(:, :, :, 1), [1, 3, 2]);
+    NSacPathIR = repmat(permute(NS_IR, [1, 3, 2]), [1 2 1]);
+    obj.setAcousticPaths('WFS', WFSacPathIR);
+    obj.setAcousticPaths('NS', NSacPathIR);
+    
+% ---- No optimization ----
+    
+    % - Only noise source
+    obj.WFSToolObj.virtual = [false; false];
+    obj.WFSToolObj.WFScalculation();
+    obj.WFSToolObj.simulate;
+    recSignalNS = obj.microCoef;
+    obj.WFSToolObj.virtual = [false; true];
+    
+    % - Only WFS
+    obj.WFSToolObj.real = [false; false];
+    obj.WFSToolObj.WFScalculation();
+    obj.WFSToolObj.simulate;
+    recSignalWFS = obj.microCoef;
+    obj.WFSToolObj.real = [true; false];
+    
+    % - All
+    obj.WFSToolObj.WFScalculation();
+    obj.WFSToolObj.simulate;
+    recSignal = obj.microCoef;
 
 % ---- Optimized volume ----
-coefMat = zeros(3, numChannels, numFreqs); % (3 x 96 x numFreqs)
-WFScoefMat = [s.WFScoef];
-NScoefMat = [s.NSVcoef];
-coefMat(1, nsChan, :) = permute(NScoefMat(nsIndOrig, :), [3 1 2]);
-coefMat(2, wfsChan, :) = permute(WFScoefMat*corrVol(wfsIndOrig, :), [3 1 2]);
-coefMat(3, nsChan, :) = permute(NScoefMat(nsIndOrig, :), [3 1 2]);
-coefMat(3, wfsChan, :) = permute(WFScoefMat*corrVol(wfsIndOrig, :), [3 1 2]);
+    
+    % - Only noise source
+    obj.WFSToolObj.virtual = [false; false];
+    obj.WFSToolObj.WFScalculation();
+    obj.WFSToolObj.simulate;
+    recSignalNScorrVol = obj.microCoef;
+    obj.WFSToolObj.virtual = [false; true];
+    
+    % - Only WFS
+    obj.WFSToolObj.real = [false; false];
+    obj.WFSToolObj.WFScalculation();
+    obj.WFScoef = obj.WFScoef*corrVol;
+    obj.WFSToolObj.simulate;
+    recSignalWFScorrVol = obj.microCoef;
+    obj.WFSToolObj.real = [true; false];
+    
+    % - All
+    obj.WFSToolObj.WFScalculation();
+    obj.WFScoef = obj.WFScoef*corrVol;
+    obj.WFSToolObj.simulate;
+    recSignalCorrVol = obj.microCoef;
+    
+end
 
-pulseLimits = [1 3; 4 6; 7 9];
 
-sampleRate = 44100/4;
-signalFunction = @(startSample, endSample) pulseCoefMat2signal(coefMat, pulseLimits,...
-    freqs, sampleRate, startSample, endSample, 'type_pulseLimits', 'time');
-
-obj.WFSToolObj.reproduceSignalFunction(signalFunction, sampleRate);
-recFieldCorrVol = obj.WFSToolObj.recorded;
-
-% ---- Optimized volume and noise source location ----
-% No completado
 
 %% Comparison of measures and estimations. They should be similar.
 
 % Get the received signal frequency spectrum
+oper = @(x) freqz(x, 1, freqs, sampleRate);
 
-% Compare it with the theoretical one
+recNS = oneDimOperOverMultiDimArray(oper, recSignalNS, 2);
+recWFS = oneDimOperOverMultiDimArray(oper, recSignalWFS, 2);
+rec = oneDimOperOverMultiDimArray(oper, recSignal, 2);
+recNScorrVol = oneDimOperOverMultiDimArray(oper, recSignalNScorrVol , 2);
+recWFScorrVol = oneDimOperOverMultiDimArray(oper, recSignalWFScorrVol , 2);
+recCorrVol  = oneDimOperOverMultiDimArray(oper, recSignalCorrVol , 2);
 
+obj.domain = 'frequency';
+sExp = repmat(obj.generateBasicExportStructure, numFreqs, 1);
+sExpCorrVol = repmat(obj.generateBasicExportStructure, numFreqs, 1);
+for f = 1:numFreqs
+    sExp(f).recCoef = rec(:, f);
+    sExp(f).recNScoef = recNS(:, f);
+    sExp(f).recWFScoef = recWFS(:, f);
+    sExp(f).Frequency = freqs(f);
+    
+    sExpCorrVol(f).recCoef = recCorrVol(:, f);
+    sExpCorrVol(f).recNScoef = recNScorrVol(:, f);
+    sExpCorrVol(f).recWFScoef = recWFScorrVol(:, f);
+    sExpCorrVol(f).Frequency = freqs(f);
+end
+[sExt, corrFactInd, corrFactGlob, gainInd, gainGlob, corrFactAver, gainAver] =...
+        SimulationController.addCancellationParametersToStructure(sExp); 
+[sExtCorrVol, corrFactIndCorrVol, corrFactGlobCorrVol, gainIndCorrVol, gainGlobCorrVol, corrFactAverCorrVol, gainAverCorrVol] =...
+        SimulationController.addCancellationParametersToStructure(sExpCorrVol);
+    
+% Compare it with the simulated one according to the measured acoustic
+% paths
+[sExtSimul, corrFactIndSimul, corrFactGlobSimul, gainIndSimul, gainGlobSimul, corrFactAverSimul, gainAverSimul] =...
+        SimulationController.addCancellationParametersToStructure(sSimul);
+
+% ax = axes(figure, 'NextPlot', 'Add');
+% plot(ax, freqs, 10*log10(gainAver))
+% plot(ax, freqs, 10*log10(gainAverSimul))
+% ax.XLabel.String = 'Frequency (Hz)';
+% ax.YLabel.String = 'Average gain (dB)';
+% 
+% ax = axes(figure, 'NextPlot', 'Add');
+% plot(ax, freqs, 10*log10(gainAverCorrVol))
+% plot(ax, freqs, 10*log10(gainAverSimulCorrVol))
+% ax.XLabel.String = 'Frequency (Hz)';
+% ax.YLabel.String = 'Average gain (dB)';
+
+NSspec = freqz(NSsignal, 1, freqs, sampleRate);
+resp = recNS./repmat(NSspec, 2, 1);
+ax = axes(figure);
+plot(ax, freqs, abs(NSspec))
+plot(ax, freqs, abs(resp))
 
 %% View of results
 
+% The transmitted signal by the noise source is:
+    % Time representation
+    % Frequency representation
 
+% The received signals from the noise source in both microphones are:
+    % Time representation
+    % Frequency representation
+    
+% The received total signals are:
+    % ---- No optimization ----
+        % Time representation
+        % Frequency representation
+    
+    % ---- Volume optimization ----    
+        % Time representation
+        % Frequency representation
+        
+        
+        
