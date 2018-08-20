@@ -188,7 +188,7 @@ end
 
 % Export
 ChangeInterpreter(h2, 'Latex') % In order to be exported as path
-saveas(h2, [filename, '_path'], 'svg')
+saveas(h2, [filename, '_'], 'svg')
 saveas(h2, [filename, '_pathCopy'], 'svg')
 close(h2)
 

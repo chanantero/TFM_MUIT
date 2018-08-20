@@ -7,7 +7,7 @@
 %% Preamble
 pathSetUp;
 
-imagesPath = 'C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Documentos\Img\';
+imagesPath = 'C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Documentos\TFM\Img\';
 
 dataPathName = [globalPath, 'Data\'];
 ID = datestr(now, 'yyyy-mm-dd_HH-MM-SS');
@@ -185,7 +185,7 @@ plot(ax, signalEx(:, 1))
 % ax.Children(1).Visible = 'on';
 
 %% Reproduce and record frequency response test signal
-
+tic;
 % Load frequency response test signal parameters
 IDload = '2018-08-12_12-56-46';
 signalStructLoaded = load([dataPathName, 'signalStruct_', IDload, '.mat']);
@@ -325,10 +325,12 @@ if simulatedReproduction
     FRtheo = zeros(numMicros, numChannels, numFreqs);
     FRtheo(:, wfsToLoudsInd, :) = permute(WFS_FR(:, :, wfsInd), [1, 3, 2]);
     FRtheo(:, nsToLoudsInd, :) = permute(NS_FR(:, :, nsInd), [1, 3, 2]);
-    recFlag = any(coefMat ~= 0, 1);
+    recFlag = repmat(any(coefMat ~= 0, 1), [numMicros, 1, 1]);
     rel = ones(size(FR));
     rel(recFlag) = FR(recFlag)./FRtheo(recFlag);
-    histogram(abs(rel(recFlag)))
+    fig = figure;
+    ax = axes(fig);
+    histogram(ax, abs(rel(recFlag)))
     histogram(angle(rel(recFlag)))
     max(abs(rel(recFlag)))
     min(abs(rel(recFlag)))
@@ -351,7 +353,7 @@ for m = 1:numMicros
         FRint(m, c, :) = magn.*exp(1i*phase);
     end
 end
-
+toc1 = toc;
 %% Estimation of results based on measured acoustic path responses
 
 % ---- No optimization ----
@@ -362,7 +364,7 @@ phase = 0;
 freqFilters = {};
 freqFiltDelays = [];
 
-simulScriptFlag = true;
+simulScriptFlag = false;
 if simulScriptFlag
     fs = sampleRate;
     c = 340;
@@ -402,11 +404,11 @@ if simulScriptFlag
     % recCoef_freq
     % recWFScoef_freq
     % WFScoef_freq
-    
-    sSimul = s;
-    
+        
+    sSimul = s';
+
     [sExtTheo, corrFactInd, corrFactGlob, gainInd, gainGlob, corrFactAver, gainAver] =...
-        SimulationController.addCancellationParametersToStructure(s);
+        SimulationController.addCancellationParametersToStructure(sSimul);
     
     ax = axes(figure);
     plot(ax, freqs, 10*log10(gainAver));
@@ -425,11 +427,13 @@ else
     obj.domain = 'frequency';
     fieldNS = zeros(numMicros, numFreqs);
     fieldWFS = zeros(numMicros, numFreqs);
+    WFScoefs = zeros(obj.numWFS, numFreqs);
     
     for f = 1:numFreqs
         obj.frequency = freqs(f);
         obj.WFSToolObj.WFScalculation();
         WFScoef = obj.WFScoef;
+        WFScoefs(:, f) = WFScoef;
         fieldNS(:, f) = NS_FR(:, :, f)*obj.NSRcoef;
         fieldWFS(:, f) = WFS_FR(:,:,f)*WFScoef;
     end
@@ -442,11 +446,13 @@ else
         s(f).recCoef = field(:, f);
         s(f).recNScoef = fieldNS(:, f);
         s(f).recWFScoef = fieldWFS(:, f);
+        s(f).WFScoef = WFScoefs(:, f);
     end
     [sExt, corrFactInd, corrFactGlob, gainInd, gainGlob, corrFactAver, gainAver] =...
         SimulationController.addCancellationParametersToStructure(s);
     
     sSimul = s;
+    
 end
 
 % ---- Volume optimization ----
@@ -454,11 +460,21 @@ end
 minFreq = 500;
 maxFreq = 850;
 
+recNScoef = [sSimul.recNScoef];
+recWFScoef = [sSimul.recWFScoef];
+
 sel = freqs >= minFreq & freqs <= maxFreq;
-fieldWFSaux = recWFScoef_freq(:, sel);
-fieldNSaux = recNScoef_freq(:, sel);
+fieldWFSaux = recWFScoef(:, sel);
+fieldNSaux = recNScoef(:, sel);
 corrFact = -fieldWFSaux(:)\fieldNSaux(:);
 corrVol = real(corrFact);
+
+sSimulCorrVol = sSimul;
+for f = 1:numFreqs
+    sSimulCorrVol(f).WFScoef = sSimulCorrVol(f).WFScoef*corrVol;
+    sSimulCorrVol(f).recWFScoef = sSimulCorrVol(f).recWFScoef*corrVol;
+    sSimulCorrVol(f).recCoef = sSimulCorrVol(f).recWFScoef + sSimulCorrVol(f).recNScoef;
+end
 
 % ---- Volume and noise source location optimization ----
 % Completar
@@ -475,10 +491,14 @@ corrVol = real(corrFact);
 durSign = 4; % Duration of tone for time processing
 t = (0:ceil(durSign*sampleRate)-1)/sampleRate;
 NSsignal = chirp(t, min(freqs), durSign, max(freqs) + 50);
+prefixDuration = 2;
+prefixNumSamples = floor(prefixDuration*sampleRate) + 1;
+NSsignal = [zeros(1, prefixNumSamples), NSsignal, zeros(1, prefixNumSamples )];
+t = (0:length(NSsignal)-1)/sampleRate;
 
 % Frequency filters
 magnFiltOrder = 2^11;
-hilbertFiltOrder = 2^12;
+hilbertFiltOrder = 2^13;
 [freqFilter, freqFiltDelay] = getFrequencyFilter(magnFiltOrder, hilbertFiltOrder, sampleRate);
 
 % Calculate WFS signals
@@ -488,13 +508,15 @@ obj.NSVcoef = -NSsignal;
 
 obj.WFSToolObj.freqFilter = freqFilter;
 
-% freqFilterResp = freqz(freqFilter, 1, freqs, sampleRate);
-% ax = axes(figure);
-% plot(ax, freqs, abs(freqFilterResp))
+freqFilterResp = freqz(freqFilter, 1, freqs, sampleRate);
+ax = axes(figure);
+plot(ax, freqs, abs(freqFilterResp), freqs, sqrt(freqs/340))
+plot(ax, freqs, rad2deg(wrapToPi(angle(freqFilterResp) + freqFiltDelay/sampleRate*2*pi*freqs)))
 
 obj.WFSToolObj.frequencyCorrection = true;
-attenuationType = 'Ruben';
+obj.WFSToolObj.attenuationType = 'Ruben'; attenuationType = 'Ruben';
 obj.WFSToolObj.updateFiltersWFS();
+obj.WFSToolObj.automaticLengthModification = false;
 obj.WFSToolObj.WFScalculation();
 
 numSamp = length(NSsignal);
@@ -565,6 +587,7 @@ else
     WFS_AcPath_previously_calculated = true;
     NS_AcPath_previously_calculated = true;
     appendFreeSpaceAcPaths = false;
+    automaticLengthModification = false;
         
     SetupParametersScript
     AcousticPathCalculationScript
@@ -579,6 +602,7 @@ else
 % ---- No optimization ----
     
     % - Only noise source
+    obj.WFSToolObj.real = [true; false];
     obj.WFSToolObj.virtual = [false; false];
     obj.WFSToolObj.WFScalculation();
     obj.WFSToolObj.simulate;
@@ -591,6 +615,25 @@ else
     obj.WFSToolObj.simulate;
     recSignalWFS = obj.microCoef;
     obj.WFSToolObj.real = [true; false];
+    
+    % Debug
+    ax = axes(figure);
+    plot(ax, t, NSsignal, t, obj.WFScoef(89, :))
+    nsSignalFreq = freqz(NSsignal, 1, freqs, sampleRate);
+    wfsSignalFreq = freqz(obj.WFScoef(89, :), 1, freqs, sampleRate);
+    ax = axes(figure);
+    dist = calcDistances(obj.NSRposition, obj.WFSposition(89,:));
+    cosAlpha = dot((obj.WFSposition(89,:) - obj.NSRposition), [0 1 0]);
+    plot(ax, freqs, abs(wfsSignalFreq./nsSignalFreq))
+    plot(ax, freqs, rad2deg(wrapToPi(angle(wfsSignalFreq./nsSignalFreq) + dist/340*2*pi*freqs)))
+    plot(ax, freqs, angle(wfsSignalFreq./nsSignalFreq) )
+    
+    % size(obj.filtersWFS_IR) (numWFS x numNS x numSamp)
+    filt = squeeze(obj.WFSToolObj.filtersWFS_IR(89, 2, :));
+    plot(ax, filt)
+    filtSpec = freqz(filt, 1, freqs, sampleRate);
+    plot(ax, freqs, angle(filtSpec))
+    
     
     % - All
     obj.WFSToolObj.WFScalculation();
@@ -659,31 +702,60 @@ end
 % paths
 [sExtSimul, corrFactIndSimul, corrFactGlobSimul, gainIndSimul, gainGlobSimul, corrFactAverSimul, gainAverSimul] =...
         SimulationController.addCancellationParametersToStructure(sSimul);
+[sExtSimulCorrVol, corrFactIndSimulCorrVol, corrFactGlobSimulCorrVol, gainIndSimulCorrVol, gainGlobSimulCorrVol, corrFactAverSimulCorrVol, gainAverSimulCorrVol] =...
+        SimulationController.addCancellationParametersToStructure(sSimulCorrVol);
 
-% ax = axes(figure, 'NextPlot', 'Add');
-% plot(ax, freqs, 10*log10(gainAver))
-% plot(ax, freqs, 10*log10(gainAverSimul))
-% ax.XLabel.String = 'Frequency (Hz)';
-% ax.YLabel.String = 'Average gain (dB)';
-% 
-% ax = axes(figure, 'NextPlot', 'Add');
-% plot(ax, freqs, 10*log10(gainAverCorrVol))
-% plot(ax, freqs, 10*log10(gainAverSimulCorrVol))
-% ax.XLabel.String = 'Frequency (Hz)';
-% ax.YLabel.String = 'Average gain (dB)';
+ax = axes(figure, 'NextPlot', 'Add');
+plot(ax, freqs, 10*log10(gainAver))
+plot(ax, freqs, 10*log10(gainAverSimul))
+ax.XLabel.String = 'Frequency (Hz)';
+ax.YLabel.String = 'Average gain (dB)';
 
+ax = axes(figure, 'NextPlot', 'Add');
+plot(ax, freqs, 10*log10(gainAverCorrVol))
+plot(ax, freqs, 10*log10(gainAverSimulCorrVol))
+ax.XLabel.String = 'Frequency (Hz)';
+ax.YLabel.String = 'Average gain (dB)';
+
+% Debug
+% The received signal spectrum from the noise source is the same
 NSspec = freqz(NSsignal, 1, freqs, sampleRate);
 resp = recNS./repmat(NSspec, 2, 1);
+recNSsimul = [sSimul.recNScoef];
 ax = axes(figure);
-plot(ax, freqs, abs(NSspec))
-plot(ax, freqs, abs(resp))
+plot(ax, freqs, abs(resp), freqs, abs(recNSsimul))
+
+% The received signal spectrum from the WFS array is the same? No, but it's
+% similar. I think the differece is due to the fact that FRint is not
+% exactly as the simulated acoustic paths, since it is an interpolation. Or
+% maybe it is because the frequency response of the frequency filter is not
+% ideal
+resp = recWFS./repmat(NSspec, 2, 1);
+recNSsimul = [sSimul.recWFScoef];
+ax = axes(figure);
+plot(ax, freqs, abs(resp), freqs, abs(recNSsimul)) % plot(ax, freqs, angle(resp), freqs, angle(recNSsimul))
+
+ax = axes(figure);
+plot(ax, t, recSignalNS(1,:), t, recSignalWFS(1,:))
+
+ax
 
 %% View of results
 
 % The transmitted signal by the noise source is:
     % Time representation
-    % Frequency representation
+    ax = axes(figure);
+    plot(ax, t, NSsignal)
+    ax.XLabel.String = 'Time (s)';
+    ax.YLabel.String = '$\signal[ns][time]$'; ax.YLabel.Interpreter = 'latex';
+    Plot2LaTeX(ax.Parent, [imagesPath, 'Experiment16_NSsignalTime'])
 
+    % Frequency representation
+    ax = axes(figure);
+    plot(ax, freqs, abs(NSspec));
+    ax.XLabel.String = 'Frequency (Hz)';
+    ax.YLabel.String = '$\signal[ns][frequency]$'; ax.YLabel.Interpreter = 'latex';
+    
 % The received signals from the noise source in both microphones are:
     % Time representation
     % Frequency representation

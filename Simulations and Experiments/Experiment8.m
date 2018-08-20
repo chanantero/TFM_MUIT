@@ -17,7 +17,7 @@ dataPathName = [globalPath, 'Data\'];
 ID = datestr(now, 'yyyy-mm-dd_HH-MM-SS');
 
 %% System set up.
-% obj = SimulationController;
+obj = SimulationController;
 
 % Constants
 c = 340; % Sound velocity (m/s)
@@ -30,18 +30,18 @@ phase = 0;
 
 % Filter variables for the time WFS filter.
 WFSfilterLength = 22050;
-% % Creation of frequency filters with different orders.
-% magnFiltOrder = 2.^(12);
-% hilbertFiltOrder = 2.^(12);
-% numFreqFilters = length(magnFiltOrder);
-% 
-% freqFilters = cell(numFreqFilters, 1);
-% freqFiltDelays = zeros(numFreqFilters, 1);
-% for k = 1:numFreqFilters
-%     [freqFilter, delay] = getFrequencyFilter( magnFiltOrder(k), hilbertFiltOrder(k), fs );    
-%     freqFilters{k} = freqFilter;
-%     freqFiltDelays(k) = delay;
-% end
+% Creation of frequency filters with different orders.
+magnFiltOrder = 2.^(12);
+hilbertFiltOrder = 2.^(12);
+numFreqFilters = length(magnFiltOrder);
+
+freqFilters = cell(numFreqFilters, 1);
+freqFiltDelays = zeros(numFreqFilters, 1);
+for k = 1:numFreqFilters
+    [freqFilter, delay] = getFrequencyFilter( magnFiltOrder(k), hilbertFiltOrder(k), fs );    
+    freqFilters{k} = freqFilter;
+    freqFiltDelays(k) = delay;
+end
 
 % Microphone positions
 % Rectangular grid
