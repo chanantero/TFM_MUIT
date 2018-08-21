@@ -5,13 +5,9 @@ obj.ax.HandleVisibility = 'off';
 % Estimate visually the noise source position.
 % Maket it reproduce with amplitude 1 and phase 0 in order to simplify
 % things.
-obj.NSposition = [3.35 -0.2 0]; % Assumed real position
-obj.amplitude = 1;
-obj.phase = 0;
-obj.frequency = 440;
-
+NSpositions = [3.35 -0.2 0]; % Assumed real position
+obj.NSposition = NSpositions;
 obj.WFSToolObj.setNumReceivers(1);
-
 
 freqs = 0;
 
@@ -26,44 +22,41 @@ obj.WFSToolObj.noiseSourceChannelMapping(1) = NSchan;
 obj.domain = 'time';
 
 zPos = 1.65;
-    WFSarrayOffset = [0.46 2.21 zPos]; % [x, y, z] coordinates. Useful for generating acoustic path IR.
-    roomDim = [4.48, 9.13, 2.64];
-    fs = 44100/4;
-    c = 340;
-    
-    extRectXmin = min(obj.WFSposition(:, 1));
-    extRectXmax = max(obj.WFSposition(:, 1));
-    extRectYmin = min(obj.WFSposition(:, 2));
-    extRectYmax = max(obj.WFSposition(:, 2));
-    centerX = (extRectXmax + extRectXmin)/2;
-    centerY = (extRectYmax + extRectYmin)/2;
-    recPositions = [centerX, centerY, 0; centerX, centerY + 1, 0];
-    
-    % Room characteristics and impulse response of chamber
-    beta = 0; % Average reflection coefficient of the walls of the chamber
-    WFS_AcPath_previously_calculated = true;
-    NS_AcPath_previously_calculated = true;
-    appendFreeSpaceAcPaths = false;
-    
-    % Irrelevant variables that are necessary in order to SetupParameterScript
-    % to work
-    amplitude = 1;
-    phase = 0;
-    freqFilters = {};
-    NSpositions = obj.NSRposition;
-    
-     % WFS options
-    frequencyCorrection = true;
-    attenuationType = 'Ruben';
-    
-    % Simulation options
-    timeDomainActive = true;
-    fakeTimeProcessing = false;
-    frequencyDomainActive = true;
-    automaticLengthModification = false;
+WFSarrayOffset = [0.46 2.21 zPos]; % [x, y, z] coordinates. Useful for generating acoustic path IR.
+roomDim = [4.48, 9.13, 2.64];
+fs = 44100/4;
+c = 340;
 
+extRectXmin = min(obj.WFSposition(:, 1));
+extRectXmax = max(obj.WFSposition(:, 1));
+extRectYmin = min(obj.WFSposition(:, 2));
+extRectYmax = max(obj.WFSposition(:, 2));
+centerX = (extRectXmax + extRectXmin)/2;
+centerY = (extRectYmax + extRectYmin)/2;
+recPositions = [centerX, centerY, 0; centerX, centerY + 1, 0];
+
+% Room characteristics and impulse response of chamber
+beta = 0; % Average reflection coefficient of the walls of the chamber
+WFS_AcPath_previously_calculated = true;
+NS_AcPath_previously_calculated = true;
+appendFreeSpaceAcPaths = false;
     
-    % Define chirp signal
+% Irrelevant variables that are necessary in order to SetupParameterScript
+% to work
+amplitude = 1;
+phase = 0;
+
+ % WFS options
+frequencyCorrection = true;
+attenuationType = 'Ruben';
+
+% Simulation options
+timeDomainActive = true;
+fakeTimeProcessing = false;
+frequencyDomainActive = true;
+automaticLengthModification = false;
+    
+% Define chirp signal
 durSign = 4; % Duration of tone for time processing
 sampleRate = fs;
 t = (0:ceil(durSign*sampleRate)-1)/sampleRate;
@@ -85,10 +78,13 @@ freqFiltDelays = freqFiltDelay;
 SetupParametersScript
 AcousticPathCalculationScript
 simulationScript
-    
+
+numSamp = size(recNS_signals, 2);
+t = (0:numSamp-1)/fs;
+
 ax = axes(figure);
-t = (0:size(recNS_signals, 2)-1)/sampleRate;
-plot(ax, t, recNS_signals)
+plot(ax, t, recNS_signals(1,:), t, rec_signals(1,:))
+
 
 %%
 
@@ -185,7 +181,7 @@ predefSignals = true;
 saveSignals = true;
 
 durSign = 1; % Duration of tone for time processing
-t = (0:ceil(durSign*obj.Fs)-1)/obj.Fs;
+t = (0:ceil(durSign*fs)-1)/fs;
 NSsignal = chirp(t, 20, durSign, 940);
 
 SetupParametersScript
@@ -196,7 +192,7 @@ numSamp = size(recNS_signals, 2);
 t = (0:numSamp-1)/fs;
 
 ax = axes(figure);
-plot(ax, t, recNS_signals(1,:))
+plot(ax, t, recNS_signals(1,:), t, rec_signals(1,:))
 % axFC.XLabel.String = 'Time (s)';
 % axFC.YLabel.String = 'Signal (arbitrary units)';
 % axFC.Title.String = 'With Frequency Filter';
@@ -221,6 +217,9 @@ magnFiltOrder = 2.^(12);
 hilbertFiltOrder = 2.^(12);
 numFreqFilters = length(magnFiltOrder);
 
+sampleRate = 44100/4;
+fs = sampleRate;
+
 freqFilters = cell(numFreqFilters, 1);
 freqFiltDelays = zeros(numFreqFilters, 1);
 for k = 1:numFreqFilters
@@ -240,7 +239,7 @@ recPositions = [centerX, centerY, 0; centerX, centerY + 1, 0];
 NSpositions = [3.35 -0.2 0];
 
 % Frequencies
-freqs = [440]; numFreqs = length(freqs);
+freqs = 0;
 
 % Room characteristics and impulse response of chamber
 WFS_AcPath_previously_calculated = false;
@@ -261,7 +260,7 @@ predefSignals = true;
 saveSignals = true;
 
 durSign = 1; % Duration of tone for time processing
-t = (0:ceil(durSign*obj.Fs)-1)/obj.Fs;
+t = (0:ceil(durSign*fs)-1)/fs;
 NSsignal = chirp(t, 20, durSign, 940);
 
 SetupParametersScript
@@ -272,4 +271,4 @@ numSamp = size(recNS_signals, 2);
 t = (0:numSamp-1)/fs;
 
 ax = axes(figure);
-plot(ax, t, recNS_signals(1,:))
+plot(ax, t, recNS_signals(1,:), t, rec_signals(1,:))

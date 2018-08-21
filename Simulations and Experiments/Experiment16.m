@@ -497,38 +497,38 @@ NSsignal = [zeros(1, prefixNumSamples), NSsignal, zeros(1, prefixNumSamples )];
 t = (0:length(NSsignal)-1)/sampleRate;
 
 % Frequency filters
-magnFiltOrder = 2^11;
-hilbertFiltOrder = 2^13;
+magnFiltOrder = 2^12;
+hilbertFiltOrder = 2^12;
 [freqFilter, freqFiltDelay] = getFrequencyFilter(magnFiltOrder, hilbertFiltOrder, sampleRate);
+obj.WFSToolObj.freqFilter = freqFilter;
+% Debug
+% freqFilterResp = freqz(freqFilter, 1, freqs, sampleRate);
+% ax = axes(figure);
+% plot(ax, freqs, abs(freqFilterResp), freqs, sqrt(freqs/340))
+% plot(ax, freqs, rad2deg(wrapToPi(angle(freqFilterResp) + freqFiltDelay/sampleRate*2*pi*freqs)))
 
 % Calculate WFS signals
 obj.domain = 'time';
 obj.NScoef = NSsignal;
 obj.NSVcoef = -NSsignal;
 
-obj.WFSToolObj.freqFilter = freqFilter;
-
-freqFilterResp = freqz(freqFilter, 1, freqs, sampleRate);
-ax = axes(figure);
-plot(ax, freqs, abs(freqFilterResp), freqs, sqrt(freqs/340))
-plot(ax, freqs, rad2deg(wrapToPi(angle(freqFilterResp) + freqFiltDelay/sampleRate*2*pi*freqs)))
-
+frequencyCorrection = true;
 obj.WFSToolObj.frequencyCorrection = true;
 obj.WFSToolObj.attenuationType = 'Ruben'; attenuationType = 'Ruben';
 obj.WFSToolObj.updateFiltersWFS();
 obj.WFSToolObj.automaticLengthModification = false;
 obj.WFSToolObj.WFScalculation();
 
-numSamp = length(NSsignal);
-customSignal = zeros(numSamp, numChannels);
-wfsIndOrig = obj.WFSToolObj.loudspeakerMapping(1).originInd;
-wfsIndDest = obj.WFSToolObj.loudspeakerMapping(1).destinationInd;
-nsIndDest = obj.WFSToolObj.loudspeakerMapping(2).destinationInd;
-customSignal(:, nsIndDest) = NSsignal(:);
-customSignal(:, wfsIndDest) = obj.WFScoef(wfsIndOrig, :).';
-
 % Reproduce and record:
 if ~simulatedReproduction
+    numSamp = length(NSsignal);
+    customSignal = zeros(numSamp, numChannels);
+    wfsIndOrig = obj.WFSToolObj.loudspeakerMapping(1).originInd;
+    wfsIndDest = obj.WFSToolObj.loudspeakerMapping(1).destinationInd;
+    nsIndDest = obj.WFSToolObj.loudspeakerMapping(2).destinationInd;
+    customSignal(:, nsIndDest) = NSsignal(:);
+    customSignal(:, wfsIndDest) = obj.WFScoef(wfsIndOrig, :).';
+    
     repRecObj = reproductorRecorder;
     repRecObj.setProps('mode', originType('custom'), 1);
     repRecObj.setProps('enableProc', false);
@@ -588,6 +588,7 @@ else
     NS_AcPath_previously_calculated = true;
     appendFreeSpaceAcPaths = false;
     automaticLengthModification = false;
+    c = 340;
         
     SetupParametersScript
     AcousticPathCalculationScript
@@ -617,23 +618,25 @@ else
     obj.WFSToolObj.real = [true; false];
     
     % Debug
-    ax = axes(figure);
-    plot(ax, t, NSsignal, t, obj.WFScoef(89, :))
-    nsSignalFreq = freqz(NSsignal, 1, freqs, sampleRate);
-    wfsSignalFreq = freqz(obj.WFScoef(89, :), 1, freqs, sampleRate);
-    ax = axes(figure);
-    dist = calcDistances(obj.NSRposition, obj.WFSposition(89,:));
-    cosAlpha = dot((obj.WFSposition(89,:) - obj.NSRposition), [0 1 0]);
-    plot(ax, freqs, abs(wfsSignalFreq./nsSignalFreq))
-    plot(ax, freqs, rad2deg(wrapToPi(angle(wfsSignalFreq./nsSignalFreq) + dist/340*2*pi*freqs)))
-    plot(ax, freqs, angle(wfsSignalFreq./nsSignalFreq) )
-    
-    % size(obj.filtersWFS_IR) (numWFS x numNS x numSamp)
-    filt = squeeze(obj.WFSToolObj.filtersWFS_IR(89, 2, :));
-    plot(ax, filt)
-    filtSpec = freqz(filt, 1, freqs, sampleRate);
-    plot(ax, freqs, angle(filtSpec))
-    
+%     ax = axes(figure);
+%     plot(ax, t, NSsignal, t, obj.WFScoef(89, :))
+%     nsSignalFreq = freqz(NSsignal, 1, freqs, sampleRate);
+%     wfsSignalFreq = freqz(obj.WFScoef(89, :), 1, freqs, sampleRate);
+%     ax = axes(figure);
+%     dist = calcDistances(obj.NSRposition, obj.WFSposition(89,:));
+%     cosAlpha = dot((obj.WFSposition(89,:) - obj.NSRposition), [0 1 0]);
+%     plot(ax, freqs, abs(wfsSignalFreq./nsSignalFreq))
+%     plot(ax, freqs, rad2deg(wrapToPi(angle(wfsSignalFreq./nsSignalFreq) + dist/340*2*pi*freqs)))
+%     plot(ax, freqs, angle(wfsSignalFreq./nsSignalFreq) )
+%     
+%     % size(obj.filtersWFS_IR) (numWFS x numNS x numSamp)
+%     filt = squeeze(obj.WFSToolObj.filtersWFS_IR(89, 2, :));
+%     plot(ax, filt)
+%     filtSpec = freqz(filt, 1, freqs, sampleRate);
+%     plot(ax, freqs, angle(filtSpec))
+%     
+%     wfsSignalTheo = fftfilt(filt, NSsignal);
+%     plot(ax, t, NSsignal, t, wfsSignalTheo);
     
     % - All
     obj.WFSToolObj.WFScalculation();
@@ -736,7 +739,7 @@ ax = axes(figure);
 plot(ax, freqs, abs(resp), freqs, abs(recNSsimul)) % plot(ax, freqs, angle(resp), freqs, angle(recNSsimul))
 
 ax = axes(figure);
-plot(ax, t, recSignalNS(1,:), t, recSignalWFS(1,:))
+plot(ax, t, recSignalNS(1,:), t, recSignalWFS(1,:), t, recSignal(1,:))
 
 ax
 
