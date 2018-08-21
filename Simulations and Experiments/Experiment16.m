@@ -309,6 +309,12 @@ for p = 1:numPulses
     end
 end
 FR = recSpec./repmat(permute(transSpec, [3 1 2]), [numMicros, 1, 1]);
+% Compensate for desynchronization between the transmitted signals and the
+% received ones
+% delay is the delay that the recorded signal has experimented
+% delay = 1;
+% freqMat = pointWiseExtend(permute(freqs(:), [2 3 1]), FR);
+% FR = FR.*exp(1i*delay*2*pi*freqMat);
 
 ax = axes(figure);
 plot(ax, freqs, squeeze(abs(FR(1, 1:2, :))))
@@ -328,10 +334,10 @@ if simulatedReproduction
     recFlag = repmat(any(coefMat ~= 0, 1), [numMicros, 1, 1]);
     rel = ones(size(FR));
     rel(recFlag) = FR(recFlag)./FRtheo(recFlag);
-    fig = figure;
-    ax = axes(fig);
-    histogram(ax, abs(rel(recFlag)))
-    histogram(angle(rel(recFlag)))
+%     fig = figure;
+%     ax = axes(fig);
+%     histogram(ax, abs(rel(recFlag)))
+%     histogram(angle(rel(recFlag)))
     max(abs(rel(recFlag)))
     min(abs(rel(recFlag)))
     max(angle(rel(recFlag)))
@@ -415,7 +421,7 @@ if simulScriptFlag
     plot(ax, freqs, abs(corrFactAver))
     
 else
-    % No completado
+
     wfsChan = obj.WFSToolObj.loudspeakerMapping(1).destinationInd; % Not pretty sure
     nsChan = obj.WFSToolObj.loudspeakerMapping(2).destinationInd;
     WFS_FR = FRint;
@@ -668,9 +674,12 @@ else
     
 end
 
-
+% save([dataPathName, 'recSignals_', ID, '.mat'], 'recSignalNS', 'recSignalWFS', 'recSignal', ...
+%     'recSignalNScorrVol', 'recSignalWFScorrVol', 'recSignalCorrVol');
 
 %% Comparison of measures and estimations. They should be similar.
+% IDload = '2018-08-21_16-06-40';
+% load([dataPathName, 'recSignals_', ID, '.mat'])
 
 % Get the received signal frequency spectrum
 oper = @(x) freqz(x, 1, freqs, sampleRate);
@@ -720,28 +729,26 @@ plot(ax, freqs, 10*log10(gainAverSimulCorrVol))
 ax.XLabel.String = 'Frequency (Hz)';
 ax.YLabel.String = 'Average gain (dB)';
 
-% Debug
-% The received signal spectrum from the noise source is the same
-NSspec = freqz(NSsignal, 1, freqs, sampleRate);
-resp = recNS./repmat(NSspec, 2, 1);
-recNSsimul = [sSimul.recNScoef];
-ax = axes(figure);
-plot(ax, freqs, abs(resp), freqs, abs(recNSsimul))
-
-% The received signal spectrum from the WFS array is the same? No, but it's
-% similar. I think the differece is due to the fact that FRint is not
-% exactly as the simulated acoustic paths, since it is an interpolation. Or
-% maybe it is because the frequency response of the frequency filter is not
-% ideal
-resp = recWFS./repmat(NSspec, 2, 1);
-recNSsimul = [sSimul.recWFScoef];
-ax = axes(figure);
-plot(ax, freqs, abs(resp), freqs, abs(recNSsimul)) % plot(ax, freqs, angle(resp), freqs, angle(recNSsimul))
-
-ax = axes(figure);
-plot(ax, t, recSignalNS(1,:), t, recSignalWFS(1,:), t, recSignal(1,:))
-
-ax
+% % Debug
+% % The received signal spectrum from the noise source is the same
+% NSspec = freqz(NSsignal, 1, freqs, sampleRate);
+% resp = recNS./repmat(NSspec, 2, 1);
+% recNSsimul = [sSimul.recNScoef];
+% ax = axes(figure);
+% plot(ax, freqs, abs(resp), freqs, abs(recNSsimul))
+% 
+% % The received signal spectrum from the WFS array is the same? No, but it's
+% % similar. I think the differece is due to the fact that FRint is not
+% % exactly as the simulated acoustic paths, since it is an interpolation. Or
+% % maybe it is because the frequency response of the frequency filter is not
+% % ideal
+% resp = recWFS./repmat(NSspec, 2, 1);
+% recWFSsimul = [sSimul.recWFScoef];
+% ax = axes(figure);
+% plot(ax, freqs, abs(resp), freqs, abs(recWFSsimul)) % plot(ax, freqs, angle(resp), freqs, angle(recNSsimul))
+% 
+% ax = axes(figure);
+% plot(ax, t, recSignalNS(1,:), t, recSignalWFS(1,:), t, recSignal(1,:))
 
 %% View of results
 
@@ -751,26 +758,94 @@ ax
     plot(ax, t, NSsignal)
     ax.XLabel.String = 'Time (s)';
     ax.YLabel.String = '$\signal[ns][time]$'; ax.YLabel.Interpreter = 'latex';
-    Plot2LaTeX(ax.Parent, [imagesPath, 'Experiment16_NSsignalTime'])
+    options.TickLabels2Latex = false;
+    Plot2LaTeX(ax.Parent, [imagesPath, 'Experiment16_NSsignalTime'], options)
 
     % Frequency representation
     ax = axes(figure);
     plot(ax, freqs, abs(NSspec));
     ax.XLabel.String = 'Frequency (Hz)';
     ax.YLabel.String = '$\signal[ns][frequency]$'; ax.YLabel.Interpreter = 'latex';
+    Plot2LaTeX(ax.Parent, [imagesPath, 'Experiment16_NSsignalFreq'], options)
     
 % The received signals from the noise source in both microphones are:
     % Time representation
+    ax = axes(figure);
+    plot(ax, t, recSignalNS.')
+    ax.XLabel.String = 'Time (s)';
+    ax.YLabel.String = '$\Field[ns][time]$'; ax.YLabel.Interpreter = 'latex';
+    Plot2LaTeX(ax.Parent, [imagesPath, 'Experiment16_recNSTime'], options)
+
     % Frequency representation
-    
+    ax = axes(figure);
+    plot(ax, freqs, abs(recNS).')
+    ax.XLabel.String = 'Frequency (Hz)';
+    ax.YLabel.String = '$\Field[ns][frequency]$'; ax.YLabel.Interpreter = 'latex';
+    Plot2LaTeX(ax.Parent, [imagesPath, 'Experiment16_recNSFreq'], options)
+
 % The received total signals are:
     % ---- No optimization ----
         % Time representation
+        ax = axes(figure);
+        plot(ax, t, recSignal.')
+        ax.XLabel.String = 'Time (s)';
+        ax.YLabel.String = '$\Field[total][time]$'; ax.YLabel.Interpreter = 'latex';
+%         Plot2LaTeX(ax.Parent, [imagesPath, 'Experiment16_recTime'], options)
+
         % Frequency representation
-    
+        ax = axes(figure);
+        plot(ax, freqs, abs(rec).')
+        ax.XLabel.String = 'Frequency (Hz)';
+        ax.YLabel.String = '$\Field[total][frequency]$'; ax.YLabel.Interpreter = 'latex';
+%         Plot2LaTeX(ax.Parent, [imagesPath, 'Experiment16_recFreq'], options)
+
     % ---- Volume optimization ----    
         % Time representation
+        ax = axes(figure);
+        plot(ax, t, recSignalCorrVol.')
+        ax.XLabel.String = 'Time (s)';
+        ax.YLabel.String = '$\Field[total][time]$'; ax.YLabel.Interpreter = 'latex';
+%         Plot2LaTeX(ax.Parent, [imagesPath, 'Experiment16_recCorrVolTime'], options)
+
         % Frequency representation
-        
-        
-        
+        ax = axes(figure);
+        plot(ax, freqs, abs(recCorrVol).')
+        ax.XLabel.String = 'Frequency (Hz)';
+        ax.YLabel.String = '$\Field[total][frequency]$'; ax.YLabel.Interpreter = 'latex';
+%         Plot2LaTeX(ax.Parent, [imagesPath, 'Experiment16_recCorrVolFreq'], options)
+
+% The received total signals in comparison with the receved noise source signals
+    % ---- No optimization ----
+        % Time representation
+        ax = axes(figure);
+        plot(ax, t, recSignalNS(1,:).', t, recSignal(1,:).')
+        ax.XLabel.String = 'Time (s)';
+        legend(ax, {'$\Field[ns][time]$', '$\Field[total][time]$'})
+%         Plot2LaTeX(ax.Parent, [imagesPath, 'Experiment16_recAndrecNStime_1'], options)
+
+        ax = axes(figure);
+        plot(ax, t, recSignalNS(2,:).', t, recSignal(2,:).')
+        ax.XLabel.String = 'Time (s)';
+        legend(ax, {'$\Field[ns][time]$', '$\Field[total][time]$'})
+%         Plot2LaTeX(ax.Parent, [imagesPath, 'Experiment16_recAndrecNStime_2'], options)
+
+        % Frequency representation
+        ax = axes(figure);
+        plot(ax, t, recSignalNS(1,:).', t, recSignal(1,:).')
+        ax.XLabel.String = 'Frequency (Hz)';
+        legend(ax, {'$\Field[ns][frequency]$', '$\Field[total][frequency]$'})
+%         Plot2LaTeX(ax.Parent, [imagesPath, 'Experiment16_recAndrecNSfreq_1'], options)
+
+        ax = axes(figure);
+        plot(ax, t, recSignalNS(2,:).', t, recSignal(2,:).')
+        ax.XLabel.String = 'Frequency (Hz)';
+        legend(ax, {'$\Field[ns][frequency]$', '$\Field[total][frequency]$'})
+%         Plot2LaTeX(ax.Parent, [imagesPath, 'Experiment16_recAndrecNSfreq_2'], options)
+
+% Average gain for no optimization and for optimization of volume
+ax = axes(figure, 'NextPlot', 'Add');
+plot(ax, freqs, 10*log10(gainAver), freqs, 10*log10(gainAverCorrVol))
+ax.XLabel.String = 'Frequency (Hz)';
+ax.YLabel.String = 'Average gain (dB)';
+legend(ax, 'No optimization', 'Volume correction')
+% printfig(ax.Parent, imagesPath, 'Experiment16_averGainComparison', 'eps')

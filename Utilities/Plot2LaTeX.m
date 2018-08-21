@@ -188,8 +188,8 @@ end
 
 % Export
 ChangeInterpreter(h2, 'Latex') % In order to be exported as path
-saveas(h2, [filename, '_'], 'svg')
-saveas(h2, [filename, '_pathCopy'], 'svg')
+saveas(h2, [filename, '_path'], 'svg')
+% saveas(h2, [filename, '_pathCopy'], 'svg')
 close(h2)
 
 %% Find all objects with text
@@ -355,7 +355,7 @@ waitbar(Step/nStep,hWaitBar,'Saving figure to .svg file');
 
 % savefig(h,[filename,'_temp']); % to see the intermediate situation
 saveas(h,filename,'svg'); % export to svg
-saveas(h,[filename, 'Copy'],'svg'); % export to svg
+% saveas(h,[filename, 'Copy'],'svg'); % export to svg
 %% Modify SVG file to replace labels with original text
 Step = Step + 1;
 waitbar(Step/nStep,hWaitBar,'Restoring text in .svg file');
