@@ -7,10 +7,10 @@
 %% Preamble
 pathSetUp;
 
-imagesPath = 'C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Documentos\TFM\Img\';
+imagesPath = '.\Img Lab 23-08-2018\'; % 'C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Documentos\TFM\Img\';
 
-dataPathName = [globalPath, 'Data\'];
-ID = datestr(now, 'yyyy-mm-dd_HH-MM-SS');
+dataPathName = '.\Data\'; % This is the laboratory version of 22-08-2018. Usual path: [globalPath, 'Data\'];
+ID = 'Lab_23-08-2018'; % datestr(now, 'yyyy-mm-dd_HH-MM-SS');
 
 %% System set up.
 obj = SimulationController;
