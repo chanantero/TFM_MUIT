@@ -7,10 +7,10 @@
 %% Preamble
 pathSetUp;
 
-imagesPath = '.\Img Lab 23-08-2018\'; % 'C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Documentos\TFM\Img\';
+imagesPath = 'C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Documentos\TFM\Img\';
 
-dataPathName = '.\Data\'; % This is the laboratory version of 22-08-2018. Usual path: [globalPath, 'Data\'];
-ID = 'Lab_23-08-2018'; % datestr(now, 'yyyy-mm-dd_HH-MM-SS');
+dataPathName = [globalPath, 'Data\'];
+ID = datestr(now, 'yyyy-mm-dd_HH-MM-SS');
 
 %% System set up.
 obj = SimulationController;
@@ -197,20 +197,96 @@ pulseLimits = signalStructLoaded.pulseLimits;
 freqs = signalStructLoaded.freqs;
 numFreqs = length(freqs);
 coefMat = signalStructLoaded.coefMat;
-info = audioinfo([dataPathName, 'acousticPathReprodSignal_', IDload, '.wav']);
-sampleRate = info.SampleRate;
 filename = [dataPathName, 'acousticPathReprodSignal_', IDload, '.wav'];
+info = audioinfo(filename);
+sampleRate = info.SampleRate;
 
 simulatedReproduction = true;
 if ~simulatedReproduction
-    % Reproduce
-    repRecObj = reproductorRecorder;
-    repRecObj.setProps('mode', originType('file'), 1);
-    repRecObj.setProps('enableProc', false);
-    % filename = 'C:\Users\Rubén\Music\Salsa\Flor Pálida - Marc Anthony.mp3';
-    repRecObj.setProps('audioFileName', filename, 1);
-    repRecObj.executeOrder('play');
-    recSignal = repRecObj.recorded{1}.';
+    audioPlayerRecorderEnabled = strcmp(version('-release'), '2018a');
+    if ~audioPlayerRecorderEnabled
+        % Reproduce
+        repRecObj = reproductorRecorder;
+        repRecObj.setProps('mode', originType('file'), 1);
+        repRecObj.setProps('enableProc', false);
+        % filename = 'C:\Users\Rubén\Music\Salsa\Flor Pálida - Marc Anthony.mp3';
+        repRecObj.setProps('audioFileName', filename, 1);
+        repRecObj.executeOrder('play');
+        recSignal = repRecObj.recorded{1}.';
+    else
+%         % Debug
+%         deviceWriter = audioDeviceWriter;
+%         deviceWriter.SampleRate = sampleRate;
+%         deviceWriter.Driver = 'ASIO';
+%         deviceWriter.Device = 'Default';
+%         deviceWriter.ChannelMappingSource = 'Property';
+% 
+%         signProv = signalProvider;
+%     %     filename = 'C:\Users\Rubén\Music\Salsa\Flor Pálida - Marc Anthony.mp3';
+%         signProv.FileName = filename;
+%         signProv.SamplesPerFrame = sampleRate*2; % The maximum an audioDeviceWriter allows
+% 
+%         release(signProv)
+%         release(deviceWriter)
+%         tic
+%         while ~isDone(signProv)
+%             x = step(signProv);
+%             step(deviceWriter, x(:, [1 2]));
+%         end
+%         toc
+%         disp('done')
+% 
+%         info = audioinfo(filename);
+
+        samplesPerFrame = sampleRate*2;
+        numRecChann = 1;
+        numFrames = ceil(info.TotalSamples/samplesPerFrame);
+        
+        signProv = signalProvider;
+        signProv.FileName = filename;
+        signProv.SamplesPerFrame = samplesPerFrame; % The maximum an audioDeviceWriter allows
+
+        playRec = audioPlayerRecorder;
+        playRec.SampleRate = sampleRate;
+        
+        y = zeros(numFrames*samplesPerFrame, numRecChann);
+        x = zeros(numFrames*samplesPerFrame, info.NumChannels);
+        numUnderruns = zeros(numFrames, 1);
+        numOverruns = zeros(numFrames, 1);
+        ind = 1-samplesPerFrame:0;
+        for fr = 1:numFrames
+            x_curr = step(signProv);
+            [y_curr, numUnderruns(fr), numOverruns(fr)] = step(playRec, x_curr(:, [1 2]));
+            ind = ind + samplesPerFrame;
+            x(ind, :) = x_curr;
+            y(ind, :) = y_curr;
+            fprintf('%d\n', fr)
+        end
+        release(playRec)
+        release(signProv)
+            
+        numSamp = size(y, 1);
+        cor = xcorr(mean(x(:,[1 2]), 2), y, 'unbiased');
+        ax = axes(figure);
+        plot(ax, cor)
+        centerCor = numSamp;
+        [~, indMax] = max(cor);
+        numShiftFrames = round((indMax - centerCor)/samplesPerFrame); 
+        % Shift numShiftFrames*samplesPerFrame samples
+        origInd = (1:numSamp) - numShiftFrames*samplesPerFrame;
+        destInd = (1:numSamp);
+        validInd = origInd >= 1 & origInd <= numSamp;
+        destInd = destInd(validInd);
+        origInd = origInd(validInd);
+        recSignal = zeros(size(y));
+        recSignal(destInd, :) = y(origInd, :);
+        recSignal = recSignal';
+        
+%         ax = axes(figure, 'NextPlot', 'Add');
+%         plot(ax, x(1:samplesPerFrame*5, 1))
+%         plot(ax, y(1:samplesPerFrame*5, 1))
+%         plot(ax, recSignal(1, 1:samplesPerFrame*5))
+    end
 else
     % Reproduce in simulation
     [signal, Fs] = audioread(filename, 'native');

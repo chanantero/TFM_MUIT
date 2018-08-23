@@ -46,6 +46,9 @@ classdef signalProvider < matlab.System
             switch obj.mode
                 case originType('file')
                     obj.providerFunction = @() obj.stepFileReader();
+                    if isLocked(obj.fileReader)
+                        release(obj.fileReader)
+                    end
                     obj.fileReader.Filename = obj.FileName;
                     obj.fileReader.SamplesPerFrame = obj.SamplesPerFrame;
                     setup(obj.fileReader)
