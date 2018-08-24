@@ -7,10 +7,10 @@
 %% Preamble
 pathSetUp;
 
-imagesPath = 'C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Documentos\TFM\Img\';
+imagesPath = '.\Img Lab 23-08-2018\'; % 'C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Documentos\TFM\Img\';
 
-dataPathName = [globalPath, 'Data\'];
-ID = datestr(now, 'yyyy-mm-dd_HH-MM-SS');
+dataPathName = '.\Data\'; % This is the laboratory version of 22-08-2018. Usual path: [globalPath, 'Data\'];
+ID = 'Lab_23-08-2018'; % datestr(now, 'yyyy-mm-dd_HH-MM-SS');
 
 %% System set up.
 obj = SimulationController;
@@ -40,7 +40,7 @@ obj.WFSToolObj.noiseSourceChannelMapping(1) = NSchan;
 % User change this
 pulseDur = 1.5; % seconds
 pulseSolap = 0.5; % seconds
-testLaptop = true; % testLaptop should be false when reproducing in the listening room
+testLaptop = false; % testLaptop should be false when reproducing in the listening room
 
 % % % Don't touch the rest of the section % % %
 
@@ -69,7 +69,10 @@ else % Test in GTAC listening room
     indChan = 1:numWFS; % mod(1:numWFS, 2)+1;
     indPulse = 1:numWFS;
     inds = sub2ind([numWFS, numWFS, 8], indPulse, indChan, indFreq); % sub2ind([numWFS, 2, 8], indPulse, indChan, indFreq);
-    coefMat(inds) = 1;
+    coefMat(inds) = 0.5;
+    
+%     obj.WFSToolObj.player.driver = 'ASIO';
+    obj.WFSToolObj.player.setProps('driver', 'ASIO', 1);
 end
 
 pulseStart = (0:numWFS-1)'*(pulseDur - pulseSolap);
@@ -79,12 +82,80 @@ pulseLimits = [pulseStart, pulseEnd];
 sampleRate = 44100;
 signalFunction = @(startSample, endSample) pulseCoefMat2signal(coefMat, pulseLimits,...
     freqs, sampleRate, startSample, endSample, 'type_pulseLimits', 'time');
-
 % Debug
 % ax = axes(figure);
 % plot(ax, signalFunction(0, 44100*2))
 
-obj.WFSToolObj.reproduceSignalFunction(signalFunction, sampleRate);
+% Write into file
+audWriterObj = dsp.AudioFileWriter;
+audWriterObj.Filename = [dataPathName, 'test', ID, '.wav'];
+audWriterObj.SampleRate = sampleRate;
+audWriterObj.DataType = 'single';
+
+sampIni = 1;
+sampPerFrame = sampleRate;
+sampEnd = sampIni + sampPerFrame - 1;
+outOfRange = false;
+count = 0; maxCount = ceil(pulseLimits(end)*sampleRate/sampPerFrame);
+while outOfRange ~= 1
+    [signal, outOfRange] = signalFunction(sampIni, sampEnd);
+    sampIni = sampIni + sampPerFrame;
+    sampEnd = sampEnd + sampPerFrame;
+    signal(abs(signal) > 1) = sign(signal(abs(signal) > 1));
+    step(audWriterObj, single(signal))
+    count = count + 1;
+    fprintf('count = %d/%d\n', count, maxCount);
+end
+
+IDload = 'Lab_23-08-2018';
+filename = [dataPathName, 'test', IDload, '.wav'];
+info = audioinfo(filename);
+sampleRate = info.SampleRate;
+
+samplesPerFrame = sampleRate*2;
+numRecChann = 1;
+numFrames = ceil(info.TotalSamples/samplesPerFrame);
+
+signProv = signalProvider;
+signProv.FileName = filename;
+signProv.SamplesPerFrame = samplesPerFrame; % The maximum an audioDeviceWriter allows
+
+%% Reproduce with audioPlayerRecorder
+playRec = audioPlayerRecorder;
+playRec.SampleRate = sampleRate;
+playRec.Device = 'MOTU PCI ASIO';
+
+y = zeros(numFrames*samplesPerFrame, numRecChann);
+x = zeros(numFrames*samplesPerFrame, info.NumChannels);
+numUnderruns = zeros(numFrames, 1);
+numOverruns = zeros(numFrames, 1);
+ind = 1-samplesPerFrame:0;
+for fr = 1:1%numFrames
+    x_curr = step(signProv);
+    [y_curr, numUnderruns(fr), numOverruns(fr)] = step(playRec, x_curr);
+    ind = ind + samplesPerFrame;
+    x(ind, :) = x_curr;
+    y(ind, :) = y_curr;
+    fprintf('%d\n', fr)
+end
+release(playRec)
+release(signProv)
+
+% % Reproduce with audioDeviceWriter object
+% deviceWriter = audioDeviceWriter;
+% deviceWriter.SampleRate = sampleRate;
+% deviceWriter.Driver = 'ASIO';
+% deviceWriter.Device = 'MOTU PCI ASIO';
+% deviceWriter.ChannelMappingSource = 'Property';
+% 
+% while ~isDone(signProv)
+%     x = step(signProv);
+%     step(deviceWriter, x);
+% end
+% release(deviceWriter)
+
+
+% obj.WFSToolObj.reproduceSignalFunction(signalFunction, sampleRate);
 
 %% Generate frequency response signal
 
@@ -97,8 +168,8 @@ obj.WFSToolObj.reproduceSignalFunction(signalFunction, sampleRate);
 
 % Generate signals
 numTotalChan = 96;
-numSimultChan = 24; % Number of simultaneous channels reproducing
-freqRange = [20, 950]; % Hz. It's a user preference, but it's not going to be exactly respectd
+numSimultChan = 8; % Number of simultaneous channels reproducing
+freqRange = [10, 1100]; % Hz. It's a user preference, but it's not going to be exactly respectd
 freqStep = 1; % Hz
 freqStepChan = freqStep*numSimultChan; % Frequency step of each channel
 numBlocks = ceil((freqRange(2) - freqRange(1))/freqStepChan);
@@ -130,13 +201,14 @@ pulseStart = silenceBetweenPulses + (pulseDur + silenceBetweenPulses)*(0:numChan
 pulseEnd = pulseStart + pulseDur;
 pulseLimits = [pulseStart, pulseEnd];
 
+sampleRate = 44100;
+
 signalStruct = struct('coefMat', coefMat, 'freqs', freqs, 'pulseLimits', pulseLimits, 'numSimultChan', numSimultChan, 'freqInd', freqInd);
 
-sampleRate = 44100/4;
+% Write signal into file
 signalFunction = @(startSample, endSample) pulseCoefMat2signal(coefMat, pulseLimits,...
     freqs, sampleRate, startSample, endSample, 'type_pulseLimits', 'time');
 
-% Write signal into file
 audWriterObj = dsp.AudioFileWriter;
 audWriterObj.Filename = [dataPathName, 'acousticPathReprodSignal_', ID, '.wav'];
 audWriterObj.SampleRate = sampleRate;
@@ -176,6 +248,44 @@ while outOfRange ~= 1
 end
 release(audWriterObj);
 save([dataPathName, 'signalStruct_', ID, '.mat'], '-struct', 'signalStruct');
+
+% Other way, more efficient
+audWriterObj = dsp.AudioFileWriter;
+audWriterObj.Filename = [dataPathName, 'acousticPathReprodSignal_', ID, '.wav'];
+audWriterObj.SampleRate = sampleRate;
+audWriterObj.DataType = 'single';
+
+numPulses = size(pulseLimits, 1);
+prevEndingInd = 1;
+for p = 1:numPulses
+    % Previous silence
+    start = pulseLimits(p, 1);
+    ending = pulseLimits(p, 2);
+
+    startInd = floor(start*sampleRate) + 1;
+    endingInd = ceil(ending*sampleRate); % Open interval, not included sample
+    
+    t = (startInd-1:endingInd-2)'/sampleRate;
+    
+    signal = zeros(endingInd - prevEndingInd, 96);
+    activeChan = find(any(coefMat(p, :, :) ~= 0, 3));  
+    
+    for ch = 1:length(activeChan)
+        activeFreq = find(coefMat(p, ch, :) ~= 0);
+        coef = squeeze(coefMat(p, ch, activeFreq));
+        freq = freqs(activeFreq);
+        signFrag = zeros(size(t));
+        for fr = 1:length(activeFreq)
+            signFrag = signFrag + abs(coef(fr))*cos(2*pi*freq(fr)*t + angle(coef(fr)));
+        end
+        signal(startInd:end, activeChan(ch)) = signFrag;
+    end
+    
+    signal(abs(signal) > 1) = sign(signal(abs(signal) > 1));
+    step(audWriterObj, single(signal))
+    fprintf('pulse = %d/%d\n', p, numPulses);
+end
+
 
 % % Debug
 ax = axes(figure);
@@ -238,7 +348,7 @@ if ~simulatedReproduction
 % 
 %         info = audioinfo(filename);
 
-        samplesPerFrame = sampleRate*2;
+        samplesPerFrame = sampleRate;
         numRecChann = 1;
         numFrames = ceil(info.TotalSamples/samplesPerFrame);
         
@@ -247,7 +357,7 @@ if ~simulatedReproduction
         signProv.SamplesPerFrame = samplesPerFrame; % The maximum an audioDeviceWriter allows
 
         playRec = audioPlayerRecorder;
-        playRec.SampleRate = sampleRate;
+        playRec.SampleRate = 44100; % sampleRate;
         
         y = zeros(numFrames*samplesPerFrame, numRecChann);
         x = zeros(numFrames*samplesPerFrame, info.NumChannels);
@@ -256,7 +366,8 @@ if ~simulatedReproduction
         ind = 1-samplesPerFrame:0;
         for fr = 1:numFrames
             x_curr = step(signProv);
-            [y_curr, numUnderruns(fr), numOverruns(fr)] = step(playRec, x_curr(:, [1 2]));
+            x_curr = resample(x_curr, 4, 1);
+            [y_curr, numUnderruns(fr), numOverruns(fr)] = step(playRec, x_curr);
             ind = ind + samplesPerFrame;
             x(ind, :) = x_curr;
             y(ind, :) = y_curr;
