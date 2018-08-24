@@ -25,7 +25,7 @@ printfig(ax.Parent, imagesPath, 'PruebaB', 'svg');
 
 h = figure;
 ax = axes(h);
-% plot(ax, cos(0:0.1:2*pi));
+plot(ax, cos(0:0.1:2*pi));
 ax.Title.String = 'titulo';
 ax.Title.Interpreter = 'none';
 ax.XLabel.String = 'Eje x';
@@ -34,4 +34,13 @@ legend(ax, 'hopoa')
 colorbar
 
 options.TickLabels2Latex = false;
+Plot2LaTeX(h, [imagesPath, 'pruebaPlot2LaTeXfalse'], options)
+
+options.TickLabels2Latex = true;
 Plot2LaTeX(h, [imagesPath, 'pruebaPlot2LaTeX'], options)
+
+
+h2 = copyobj(h, 0);
+hBackup = copyobj(h, 0);
+delete(h2.Children)
+copyobj(hBackup.Children, h2)

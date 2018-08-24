@@ -155,6 +155,7 @@ end
 % executing the function ChangeInterpreter, the saved svg makes number as
 % paths. But after executing it, it exports all the text as text. It is a
 % line of future research.
+h = copyobj(h, 0); % Don't touch original
 
 h2 = copyobj(h, 0);
 
@@ -317,8 +318,12 @@ if TickLabelToLatex
     end
 else
     for k = 1:length(AxeObj)
+        XLabelPos = AxeObj(k).XLabel.Position;
+        YLabelPos = AxeObj(k).YLabel.Position;
         AxeObj(k).XTickLabel = [];
         AxeObj(k).YTickLabel = [];
+        AxeObj(k).XLabel.Position = XLabelPos;
+        AxeObj(k).YLabel.Position = YLabelPos;
     end
 end
 
@@ -459,6 +464,8 @@ if exist([filename,'.pdf'],'file')~= 2 || exist([filename,'.pdf_tex'],'file')~= 
 end
 
 %% Restore figure in matlab
+oldWay = false;
+if oldWay
 % for nicety replace labels with the original text
 Step = Step + 1;
 waitbar(Step/nStep,hWaitBar,'Restoring Matlab figure');
@@ -515,6 +522,9 @@ end
 
 % restore interpreter
 ChangeInterpreter(gcf,'Latex')
+else
+    delete(h)
+end
 
 close(hWaitBar);
 end
