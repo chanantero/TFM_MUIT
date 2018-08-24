@@ -88,26 +88,26 @@ signalFunction = @(startSample, endSample) pulseCoefMat2signal(coefMat, pulseLim
 % obj.WFSToolObj.reproduceSignalFunction(signalFunction, sampleRate);
 % So, it is better to read from file
 
-% Write into file
-audWriterObj = dsp.AudioFileWriter;
-audWriterObj.Filename = [dataPathName, 'test', ID, '.wav'];
-audWriterObj.SampleRate = sampleRate;
-audWriterObj.DataType = 'single';
-
-sampIni = 1;
-sampPerFrame = sampleRate;
-sampEnd = sampIni + sampPerFrame - 1;
-outOfRange = false;
-count = 0; maxCount = ceil(pulseLimits(end)*sampleRate/sampPerFrame);
-while outOfRange ~= 1
-    [signal, outOfRange] = signalFunction(sampIni, sampEnd);
-    sampIni = sampIni + sampPerFrame;
-    sampEnd = sampEnd + sampPerFrame;
-    signal(abs(signal) > 1) = sign(signal(abs(signal) > 1));
-    step(audWriterObj, single(signal))
-    count = count + 1;
-    fprintf('count = %d/%d\n', count, maxCount);
-end
+% % Write into file
+% audWriterObj = dsp.AudioFileWriter;
+% audWriterObj.Filename = [dataPathName, 'test', ID, '.wav'];
+% audWriterObj.SampleRate = sampleRate;
+% audWriterObj.DataType = 'single';
+% 
+% sampIni = 1;
+% sampPerFrame = sampleRate;
+% sampEnd = sampIni + sampPerFrame - 1;
+% outOfRange = false;
+% count = 0; maxCount = ceil(pulseLimits(end)*sampleRate/sampPerFrame);
+% while outOfRange ~= 1
+%     [signal, outOfRange] = signalFunction(sampIni, sampEnd);
+%     sampIni = sampIni + sampPerFrame;
+%     sampEnd = sampEnd + sampPerFrame;
+%     signal(abs(signal) > 1) = sign(signal(abs(signal) > 1));
+%     step(audWriterObj, single(signal))
+%     count = count + 1;
+%     fprintf('count = %d/%d\n', count, maxCount);
+% end
 
 % Reproduce
 IDload = 'Lab_23-08-2018';
@@ -221,7 +221,7 @@ plot(ax, signalEx(:, 1))
 %% Reproduce and record frequency response test signal
 tic;
 % Load frequency response test signal parameters
-IDload = '2018-08-12_12-56-46';
+IDload = '2018-08-24_19-23-00';
 signalStructLoaded = load([dataPathName, 'signalStruct_', IDload, '.mat']);
 freqStep = signalStructLoaded.freqs(2) - signalStructLoaded.freqs(1);
 T = 1/freqStep;
