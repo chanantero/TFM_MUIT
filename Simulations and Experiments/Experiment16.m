@@ -84,7 +84,57 @@ signalFunction = @(startSample, endSample) pulseCoefMat2signal(coefMat, pulseLim
 % ax = axes(figure);
 % plot(ax, signalFunction(0, 44100*2))
 
-obj.WFSToolObj.reproduceSignalFunction(signalFunction, sampleRate);
+% Next line produces underruns
+% obj.WFSToolObj.reproduceSignalFunction(signalFunction, sampleRate);
+% So, it is better to read from file
+
+% Write into file
+audWriterObj = dsp.AudioFileWriter;
+audWriterObj.Filename = [dataPathName, 'test', ID, '.wav'];
+audWriterObj.SampleRate = sampleRate;
+audWriterObj.DataType = 'single';
+
+sampIni = 1;
+sampPerFrame = sampleRate;
+sampEnd = sampIni + sampPerFrame - 1;
+outOfRange = false;
+count = 0; maxCount = ceil(pulseLimits(end)*sampleRate/sampPerFrame);
+while outOfRange ~= 1
+    [signal, outOfRange] = signalFunction(sampIni, sampEnd);
+    sampIni = sampIni + sampPerFrame;
+    sampEnd = sampEnd + sampPerFrame;
+    signal(abs(signal) > 1) = sign(signal(abs(signal) > 1));
+    step(audWriterObj, single(signal))
+    count = count + 1;
+    fprintf('count = %d/%d\n', count, maxCount);
+end
+
+% Reproduce
+IDload = 'Lab_23-08-2018';
+filename = [dataPathName, 'test', IDload, '.wav'];
+info = audioinfo(filename);
+sampleRate = info.SampleRate;
+
+samplesPerFrame = sampleRate*2;
+numRecChann = 1;
+numFrames = ceil(info.TotalSamples/samplesPerFrame);
+
+signProv = signalProvider;
+signProv.FileName = filename;
+signProv.SamplesPerFrame = samplesPerFrame; % The maximum an audioDeviceWriter allows
+
+% Reproduce with audioDeviceWriter object
+deviceWriter = audioDeviceWriter;
+deviceWriter.SampleRate = sampleRate;
+deviceWriter.Driver = 'ASIO';
+deviceWriter.Device = 'MOTU PCI ASIO';
+deviceWriter.ChannelMappingSource = 'Property';
+
+while ~isDone(signProv)
+    x = step(signProv);
+    step(deviceWriter, x);
+end
+release(deviceWriter)
 
 %% Generate frequency response signal
 
@@ -130,35 +180,18 @@ pulseStart = silenceBetweenPulses + (pulseDur + silenceBetweenPulses)*(0:numChan
 pulseEnd = pulseStart + pulseDur;
 pulseLimits = [pulseStart, pulseEnd];
 
+sampleRate = 44100;
+
 signalStruct = struct('coefMat', coefMat, 'freqs', freqs, 'pulseLimits', pulseLimits, 'numSimultChan', numSimultChan, 'freqInd', freqInd);
 
-sampleRate = 44100/4;
+% Write signal into file
 signalFunction = @(startSample, endSample) pulseCoefMat2signal(coefMat, pulseLimits,...
     freqs, sampleRate, startSample, endSample, 'type_pulseLimits', 'time');
 
-% Write signal into file
 audWriterObj = dsp.AudioFileWriter;
 audWriterObj.Filename = [dataPathName, 'acousticPathReprodSignal_', ID, '.wav'];
 audWriterObj.SampleRate = sampleRate;
 audWriterObj.DataType = 'single';
-
-% % Debug
-% audReaderObj = dsp.AudioFileReader;
-% filename = 'C:\Users\Rubén\Music\Salsa\Flor Pálida - Marc Anthony.mp3';
-% audReaderObj.Filename = filename;
-% audReaderObj.SamplesPerFrame = audReaderObj.SampleRate;
-% 
-% audWriterObj.SampleRate = audReaderObj.SampleRate;
-% 
-% count = 0;
-% while ~isDone(audReaderObj)
-%     signal = step(audReaderObj);
-%     step(audWriterObj, single(signal));
-%     count = count + 1;
-% end
-% 
-% release(audReaderObj)
-% release(audWriterObj);
 
 sampIni = 1;
 sampPerFrame = sampleRate;
@@ -183,6 +216,7 @@ signalEx = signalFunction(sampleRate*3, sampleRate*10);
 plot(ax, signalEx(:, 1))
 % [ax.Children(:).Visible] = deal('off');
 % ax.Children(1).Visible = 'on';
+
 
 %% Reproduce and record frequency response test signal
 tic;
