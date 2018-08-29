@@ -5,12 +5,14 @@
 % Measures on the GTAC listening room. Reproduction and recording.
 
 %% Preamble
-pathSetUp;
 
-imagesPath = 'C:\Users\Rubén\Google Drive\Telecomunicación\Máster 2º Curso 2015-2016\TFM MUIT\Documentos\TFM\Img\';
+paths = genpath('./');
+addpath(paths);
 
-dataPathName = [globalPath, 'Data\'];
-ID = datestr(now, 'yyyy-mm-dd_HH-MM-SS');
+imagesPath = 'Img/';
+
+dataPathName = 'Data/'; % [globalPath, 'Data\'];
+ID = 'Lab_29-08-2018'; %datestr(now, 'yyyy-mm-dd_HH-MM-SS');
 
 %% System set up.
 obj = SimulationController;
@@ -128,12 +130,16 @@ deviceWriter = audioDeviceWriter;
 deviceWriter.SampleRate = sampleRate;
 deviceWriter.Driver = 'ASIO';
 deviceWriter.Device = 'MOTU PCI ASIO';
-deviceWriter.ChannelMappingSource = 'Property';
+% deviceWriter.ChannelMappingSource = 'Property';
 
+count = 0;
 while ~isDone(signProv)
     x = step(signProv);
     step(deviceWriter, x);
+    count = count + 1;
+    fprintf('%d\n', count);
 end
+release(signProv)
 release(deviceWriter)
 
 %% Generate frequency response signal
@@ -147,8 +153,8 @@ release(deviceWriter)
 
 % Generate signals
 numTotalChan = 96;
-numSimultChan = 24; % Number of simultaneous channels reproducing
-freqRange = [20, 950]; % Hz. It's a user preference, but it's not going to be exactly respectd
+numSimultChan = 4; % Number of simultaneous channels reproducing
+freqRange = [20, 1200]; % Hz. It's a user preference, but it's not going to be exactly respectd
 freqStep = 1; % Hz
 freqStepChan = freqStep*numSimultChan; % Frequency step of each channel
 numBlocks = ceil((freqRange(2) - freqRange(1))/freqStepChan);
@@ -172,9 +178,9 @@ end
 % coefficients in order to avoid saturation, and then compensate it by
 % measuring during more time
 maxPossible = repmat(sum(abs(coefMat), 3), [1, 1, numFreqs]);
-coefMat(maxPossible ~= 0) = coefMat(maxPossible ~= 0)./maxPossible(maxPossible ~= 0);
+coefMat(maxPossible ~= 0) = 0.5*coefMat(maxPossible ~= 0)./maxPossible(maxPossible ~= 0);
 
-pulseDur = (1/freqStep)*10 + 2;
+pulseDur = (1/freqStep)*5 + 2;
 silenceBetweenPulses = 3;
 pulseStart = silenceBetweenPulses + (pulseDur + silenceBetweenPulses)*(0:numChanBlocks-1)';
 pulseEnd = pulseStart + pulseDur;
@@ -219,9 +225,9 @@ plot(ax, signalEx(:, 1))
 
 
 %% Reproduce and record frequency response test signal
-tic;
+
 % Load frequency response test signal parameters
-IDload = '2018-08-24_19-23-00';
+IDload = 'Lab_29-08-2018';
 signalStructLoaded = load([dataPathName, 'signalStruct_', IDload, '.mat']);
 freqStep = signalStructLoaded.freqs(2) - signalStructLoaded.freqs(1);
 T = 1/freqStep;
@@ -235,7 +241,7 @@ filename = [dataPathName, 'acousticPathReprodSignal_', IDload, '.wav'];
 info = audioinfo(filename);
 sampleRate = info.SampleRate;
 
-simulatedReproduction = true;
+simulatedReproduction = false;
 if ~simulatedReproduction
     audioPlayerRecorderEnabled = strcmp(version('-release'), '2018a');
     if ~audioPlayerRecorderEnabled
@@ -273,7 +279,7 @@ if ~simulatedReproduction
 %         info = audioinfo(filename);
 
         samplesPerFrame = sampleRate*2;
-        numRecChann = 1;
+        numRecChann = 2;
         numFrames = ceil(info.TotalSamples/samplesPerFrame);
         
         signProv = signalProvider;
@@ -281,7 +287,9 @@ if ~simulatedReproduction
         signProv.SamplesPerFrame = samplesPerFrame; % The maximum an audioDeviceWriter allows
 
         playRec = audioPlayerRecorder;
+        playRec.Device = 'MOTU PCI ASIO';
         playRec.SampleRate = sampleRate;
+        playRec.RecorderChannelMapping = 1:numRecChann;
         
         y = zeros(numFrames*samplesPerFrame, numRecChann);
         x = zeros(numFrames*samplesPerFrame, info.NumChannels);
@@ -290,7 +298,7 @@ if ~simulatedReproduction
         ind = 1-samplesPerFrame:0;
         for fr = 1:numFrames
             x_curr = step(signProv);
-            [y_curr, numUnderruns(fr), numOverruns(fr)] = step(playRec, x_curr(:, [1 2]));
+            [y_curr, numUnderruns(fr), numOverruns(fr)] = step(playRec, x_curr);
             ind = ind + samplesPerFrame;
             x(ind, :) = x_curr;
             y(ind, :) = y_curr;
@@ -300,7 +308,7 @@ if ~simulatedReproduction
         release(signProv)
             
         numSamp = size(y, 1);
-        cor = xcorr(mean(x(:,[1 2]), 2), y, 'unbiased');
+        cor = xcorr(mean(x, 2), y(:,1), 'biased');
         ax = axes(figure);
         plot(ax, cor)
         centerCor = numSamp;
@@ -387,7 +395,9 @@ end
 
 % Crop signal with an adequate duration
 numMicros = size(recSignal, 1);
-margin = 1;
+margin = 0.5;
+
+% [signal, Fs] = audioread(filename, 'native'); % audioread(filename, [sampIni, sampEnd])
 
 numPulses = size(pulseLimits, 1);
 transSpec = zeros(numChannels, numFreqs);
@@ -402,8 +412,10 @@ for p = 1:numPulses
     
     % Calculate the transmitted signals spectra
     activeChannels = find(any(coefMat(p, :, :) ~= 0, 3)); % Active channels in this pulse
+    fragmentAllChann = audioread(filename, [startIndex, endIndex], 'native');
     for c = 1:length(activeChannels)
-        fragment = signal(startIndex:endIndex, activeChannels(c));
+%         fragment = signal(startIndex:endIndex, activeChannels(c));
+        fragment = fragmentAllChann(:, activeChannels(c));
         transSpec(activeChannels(c), :) = freqz(fragment, 1, freqs, sampleRate);
     end
     
@@ -417,6 +429,8 @@ for p = 1:numPulses
             recSpec(m, c, activeFreq) = X(activeFreq);
         end       
     end
+    
+    fprintf('%d/%d\n', p, numPulses);
 end
 FR = recSpec./repmat(permute(transSpec, [3 1 2]), [numMicros, 1, 1]);
 % Compensate for desynchronization between the transmitted signals and the
@@ -469,12 +483,21 @@ for m = 1:numMicros
         FRint(m, c, :) = magn.*exp(1i*phase);
     end
 end
-toc1 = toc;
+
+% save([dataPathName, 'acousticPathRecordSignal_', ID, '.mat'], 'IDload', 'recSignal', 'FR')
 %% Estimation of results based on measured acoustic path responses
 
 % ---- No optimization ----
 % Set parameters
-NSpositions = [3.35 -0.2 0]; % Assumed real position
+% Calculate noise source position based on distances measured in the lab
+w = 0.2;
+d = 0.184;
+L = 1.034;
+alpha = 45;
+x = 8*0.18 + w*sind(alpha) + d*cosd(alpha) + L*sind(alpha);
+y = 0 - w*cosd(alpha) + d*sind(alpha) - L*cosd(alpha);
+NSpositions = [x y 0]; % Assumed real position
+
 amplitude = 1;
 phase = 0;
 freqFilters = {};
@@ -529,6 +552,7 @@ if simulScriptFlag
     ax = axes(figure);
     plot(ax, freqs, 10*log10(gainAver));
     plot(ax, freqs, abs(corrFactAver))
+    plot(ax, freqs, unwrap(angle(corrFactAver)))
     
 else
 
@@ -583,7 +607,8 @@ sel = freqs >= minFreq & freqs <= maxFreq;
 fieldWFSaux = recWFScoef(:, sel);
 fieldNSaux = recNScoef(:, sel);
 corrFact = -fieldWFSaux(:)\fieldNSaux(:);
-corrVol = real(corrFact);
+corrFactComp = -fieldNSaux./fieldWFSaux;
+plot(ax, freqs(sel), abs(corrFactComp))
 
 sSimulCorrVol = sSimul;
 for f = 1:numFreqs
@@ -615,7 +640,7 @@ t = (0:length(NSsignal)-1)/sampleRate;
 % Frequency filters
 magnFiltOrder = 2^12;
 hilbertFiltOrder = 2^12;
-[freqFilter, freqFiltDelay] = getFrequencyFilter(magnFiltOrder, hilbertFiltOrder, sampleRate);
+[freqFilter, freqFiltDelay] = getFrequencyFilter(magnFiltOrder, hilbertFiltOrder, sampleRate, 'analytical', true);
 obj.WFSToolObj.freqFilter = freqFilter;
 % Debug
 % freqFilterResp = freqz(freqFilter, 1, freqs, sampleRate);
@@ -645,32 +670,78 @@ if ~simulatedReproduction
     customSignal(:, nsIndDest) = NSsignal(:);
     customSignal(:, wfsIndDest) = obj.WFScoef(wfsIndOrig, :).';
     
-    repRecObj = reproductorRecorder;
-    repRecObj.setProps('mode', originType('custom'), 1);
-    repRecObj.setProps('enableProc', false);
-    repRecObj.setProps('Fs_player', sampleRate, 1);
-    repRecObj.setProps('Fs_recorder', sampleRate, 1);
+%     repRecObj = reproductorRecorder;
+%     repRecObj.setProps('mode', originType('custom'), 1);
+%     repRecObj.setProps('enableProc', false);
+%     repRecObj.setProps('Fs_player', sampleRate, 1);
+%     repRecObj.setProps('Fs_recorder', sampleRate, 1);
+    
+    samplesPerFrame = sampleRate*2;
+    numFrames = ceil(numSamp/samplesPerFrame);
+
+    playRec = audioPlayerRecorder;
+    playRec.SampleRate = sampleRate;
+    playRec.Device = 'MOTU PCI ASIO';
+    numRecChann = 2;
+    playRec.RecorderChannelMapping = 1:numRecChann;
+    
+    signProv = signalProvider;
+    signProv.mode = originType('custom');
+    signProv.SamplesPerFrame = samplesPerFrame;
     
 % ---- No optimization ----
     
     % - Only noise source
     aux = customSignal;
     aux(:, wfsIndDest) = 0;
-    repRecObj.setProps('customSignal', aux, 1);
-    repRecObj.executeOrder('play');
-    recSignalNS = repRecObj.recorded{1}.';
+%     repRecObj.setProps('customSignal', aux, 1);
+%     repRecObj.executeOrder('play');
+%     recSignalNS = repRecObj.recorded{1}.';
+    signProv.customSignal = aux;
+    recSignalNS = zeros(numSamp, numRecChann);
+    ind = 1-samplesPerFrame:0;
+    for fr = 1:numFrames
+        x = step(signProv);
+        ind = ind + samplesPerFrame;
+        recSignalNS(ind, :) = step(playRec, x);
+    end
+    release(signProv)
+    release(playRec)
+    recSignalNS = recSignalNS';
     
     % - Only WFS
     aux = customSignal;
     aux(:, nsIndDest) = 0;
-    repRecObj.setProps('customSignal', aux);
-    repRecObj.executeOrder('play');
-    recSignalWFS = repRecObj.recorded{1}.';
-    
+%     repRecObj.setProps('customSignal', aux);
+%     repRecObj.executeOrder('play');
+%     recSignalWFS = repRecObj.recorded{1}.';
+    signProv.customSignal = aux;
+    recSignalWFS = zeros(numSamp, numRecChann);
+    ind = 1-samplesPerFrame:0;
+    for fr = 1:numFrames
+        ind = ind + samplesPerFrame;
+        x = step(signProv);
+        recSignalWFS(ind, :) = step(playRec, x);
+    end
+    release(signProv)
+    release(playRec)
+    recSignalWFS = recSignalWFS';
+
     % - All
-    repRecObj.setProps('customSignal', customSignal);
-    repRecObj.executeOrder('play');
-    recSignal = repRecObj.recorded{1}.';
+%     repRecObj.setProps('customSignal', customSignal);
+%     repRecObj.executeOrder('play');
+%     recSignal = repRecObj.recorded{1}.';
+    signProv.customSignal = customSignal;
+    recSignal = zeros(numSamp, numRecChann);
+    ind = 1-samplesPerFrame:0;
+    for fr = 1:numFrames
+        ind = ind + samplesPerFrame;
+        x = step(signProv);
+        recSignal(ind, :) = step(playRec, x);
+    end
+    release(signProv)
+    release(playRec)
+    recSignal = recSignal';
     
 % ---- Optimized volume ----
     customSignal(:, wfsIndDest) = corrVol*obj.WFScoef(wfsIndOrig, :).';
@@ -784,8 +855,8 @@ else
     
 end
 
-% save([dataPathName, 'recSignals_', ID, '.mat'], 'recSignalNS', 'recSignalWFS', 'recSignal', ...
-%     'recSignalNScorrVol', 'recSignalWFScorrVol', 'recSignalCorrVol');
+save([dataPathName, 'recSignals_', ID, '.mat'], 'recSignalNS', 'recSignalWFS', 'recSignal')%, ...
+    %'recSignalNScorrVol', 'recSignalWFScorrVol', 'recSignalCorrVol');
 
 %% Comparison of measures and estimations. They should be similar.
 % IDload = '2018-08-21_16-06-40';
@@ -797,9 +868,9 @@ oper = @(x) freqz(x, 1, freqs, sampleRate);
 recNS = oneDimOperOverMultiDimArray(oper, recSignalNS, 2);
 recWFS = oneDimOperOverMultiDimArray(oper, recSignalWFS, 2);
 rec = oneDimOperOverMultiDimArray(oper, recSignal, 2);
-recNScorrVol = oneDimOperOverMultiDimArray(oper, recSignalNScorrVol , 2);
-recWFScorrVol = oneDimOperOverMultiDimArray(oper, recSignalWFScorrVol , 2);
-recCorrVol  = oneDimOperOverMultiDimArray(oper, recSignalCorrVol , 2);
+% recNScorrVol = oneDimOperOverMultiDimArray(oper, recSignalNScorrVol , 2);
+% recWFScorrVol = oneDimOperOverMultiDimArray(oper, recSignalWFScorrVol , 2);
+% recCorrVol  = oneDimOperOverMultiDimArray(oper, recSignalCorrVol , 2);
 
 obj.domain = 'frequency';
 sExp = repmat(obj.generateBasicExportStructure, numFreqs, 1);
@@ -810,22 +881,22 @@ for f = 1:numFreqs
     sExp(f).recWFScoef = recWFS(:, f);
     sExp(f).Frequency = freqs(f);
     
-    sExpCorrVol(f).recCoef = recCorrVol(:, f);
-    sExpCorrVol(f).recNScoef = recNScorrVol(:, f);
-    sExpCorrVol(f).recWFScoef = recWFScorrVol(:, f);
-    sExpCorrVol(f).Frequency = freqs(f);
+%     sExpCorrVol(f).recCoef = recCorrVol(:, f);
+%     sExpCorrVol(f).recNScoef = recNScorrVol(:, f);
+%     sExpCorrVol(f).recWFScoef = recWFScorrVol(:, f);
+%     sExpCorrVol(f).Frequency = freqs(f);
 end
 [sExt, corrFactInd, corrFactGlob, gainInd, gainGlob, corrFactAver, gainAver] =...
         SimulationController.addCancellationParametersToStructure(sExp); 
-[sExtCorrVol, corrFactIndCorrVol, corrFactGlobCorrVol, gainIndCorrVol, gainGlobCorrVol, corrFactAverCorrVol, gainAverCorrVol] =...
-        SimulationController.addCancellationParametersToStructure(sExpCorrVol);
+% [sExtCorrVol, corrFactIndCorrVol, corrFactGlobCorrVol, gainIndCorrVol, gainGlobCorrVol, corrFactAverCorrVol, gainAverCorrVol] =...
+%         SimulationController.addCancellationParametersToStructure(sExpCorrVol);
     
 % Compare it with the simulated one according to the measured acoustic
 % paths
 [sExtSimul, corrFactIndSimul, corrFactGlobSimul, gainIndSimul, gainGlobSimul, corrFactAverSimul, gainAverSimul] =...
         SimulationController.addCancellationParametersToStructure(sSimul);
-[sExtSimulCorrVol, corrFactIndSimulCorrVol, corrFactGlobSimulCorrVol, gainIndSimulCorrVol, gainGlobSimulCorrVol, corrFactAverSimulCorrVol, gainAverSimulCorrVol] =...
-        SimulationController.addCancellationParametersToStructure(sSimulCorrVol);
+% [sExtSimulCorrVol, corrFactIndSimulCorrVol, corrFactGlobSimulCorrVol, gainIndSimulCorrVol, gainGlobSimulCorrVol, corrFactAverSimulCorrVol, gainAverSimulCorrVol] =...
+%         SimulationController.addCancellationParametersToStructure(sSimulCorrVol);
 
 ax = axes(figure, 'NextPlot', 'Add');
 plot(ax, freqs, 10*log10(gainAver))
@@ -833,11 +904,11 @@ plot(ax, freqs, 10*log10(gainAverSimul))
 ax.XLabel.String = 'Frequency (Hz)';
 ax.YLabel.String = 'Average gain (dB)';
 
-ax = axes(figure, 'NextPlot', 'Add');
-plot(ax, freqs, 10*log10(gainAverCorrVol))
-plot(ax, freqs, 10*log10(gainAverSimulCorrVol))
-ax.XLabel.String = 'Frequency (Hz)';
-ax.YLabel.String = 'Average gain (dB)';
+% ax = axes(figure, 'NextPlot', 'Add');
+% plot(ax, freqs, 10*log10(gainAverCorrVol))
+% plot(ax, freqs, 10*log10(gainAverSimulCorrVol))
+% ax.XLabel.String = 'Frequency (Hz)';
+% ax.YLabel.String = 'Average gain (dB)';
 
 % % Debug
 % % The received signal spectrum from the noise source is the same

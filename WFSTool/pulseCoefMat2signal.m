@@ -168,7 +168,7 @@ for p = 1:numPulses
     %     windMask = ones(numPulseSamples, 1); % Uniform window
     indSampMask = wholePulseLimits(p,1):wholePulseLimits(p,2)-1;
     windMask = windowing('HanningModRisingDuration', length(indSampMask), sampleRate, 0.1);
-    [flag, flagInd] = ismember(indSampMask, ind);
+    [flag, flagInd] = ismember(indSampMask, ind + offsetSample);
     windMaskAdapted = zeros(size(t));
     windMaskAdapted(flagInd(flag)) = windMask(flag);
     
