@@ -790,3 +790,505 @@ ax.Title.String = ['f = ', num2str(f0), ' Hz'];
 colorbar(ax);
 
 printfig(ax.Parent, imagesPath, 'Experiment12_simpleDelay500', 'eps')
+
+%% Test ANALYTICAL magnitude filter. How does number of coefficients and performance relate?
+magnFiltOrder = 2.^(2:9);
+Nmag = length(magnFiltOrder);
+phaseFiltOrder = 2^14;
+fs = 44100;
+c = 340;
+hMags = cell(Nmag, 1);
+delaysMag = zeros(Nmag, 1);
+for k = 1:Nmag
+    [hMag, delayMag] = getFrequencyFilter( magnFiltOrder(k), [], fs, 'analytical', false );
+    hMags{k} = hMag;
+    delaysMag(k) = delayMag;
+end
+% hPha = hHilbert;
+[hPha, delayPhase] = getFrequencyFilter( [], phaseFiltOrder, fs, 'analytical', true );
+
+hTotals = cell(Nmag, 1);
+delays = zeros(Nmag, 1);
+for n = 1:Nmag  
+    hTotal = conv(hPha, hMags{n});
+    delay = delaysMag(n) + delayPhase;
+    
+    hTotals{n} = hTotal;
+    delays(n) = delay;
+end
+
+% Filter variables for the time WFS filter. Creation of frequency filters
+% with different orders.  
+freqFilters = hTotals;
+freqFiltDelays = delays;
+
+fRep = -1000:1000;
+
+axHilb = axes(figure, 'NextPlot', 'Add');
+axHilb.XLim = [-1000, 1000];
+axHilb.XLabel.String = 'Frequency (Hz)';
+axHilb.YLim = [0 2];
+axHilb.YLabel.String = '|H_{Hilb}(f)|';
+yyaxis(axHilb, 'right');
+axHilb.YLim = [-100 100];
+axHilb.YLabel.String = '$\angle{H_{Hilb}(f)}$'; axHilb.YLabel.Interpreter = 'latex';
+axHilb.Title.String = 'H_{Hilb}';
+% Hilbert
+HHilb = freqz(hHilbert, 1, fRep, fs);
+yyaxis(axHilb, 'left');
+plot(axHilb, fRep, abs(HHilb))
+yyaxis(axHilb, 'right');
+phaseShift = -delayHilbert/fs*2*pi*fRep;
+plot(axHilb, fRep, rad2deg(angle(HHilb.*exp(-1i*phaseShift))))
+
+ax = axes(figure, 'NextPlot', 'Add');
+ax.Title.String = 'H(f)';
+ax.XLim = [-1000, 1000];
+ax.XLabel.String = 'Frequency (Hz)';
+ax.YLim = [0, 4];
+ax.YLabel.String = '|H(f)|';
+yyaxis(ax, 'right')
+ax.YLim = [-100, 100];
+ax.YLabel.String = '$\angle{H(f)}$'; ax.YLabel.Interpreter = 'latex';
+
+axMag = axes(figure, 'NextPlot', 'Add');
+axMag.Title.String = 'H_{mag}';
+axMag.XLim = [-1000, 1000];
+axMag.XLabel.String = 'Frequency (Hz)';
+axMag.YLim = [0, 4];
+axMag.YLabel.String = '|H_{mag}|';
+yyaxis(axMag, 'right')
+axMag.YLim = [-180 180];
+axMag.YLabel.String = '$\angle{H_{mag}}$'; axMag.YLabel.Interpreter = 'latex';
+
+lMagsAbs = gobjects(Nmag, 1);
+lMagsPha = gobjects(Nmag, 1);
+lTotalAbs = gobjects(Nmag, 1);
+lTotalPha = gobjects(Nmag, 1);
+for n = 1:Nmag
+    % Magnitude Filter
+    hMag = hMags{n};
+    HMag = freqz(hMag, 1, fRep, fs);
+    yyaxis(axMag, 'left');
+    lMagsAbs(n) = plot(axMag, fRep, abs(HMag));
+    yyaxis(axMag, 'right');
+    phaseShift = -delaysMag(n)/fs*2*pi*fRep;
+    lMagsPha(n) = plot(axMag, fRep, rad2deg(angle(HMag.*exp(-1i*phaseShift))));
+    
+    % Total magnitude
+    Htotal = freqz(hTotals{n}, 1, fRep, fs);
+    yyaxis(ax, 'left')
+    lTotalAbs(n) = plot(ax, fRep, abs(Htotal));
+    yyaxis(ax, 'right')
+    phaseShift = -delays(n)/fs*2*pi*fRep;
+    pha = rad2deg(angle(Htotal.*exp(-1i*phaseShift)));
+    lTotalPha(n) = plot(ax, fRep, pha);
+end
+yyaxis(ax, 'left')
+plot(ax, fRep, sqrt(abs(fRep)/c));
+yyaxis(axMag, 'left')
+plot(axMag, fRep, sqrt(abs(fRep)/c))
+
+% aux = repmat({'-'}, Nmag, 1);
+% [lMagsAbs(1:Nmag).LineStyle] = aux{:};
+cmap = flipud(colorcube);
+color1 = cmap(9, :);
+color2 = cmap(14, :);
+cmapAbs = interp1([1,Nmag], [color1; color2], 1:Nmag);
+color1 = cmap(21, :);
+color2 = cmap(26, :);
+cmapPha = interp1([1,Nmag], [color1; color2], 1:Nmag);
+for n = 1:Nmag
+    lMagsAbs(n).Color = cmapAbs(n,:);
+    lMagsAbs(n).Marker = 'none';
+    lMagsAbs(n).LineStyle = '-';
+    
+    lMagsPha(n).Color = cmapPha(n,:);
+    lMagsPha(n).Marker = 'none';
+    lMagsPha(n).LineStyle = '-';
+    
+    lTotalAbs(n).Color = cmapAbs(n,:);
+    lTotalAbs(n).Marker = 'none';
+    lTotalAbs(n).LineStyle = '-';
+    
+    lTotalPha(n).Color = cmapPha(n,:);
+    lTotalPha(n).Marker = 'none';
+    lTotalPha(n).LineStyle = '-';
+end
+
+str = cell(Nmag, 1);
+for n = 1:Nmag
+    str{n} = ['N = ', num2str(magnFiltOrder(n))];
+end
+legend(ax, [str; {'Ideal'}])
+legend(axMag, [str; {'Ideal'}])
+
+%%% Simulation
+if ~exist('obj', 'var') || ~isvalid(obj)
+    obj = SimulationController;
+end
+
+% Constants
+WFSfilterLength = 22050;
+zPos = 1.65;
+WFSarrayOffset = [0.46 2.21 zPos]; % [x, y, z] coordinates. Useful for generating acoustic path IR.
+roomDim = [4.48, 9.13, 2.64];
+
+% Noise source coefficient
+amplitude = 1;
+phase = 0;
+
+% Microphone positions
+% Rectangular grid
+marginRatio = 0.6;
+numPointsX = 5;
+numPoinstY = 5;
+extRectXmin = min(obj.WFSposition(:, 1));
+extRectXmax = max(obj.WFSposition(:, 1));
+extRectYmin = min(obj.WFSposition(:, 2));
+extRectYmax = max(obj.WFSposition(:, 2));
+octagonRectPos = [extRectXmin, extRectYmin, extRectXmax - extRectXmin, extRectYmax - extRectYmin];
+gridXLength = octagonRectPos(3)*marginRatio;
+gridYLength = octagonRectPos(4)*marginRatio;
+centerX = (extRectXmax + extRectXmin)/2;
+centerY = (extRectYmax + extRectYmin)/2;
+gridMinX = centerX - gridXLength/2;
+gridMaxX = centerX + gridXLength/2;
+gridMinY = centerY - gridYLength/2;
+gridMaxY = centerY + gridYLength/2;
+xLim = [gridMinX, gridMaxX ]; yLim = [gridMinY, gridMaxY];
+x = linspace(xLim(1), xLim(2), numPointsX);
+y = linspace(yLim(1), yLim(2), numPoinstY);
+z = 0;
+[X, Y, Z] = ndgrid(x, y, z);
+recPositions = [X(:), Y(:), Z(:)];
+
+% Positions of the noise source
+% Quarter of a circle
+numPointsPerArc = 4;
+radius = [3.6 4 4.4 4.8];
+numArcs = numel(radius);
+xOctagon = obj.WFSposition(:, 1);
+yOctagon = obj.WFSposition(:, 2);
+centreX = (max(xOctagon) + min(xOctagon))/2;
+centreY = (max(yOctagon) + min(yOctagon))/2;
+alphaMax = pi/2;
+alphaMin = 0;
+alpha = linspace(alphaMin, alphaMax, numPointsPerArc)';
+x = centreX + repmat(radius, numPointsPerArc, 1).*repmat(cos(alpha), 1, numArcs);
+y = centreY + repmat(radius, numPointsPerArc, 1).*repmat(sin(alpha), 1, numArcs);
+NSpositions = [x(:), y(:), zeros(numel(x), 1)];
+
+% Frequencies
+freqs = 0:10:1000;
+
+% Room characteristics and impulse response of chamber
+beta = 0; % Average reflection coefficient of the walls of the chamber
+WFS_AcPath_previously_calculated = true;
+NS_AcPath_previously_calculated = true;
+appendFreeSpaceAcPaths = false;
+
+% WFS options
+frequencyCorrection = true;
+attenuationType = 'Ruben';
+
+% Simulation options
+timeDomainActive = true;
+fakeTimeProcessing = true;
+frequencyDomainActive = false;
+automaticLengthModification = false;
+saveSignals = true;
+
+SetupParametersScript
+AcousticPathCalculationScript
+simulationScript
+
+[sExt, corrFactInd, corrFactGlob, attenInd, attenGlob, corrFactAver, gainAver] =...
+    SimulationController.addCancellationParametersToStructure(s);
+
+% Average gain
+freqEdges = 0:20:1000;
+gainEdges = -20:5;
+vecs = {magnFiltOrder, freqs, 1:numNSpos};
+axGainAver = gobjects(numFreqFilters, 1);
+for k = 1:numFreqFilters
+    [~, gainAverCurrent] = filterArrayForRepresentation(vecs, gainAver, [2 3], 'nonIndepDimIndices', k);
+    ax = histogram2D(10*log10(gainAverCurrent), 1, freqs, freqEdges, gainEdges);
+    ax.XLabel.String = 'Frequency (Hz)';
+    ax.YLabel.String = 'Average Gain (dB)';
+    ax.Title.String = ['N = ', num2str(magnFiltOrder(k))];
+    colorbar(ax);
+    axGainAver(k) = ax;
+end
+
+% % Print
+% sel = 2:8;
+% for k = 1:numel(sel)
+%     printfig(axGainAver(sel(k)).Parent, imagesPath, ['Experiment12_GainAverMagnOrderAnalytical_', num2str(magnFiltOrder(sel(k)))], 'eps')
+% end
+% delaysMag/fs*c
+
+%% Test ANALYTICAL phase filter. How does number of coefficients and performance relate?
+magnFiltOrder = 2^11;
+phaseFiltOrder = 2.^([7, 12]);
+Nhil = length(phaseFiltOrder);
+fs = 44100;
+c = 340;
+hPhases = cell(Nhil, 1);
+delaysPha = zeros(Nhil, 1);
+for n = 1:Nhil
+    [hPhase, delayPha] = getFrequencyFilter( [], phaseFiltOrder(n), fs, 'analytical', true );
+    hPhases{n} = hPhase;
+    delaysPha(n) = delayPha;
+end
+[hMag, delayMag] = getFrequencyFilter( magnFiltOrder, [], fs, 'analytical', true );
+
+hTotals = cell(Nhil, 1);
+delays = zeros(Nhil, 1);
+for n = 1:Nhil
+    hPha = hPhases{n};
+    hTotal = conv(hPha, hMag);
+    delay = delaysPha(n) + delayMag;
+    
+    hTotals{n} = hTotal;
+    delays(n) = delay;
+end
+
+% Filter variables for the time WFS filter. Creation of frequency filters
+% with different orders.  
+freqFilters = hTotals;
+freqFiltDelays = delays;
+
+% Visualize filters response
+fRep = -1000:1000;
+
+axMag = axes(figure, 'NextPlot', 'Add');
+axMag.Title.String = 'H_{mag}';
+axMag.XLim = [-1000, 1000];
+axMag.XLabel.String = 'Frequency (Hz)';
+axMag.YLim = [0, 4];
+axMag.YLabel.String = '|H_{mag}|';
+yyaxis(axMag, 'right')
+axMag.YLim = [-180 180];
+axMag.YLabel.String = '$\angle{H_{mag}}$'; axMag.YLabel.Interpreter = 'latex';
+% Magnitude Filter
+HMag = freqz(hMag, 1, fRep, fs);
+yyaxis(axMag, 'left');
+plot(axMag, fRep, abs(HMag));
+yyaxis(axMag, 'right');
+phaseShift = -delayMag/fs*2*pi*fRep;
+plot(axMag, fRep, rad2deg(angle(HMag.*exp(-1i*phaseShift))));
+
+axHilb = axes(figure, 'NextPlot', 'Add');
+axHilb.XLim = [-1000, 1000];
+axHilb.XLabel.String = 'Frequency (Hz)';
+axHilb.YLim = [0 2];
+axHilb.YLabel.String = '|H_{Hilb}(f)|';
+yyaxis(axHilb, 'right');
+axHilb.YLim = [-100 100];
+axHilb.YLabel.String = '$\angle{H_{Hilb}(f)}$'; axHilb.YLabel.Interpreter = 'latex';
+axHilb.Title.String = 'H_{Hilb}';
+
+ax = axes(figure, 'NextPlot', 'Add');
+ax.Title.String = 'H(f)';
+ax.XLim = [-1000, 1000];
+ax.XLabel.String = 'Frequency (Hz)';
+ax.YLim = [0, 4];
+ax.YLabel.String = '|H(f)|';
+yyaxis(ax, 'right')
+ax.YLim = [-100, 100];
+ax.YLabel.String = '$\angle{H(f)}$'; ax.YLabel.Interpreter = 'latex';
+
+lHilbAbs = gobjects(Nmag, 1);
+lHilbPha = gobjects(Nmag, 1);
+lTotalAbs = gobjects(Nmag, 1);
+lTotalPha = gobjects(Nmag, 1);
+for n = 1:Nhil
+    % Hilbert
+    Hpha = freqz(hPhases{n}, 1, fRep, fs);
+    yyaxis(axHilb, 'left');
+    lHilbAbs(n) = plot(axHilb, fRep, abs(Hpha));
+    yyaxis(axHilb, 'right');
+    phaseShift = -delaysPha(n)/fs*2*pi*fRep;
+    lHilbPha(n) = plot(axHilb, fRep, rad2deg(angle(Hpha.*exp(-1i*phaseShift))));
+    
+    % Total magnitude
+    Htotal = freqz(hTotals{n}, 1, fRep, fs);
+    yyaxis(ax, 'left')
+    lTotalAbs(n) = plot(ax, fRep, abs(Htotal));
+    yyaxis(ax, 'right')
+    phaseShift = -delays(n)/fs*2*pi*fRep;
+    pha = rad2deg(angle(Htotal.*exp(-1i*phaseShift)));
+    lTotalPha(n) = plot(ax, fRep, pha);
+end
+
+% aux = repmat({'-'}, Nmag, 1);
+% [lMagsAbs(1:Nmag).LineStyle] = aux{:};
+cmap = flipud(colorcube);
+color1 = cmap(9, :);
+color2 = cmap(14, :);
+cmapAbs = interp1([1,Nhil], [color1; color2], 1:Nhil);
+color1 = cmap(21, :);
+color2 = cmap(26, :);
+cmapPha = interp1([1,Nhil], [color1; color2], 1:Nhil);
+for n = 1:Nhil
+    lHilbAbs(n).Color = cmapAbs(n,:);
+    lHilbAbs(n).Marker = 'none';
+    lHilbAbs(n).LineStyle = '-';
+    
+    lHilbPha(n).Color = cmapPha(n,:);
+    lHilbPha(n).Marker = 'none';
+    lHilbPha(n).LineStyle = '-';
+    
+    lTotalAbs(n).Color = cmapAbs(n,:);
+    lTotalAbs(n).Marker = 'none';
+    lTotalAbs(n).LineStyle = '-';
+    
+    lTotalPha(n).Color = cmapPha(n,:);
+    lTotalPha(n).Marker = 'none';
+    lTotalPha(n).LineStyle = '-';
+end
+
+str = cell(Nhil, 1);
+for n = 1:Nhil
+    str{n} = ['N = ', num2str(phaseFiltOrder(n))];
+end
+legend(ax, str)
+legend(axHilb, str)
+
+%%% Simulation %%%
+if ~exist('obj', 'var') || ~isvalid(obj) || ~isvalid(obj.ax)
+    obj = SimulationController;
+    obj.WFSToolObj.fig.HandleVisibility = 'off';
+end
+
+% Constants
+WFSfilterLength = 22050;
+zPos = 1.65;
+WFSarrayOffset = [0.46 2.21 zPos]; % [x, y, z] coordinates. Useful for generating acoustic path IR.
+roomDim = [4.48, 9.13, 2.64];
+
+% Noise source coefficient
+amplitude = 1;
+phase = 0;
+
+% Microphone positions
+% Rectangular grid
+marginRatio = 0.6;
+numPointsX = 5;
+numPoinstY = 5;
+extRectXmin = min(obj.WFSposition(:, 1));
+extRectXmax = max(obj.WFSposition(:, 1));
+extRectYmin = min(obj.WFSposition(:, 2));
+extRectYmax = max(obj.WFSposition(:, 2));
+octagonRectPos = [extRectXmin, extRectYmin, extRectXmax - extRectXmin, extRectYmax - extRectYmin];
+gridXLength = octagonRectPos(3)*marginRatio;
+gridYLength = octagonRectPos(4)*marginRatio;
+centerX = (extRectXmax + extRectXmin)/2;
+centerY = (extRectYmax + extRectYmin)/2;
+gridMinX = centerX - gridXLength/2;
+gridMaxX = centerX + gridXLength/2;
+gridMinY = centerY - gridYLength/2;
+gridMaxY = centerY + gridYLength/2;
+xLim = [gridMinX, gridMaxX ]; yLim = [gridMinY, gridMaxY];
+x = linspace(xLim(1), xLim(2), numPointsX);
+y = linspace(yLim(1), yLim(2), numPoinstY);
+z = 0;
+[X, Y, Z] = ndgrid(x, y, z);
+recPositions = [X(:), Y(:), Z(:)];
+
+% Positions of the noise source
+% Quarter of a circle
+numPointsPerArc = 4;
+radius = [3.6 4 4.4 4.8];
+numArcs = numel(radius);
+xOctagon = obj.WFSposition(:, 1);
+yOctagon = obj.WFSposition(:, 2);
+centreX = (max(xOctagon) + min(xOctagon))/2;
+centreY = (max(yOctagon) + min(yOctagon))/2;
+alphaMax = pi/2;
+alphaMin = 0;
+alpha = linspace(alphaMin, alphaMax, numPointsPerArc)';
+x = centreX + repmat(radius, numPointsPerArc, 1).*repmat(cos(alpha), 1, numArcs);
+y = centreY + repmat(radius, numPointsPerArc, 1).*repmat(sin(alpha), 1, numArcs);
+NSpositions = [x(:), y(:), zeros(numel(x), 1)];
+
+% Frequencies
+freqs = 0:10:1000;
+
+% % Signal
+% durSign = 1; % Duration of tone for time processing
+% t = (0:ceil(durSign*fs)-1)/fs;
+% NSsignal = chirp(t, 20, durSign, 940);
+% predefSignals = true;
+% saveSignals = true;
+
+% Room characteristics and impulse response of chamber
+beta = 0; % Average reflection coefficient of the walls of the chamber
+WFS_AcPath_previously_calculated = true;
+NS_AcPath_previously_calculated = true;
+appendFreeSpaceAcPaths = false;
+
+% WFS options
+frequencyCorrection = true;
+attenuationType = 'Ruben';
+
+% Simulation options
+timeDomainActive = true;
+fakeTimeProcessing = true;
+frequencyDomainActive = false;
+automaticLengthModification = false;
+
+SetupParametersScript
+AcousticPathCalculationScript
+simulationScript
+
+%%% Analysis
+[sExt, corrFactInd, corrFactGlob, attenInd, attenGlob, corrFactAver, averGain] =...
+    SimulationController.addCancellationParametersToStructure(s);
+
+freqEdges = 0:20:1000;
+attenEdges = -20:5;
+vecs = {phaseFiltOrder, freqs, 1:numNSpos};
+axGainAver = gobjects(numFreqFilters, 1);
+for k = 1:numFreqFilters
+    [~, averGainCurrent] = filterArrayForRepresentation(vecs, averGain, [2 3], 'nonIndepDimIndices', k);
+    ax = histogram2D(10*log10(averGainCurrent), 1, freqs, freqEdges, attenEdges);
+    ax.XLabel.String = 'Frequency (Hz)';
+    ax.YLabel.String = 'Average gain (dB)';
+    ax.Title.String = ['N = ', num2str(phaseFiltOrder(k))];
+    ax.Parent.Name = ['N = ', num2str(phaseFiltOrder(k))];
+    colorbar(ax);
+    axGainAver(k) = ax;
+end
+
+corrFactAbsEdges = 0:0.2:4;
+corrFactAngleEdges = -50:2:50;
+axCorrFactAverAbs = gobjects(numFreqFilters, 1);
+axCorrFactAverPha = gobjects(numFreqFilters, 1);
+for k = 1:numFreqFilters
+    [~, averCorrFactCurrent] = filterArrayForRepresentation(vecs, corrFactAver, [2 3], 'nonIndepDimIndices', k);
+    axAbs = histogram2D(abs(averCorrFactCurrent), 1, freqs, freqEdges, corrFactAbsEdges);
+    axAbs.XLabel.String = 'Frequency (Hz)';
+    axAbs.YLabel.String = 'Average correction factor (dB)';
+    axAbs.Title.String = ['N = ', num2str(phaseFiltOrder(k))];
+    axAbs.Parent.Name = ['N = ', num2str(phaseFiltOrder(k))];
+    colorbar(axAbs);
+    axCorrFactAverAbs(k) = axAbs;
+    
+    axPha = histogram2D(rad2deg(angle(averCorrFactCurrent)), 1, freqs, freqEdges, corrFactAngleEdges);
+    axPha.XLabel.String = 'Frequency (Hz)';
+    axPha.YLabel.String = 'Average correction factor phase';
+    axPha.Title.String = ['N = ', num2str(phaseFiltOrder(k))];
+    axPha.Parent.Name = ['N = ', num2str(phaseFiltOrder(k))];
+    colorbar(axPha);
+    axCorrFactAverPha(k) = axPha;
+end
+
+
+% Print
+% sel = 8:11;
+% for k = 1:numel(sel)
+%     printfig(axGainAver(sel(k)).Parent, imagesPath, ['Experiment12_gainAverPhaseOrderAnalytical_', num2str(phaseFiltOrder(sel(k)))], 'eps')
+% end
+% delaysHilb/fs*c

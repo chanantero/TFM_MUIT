@@ -173,5 +173,51 @@ ax2 = axes(figure);
 plot(f_fftshift, rad2deg(angle(fftshift(Htotal_compensated))))
 ax2.XLim = [-1000, 1000];
 
+%% FIR analytical
+% Frank Schutz. (2015). Sound Field Synthesis for Line Source Array Applications in Large-Scale Sound Reinforcement. Dissertation.
+% --- Magnitude Filter ---
+[hMag, delayMag] = getFrequencyFilter(256, [], 44100, 'analytical', true);
+ax = axes(figure);
+plot(ax, hMag)
+
+c = 340;
+freqs = 0:1500;
+Hmag = freqz(hMag, 1, freqs, 44100);
+
+ax = axes(figure, 'NextPlot', 'Add');
+plot(ax, freqs, abs(Hmag))
+plot(ax, freqs, sqrt(freqs/c))
+yyaxis(ax, 'right')
+plot(ax, freqs, rad2deg(wrapToPi(angle(Hmag) + 2*pi*freqs*delayMag)));
+
+% --- Phase Filter ---
+[hPha, delayPha] = getFrequencyFilter([], 1024, 44100, 'analytical', true);
+
+ax = axes(figure);
+plot(ax, hPha)
+
+c = 340;
+freqs = 0:1500;
+Hpha = freqz(hPha, 1, freqs, 44100);
+
+ax = axes(figure, 'NextPlot', 'Add');
+plot(ax, freqs, abs(Hpha))
+yyaxis(ax, 'right')
+plot(ax, freqs, rad2deg(wrapToPi(angle(Hpha) + 2*pi*freqs*delayPha)));
+
+% --- Total Filter ---
+[h, delay] = getFrequencyFilter(256, 256, 44100, 'analytical', true);
+
+c = 340;
+freqs = 0:1500;
+H = freqz(h, 1, freqs, 44100);
+
+ax = axes(figure, 'NextPlot', 'Add');
+plot(ax, freqs, abs(H))
+plot(ax, freqs, sqrt(freqs/c))
+yyaxis(ax, 'right')
+plot(ax, freqs, rad2deg(wrapToPi(angle(H) + 2*pi*freqs*delay)));
+
+delay*c
 
 
