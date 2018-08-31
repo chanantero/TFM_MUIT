@@ -178,7 +178,13 @@ classdef reproductorRecorder < matlab.System
             
             audioPlayerRecorderWorks = false;
             if audioPlayerRecorderWorks
-                
+                % To be completed
+                indPlay = obj.getActivePlayers();
+                numUnderrun = zeros(numPlayer, 1);
+                tics = uint64(zeros(numPlayer, 1)); % When does it finish processing?
+                for k = indPlay
+                    [obj.recorddedAP{k}, numUnderrun(k), tics(k)] = step(obj.player{k}, audioOutput{k});
+                end
             else
                 % Write to audio device buffer
                 indPlay = obj.getActivePlayers();

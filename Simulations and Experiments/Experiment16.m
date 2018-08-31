@@ -5,19 +5,18 @@
 % Measures on the GTAC listening room. Reproduction and recording.
 
 %% Preamble
-
-paths = genpath('./');
+globalPath = './';
+paths = genpath(globalPath);
 addpath(paths);
 
-imagesPath = 'Img/';
-
-dataPathName = 'Data/'; % [globalPath, 'Data\'];
-ID = 'Lab_29-08-2018'; %datestr(now, 'yyyy-mm-dd_HH-MM-SS');
+dataPathName = [globalPath, 'Data\'];
+ID = datestr(now, 'yyyy-mm-dd_HH-MM-SS');
 
 %% System set up.
 obj = SimulationController;
 obj.ax.Parent.HandleVisibility = 'off';
 obj.ax.HandleVisibility = 'off';
+obj.WFSToolObj.fig.HandleVisibility = 'off';
 
 % Estimate visually the noise source position.
 % Maket it reproduce with amplitude 1 and phase 0 in order to simplify
@@ -39,6 +38,7 @@ obj.WFSToolObj.noiseSourceChannelMapping(1) = NSchan;
 
 %% Test that loudspeakers reproduce in an adequate way
 
+% ---- Generate signal and save it into a file ----
 % User change this
 pulseDur = 1.5; % seconds
 pulseSolap = 0.5; % seconds
@@ -90,28 +90,28 @@ signalFunction = @(startSample, endSample) pulseCoefMat2signal(coefMat, pulseLim
 % obj.WFSToolObj.reproduceSignalFunction(signalFunction, sampleRate);
 % So, it is better to read from file
 
-% % Write into file
-% audWriterObj = dsp.AudioFileWriter;
-% audWriterObj.Filename = [dataPathName, 'test', ID, '.wav'];
-% audWriterObj.SampleRate = sampleRate;
-% audWriterObj.DataType = 'single';
-% 
-% sampIni = 1;
-% sampPerFrame = sampleRate;
-% sampEnd = sampIni + sampPerFrame - 1;
-% outOfRange = false;
-% count = 0; maxCount = ceil(pulseLimits(end)*sampleRate/sampPerFrame);
-% while outOfRange ~= 1
-%     [signal, outOfRange] = signalFunction(sampIni, sampEnd);
-%     sampIni = sampIni + sampPerFrame;
-%     sampEnd = sampEnd + sampPerFrame;
-%     signal(abs(signal) > 1) = sign(signal(abs(signal) > 1));
-%     step(audWriterObj, single(signal))
-%     count = count + 1;
-%     fprintf('count = %d/%d\n', count, maxCount);
-% end
+% Write into file
+audWriterObj = dsp.AudioFileWriter;
+audWriterObj.Filename = [dataPathName, 'test', ID, '.wav'];
+audWriterObj.SampleRate = sampleRate;
+audWriterObj.DataType = 'single';
 
-% Reproduce
+sampIni = 1;
+sampPerFrame = sampleRate;
+sampEnd = sampIni + sampPerFrame - 1;
+outOfRange = false;
+count = 0; maxCount = ceil(pulseLimits(end)*sampleRate/sampPerFrame);
+while outOfRange ~= 1
+    [signal, outOfRange] = signalFunction(sampIni, sampEnd);
+    sampIni = sampIni + sampPerFrame;
+    sampEnd = sampEnd + sampPerFrame;
+    signal(abs(signal) > 1) = sign(signal(abs(signal) > 1));
+    step(audWriterObj, single(signal))
+    count = count + 1;
+    fprintf('count = %d/%d\n', count, maxCount);
+end
+
+% ---- Reproduce ----
 IDload = 'Lab_23-08-2018';
 filename = [dataPathName, 'test', IDload, '.wav'];
 info = audioinfo(filename);
@@ -141,6 +141,137 @@ while ~isDone(signProv)
 end
 release(signProv)
 release(deviceWriter)
+
+%% Test that the OFDM and Chirp acoustic path estimation are equivalent
+
+% ---- OFDM Channel Estimation ----
+% Generate signal and write it into a file
+numTotalChan = 2;
+numSimultChan = 2; % Number of simultaneous channels reproducing
+freqRange = [20, 1200]; % Hz. It's a user preference, but it's not going to be exactly respectd
+freqStep = 1; % Hz
+pulseDurationInPeriods = 10;
+silenceBetweenPulses = 3;
+
+filename = [dataPathName, 'signalStructTestOFDM'];
+OFDMchannelEstimationSignal(numTotalChan, numSimultChan, freqRange, freqStep, pulseDurationInPeriods, silenceBetweenPulses, 'filename', filename);
+
+% Load frequency response test signal parameters
+IDload = 'signalStructTestOFDM';
+signalStructLoaded = load([dataPathName, IDload, '.mat']);
+pulseLimits = signalStructLoaded.pulseLimits;
+freqs = signalStructLoaded.freqs;
+filename = [dataPathName, IDload, '.wav'];
+info = audioinfo(filename);
+sampleRate = info.SampleRate;
+coefMat = signalStructLoaded.coefMat;
+
+% Reproduce and record
+samplesPerFrame = sampleRate*2;
+numRecChann = 2;
+numFrames = ceil(info.TotalSamples/samplesPerFrame);
+        
+signProv = signalProvider;
+signProv.FileName = filename;
+signProv.SamplesPerFrame = samplesPerFrame; % The maximum an audioDeviceWriter allows
+
+location = 'laboratory'; % laboratory/laptop
+
+playRec = audioPlayerRecorder;
+switch location
+    case 'laboratory'
+        playRec.Device = 'MOTU PCI ASIO';
+    case 'laptop'
+        playRec.Device = 'Default';
+        numRecChann = 1;
+end
+playRec.SampleRate = sampleRate;
+playRec.RecorderChannelMapping = 1:numRecChann;
+playRec.PlayerChannelMapping = [1 2];
+        
+y = zeros(numFrames*samplesPerFrame, numRecChann);
+x = zeros(numFrames*samplesPerFrame, info.NumChannels);
+numUnderruns = zeros(numFrames, 1);
+numOverruns = zeros(numFrames, 1);
+ind = 1-samplesPerFrame:0;
+for fr = 1:numFrames
+    x_curr = step(signProv);
+    [y_curr, numUnderruns(fr), numOverruns(fr)] = step(playRec, x_curr);
+    ind = ind + samplesPerFrame;
+    x(ind, :) = x_curr;
+    y(ind, :) = y_curr;
+    fprintf('%d\n', fr)
+end
+release(playRec)
+release(signProv)
+
+% Correct offset between the transmitted and received signals
+numSamp = numFrames*samplesPerFrame;
+t = (0:numSamp-1)/sampleRate;
+ind = t < pulseLimits(2,1); % Consider only the first pulse
+cor = xcorr(mean(x(ind, :), 2), y(ind, 1));
+ax = axes(figure);
+plot(ax, cor)
+centerCor = (length(cor) + 1)/2;
+[~, indMax] = max(cor);
+numShiftFrames = round((indMax - centerCor)/samplesPerFrame);
+recSignal = shiftArray(y, numShiftFrames*samplesPerFrame);
+recSignal = recSignal';
+
+% Estimate channel
+Hofdm = OFDMchannelEstimation( filename, recSignal, coefMat, pulseLimits, freqs, sampleRate);
+
+% Interpolate
+FRint = zeros(size(Hofdm));
+for m = 1:numMicros
+    for c = 1:numChannels
+        nonZero = Hofdm(m, c, :) ~= 0; % recSpec(m, c, :) ~= 0;
+        magn = interp1(freqs(nonZero), abs(squeeze(Hofdm(m, c, nonZero))), freqs, 'linear');
+        phase = interp1(freqs(nonZero), unwrap(angle(squeeze(Hofdm(m, c, nonZero)))), freqs, 'linear');
+        FRint(m, c, :) = magn.*exp(1i*phase);
+    end
+end
+
+% ---- Chirp estimation ----
+
+% Generate chirp signal
+durSign = 4; % Duration of tone for time processing
+t = (0:ceil(durSign*sampleRate)-1)/sampleRate;
+chirpSignal = chirp(t, 20, durSign, 1000);
+prefixDuration = 2;
+prefixNumSamples = ceil(prefixDuration*sampleRate);
+chirpSignal = [zeros(1, prefixNumSamples), chirpSignal, zeros(1, prefixNumSamples )]';
+t = (0:length(chirpSignal)-1)/sampleRate;
+
+samplesPerFrame = sampleRate*2;
+playRecExt = audioPlayerRecorderExtended;
+playRecExt.mode = originType('custom');
+playRecExt.customSignal = chirpSignal;
+playRecExt.SampleRate = sampleRate;
+playRecExt.SamplesPerFrame = samplesPerFrame;
+playRecExt.Device = 'Default';
+numRecChann = 1;
+playRecExt.RecorderChannelMapping = 1:numRecChann;
+playRecExt.playAndRecord();
+recSignal = playRecExt.recSignal;
+
+plot(ax, recSignal)
+sound(recSignal, sampleRate)
+
+specTransChirp = freqz(chirpSignal, 1, freqs, sampleRate);
+specRecChirp = freqz(recSignal, 1, freqs, sampleRate);
+
+ax = axes(figure);
+plot(ax, freqs, abs(specRecChirp))
+
+
+Hchirp = specRecChirp./specTransChirp;
+
+ax = axes(figure);
+plot(ax, freqs, abs(Hchirp))
+
+plot(ax, freqs, abs(specRecChirp))
+
 
 %% Generate frequency response signal
 
@@ -180,7 +311,7 @@ end
 maxPossible = repmat(sum(abs(coefMat), 3), [1, 1, numFreqs]);
 coefMat(maxPossible ~= 0) = 0.5*coefMat(maxPossible ~= 0)./maxPossible(maxPossible ~= 0);
 
-pulseDur = (1/freqStep)*5 + 2;
+pulseDur = (1/freqStep)*10 + 2;
 silenceBetweenPulses = 3;
 pulseStart = silenceBetweenPulses + (pulseDur + silenceBetweenPulses)*(0:numChanBlocks-1)';
 pulseEnd = pulseStart + pulseDur;
@@ -241,7 +372,7 @@ filename = [dataPathName, 'acousticPathReprodSignal_', IDload, '.wav'];
 info = audioinfo(filename);
 sampleRate = info.SampleRate;
 
-simulatedReproduction = false;
+simulatedReproduction = true;
 if ~simulatedReproduction
     audioPlayerRecorderEnabled = strcmp(version('-release'), '2018a');
     if ~audioPlayerRecorderEnabled
@@ -254,30 +385,7 @@ if ~simulatedReproduction
         repRecObj.executeOrder('play');
         recSignal = repRecObj.recorded{1}.';
     else
-%         % Debug
-%         deviceWriter = audioDeviceWriter;
-%         deviceWriter.SampleRate = sampleRate;
-%         deviceWriter.Driver = 'ASIO';
-%         deviceWriter.Device = 'Default';
-%         deviceWriter.ChannelMappingSource = 'Property';
-% 
-%         signProv = signalProvider;
-%     %     filename = 'C:\Users\Rubén\Music\Salsa\Flor Pálida - Marc Anthony.mp3';
-%         signProv.FileName = filename;
-%         signProv.SamplesPerFrame = sampleRate*2; % The maximum an audioDeviceWriter allows
-% 
-%         release(signProv)
-%         release(deviceWriter)
-%         tic
-%         while ~isDone(signProv)
-%             x = step(signProv);
-%             step(deviceWriter, x(:, [1 2]));
-%         end
-%         toc
-%         disp('done')
-% 
-%         info = audioinfo(filename);
-
+        % In case it doesn't work: DebuggingGTAC A).
         samplesPerFrame = sampleRate*2;
         numRecChann = 2;
         numFrames = ceil(info.TotalSamples/samplesPerFrame);
@@ -307,21 +415,17 @@ if ~simulatedReproduction
         release(playRec)
         release(signProv)
             
-        numSamp = size(y, 1);
-        cor = xcorr(mean(x, 2), y(:,1), 'biased');
+        % Creo que produjo un error
+        numSamp = numFrames*samplesPerFrame;
+        t = (0:numSamp-1)/sampleRate;
+        ind = t < pulseLimits(2,1); % Consider only the first pulse
+        cor = xcorr(mean(x(ind, :), 2), y(ind, 1));
         ax = axes(figure);
         plot(ax, cor)
-        centerCor = numSamp;
+        centerCor = (length(cor) + 1)/2;
         [~, indMax] = max(cor);
         numShiftFrames = round((indMax - centerCor)/samplesPerFrame); 
-        % Shift numShiftFrames*samplesPerFrame samples
-        origInd = (1:numSamp) - numShiftFrames*samplesPerFrame;
-        destInd = (1:numSamp);
-        validInd = origInd >= 1 & origInd <= numSamp;
-        destInd = destInd(validInd);
-        origInd = origInd(validInd);
-        recSignal = zeros(size(y));
-        recSignal(destInd, :) = y(origInd, :);
+        recSignal = shiftArray(y, numShiftFrames*samplesPerFrame);
         recSignal = recSignal';
         
 %         ax = axes(figure, 'NextPlot', 'Add');
@@ -330,9 +434,7 @@ if ~simulatedReproduction
 %         plot(ax, recSignal(1, 1:samplesPerFrame*5))
     end
 else
-    % Reproduce in simulation
-    [signal, Fs] = audioread(filename, 'native');
-    
+    % Reproduce in simulation    
     zPos = 1.65;
     WFSarrayOffset = [0.46 2.21 zPos]; % [x, y, z] coordinates. Useful for generating acoustic path IR.
     roomDim = [4.48, 9.13, 2.64];
@@ -373,14 +475,17 @@ else
     wfsChan = obj.WFSToolObj.loudspeakerMapping(1).destinationInd; % Not pretty sure
     nsChan = obj.WFSToolObj.loudspeakerMapping(2).destinationInd;
     fragLength = 2^12; % fragment length in samples
-    numSamp = size(signal, 1);
+    info = audioinfo(filename);
+    numSamp = info.TotalSamples;
     numFrag = ceil(numSamp/fragLength); % number of fragments
     previousSufix = zeros(numMicro, numSampIR - 1);
     recSignal = zeros(numMicro, numSamp); % Recorded signal. (numMicros x numSamples)
     for f = 1:numFrag
         fprintf('%d/%d\n', f, numFrag);
-        selSamp = 1 + fragLength*(f - 1):min(fragLength*f, numSamp); % The min() is for the last iteration
-        frag = [signal(selSamp, :)', zeros(numChannels, numSampIR-1)];
+        firstSamp = 1 + fragLength*(f - 1);
+        lastSamp = min(fragLength*f, numSamp); % The min() is for the last iteration
+        fragSignal = audioread(filename, [firstSamp, lastSamp]);
+        frag = [fragSignal', zeros(numChannels, numSampIR-1)];
         obj.WFSToolObj.WFSarrayCoefficient = zeros(obj.numWFS, size(frag, 2));
         obj.WFSToolObj.WFSarrayCoefficient(obj.WFSToolObj.loudspeakerMapping(1).originInd, :) = frag(wfsChan, :);
         obj.WFSToolObj.noiseSourceCoefficient_complete = zeros(2, size(frag, 2));
@@ -389,56 +494,12 @@ else
         recFrag = obj.WFSToolObj.simulField;
         recFrag(:, 1:numSampIR-1) = recFrag(:, 1:numSampIR-1) + previousSufix; % Add previous sufix
         previousSufix = recFrag(:, end - (numSampIR - 1) + 1:end); % Set sufix for next loop iteration
+        selSamp = firstSamp:lastSamp;
         recSignal(:, selSamp) = recFrag(:, 1:length(selSamp)); % Save the signal without the sufix. We use length(selSamp) and not fragLength for the last iteration
     end
 end
 
-% Crop signal with an adequate duration
-numMicros = size(recSignal, 1);
-margin = 0.5;
-
-% [signal, Fs] = audioread(filename, 'native'); % audioread(filename, [sampIni, sampEnd])
-
-numPulses = size(pulseLimits, 1);
-transSpec = zeros(numChannels, numFreqs);
-recSpec = zeros(numMicros, numChannels, numFreqs);
-coefMatFlag = permute(coefMat ~= 0, [3 2 1]);
-for p = 1:numPulses
-    start = pulseLimits(p, 1) + margin;
-    ending = start + floor((pulseLimits(p, 2) - margin - start)/T);
-    
-    startIndex = floor(start*sampleRate) + 1;
-    endIndex = floor(ending*sampleRate) + 1;
-    
-    % Calculate the transmitted signals spectra
-    activeChannels = find(any(coefMat(p, :, :) ~= 0, 3)); % Active channels in this pulse
-    fragmentAllChann = audioread(filename, [startIndex, endIndex], 'native');
-    for c = 1:length(activeChannels)
-%         fragment = signal(startIndex:endIndex, activeChannels(c));
-        fragment = fragmentAllChann(:, activeChannels(c));
-        transSpec(activeChannels(c), :) = freqz(fragment, 1, freqs, sampleRate);
-    end
-    
-    % Calculate the received signals spectra    
-    for m = 1:numMicros
-        fragment = recSignal(m, startIndex:endIndex);
-        X = freqz(fragment, 1, freqs, sampleRate); % (1 x numFreqs)
-        
-        for c = 1:numChannels
-            activeFreq = coefMatFlag(:, c, p);
-            recSpec(m, c, activeFreq) = X(activeFreq);
-        end       
-    end
-    
-    fprintf('%d/%d\n', p, numPulses);
-end
-FR = recSpec./repmat(permute(transSpec, [3 1 2]), [numMicros, 1, 1]);
-% Compensate for desynchronization between the transmitted signals and the
-% received ones
-% delay is the delay that the recorded signal has experimented
-% delay = 1;
-% freqMat = pointWiseExtend(permute(freqs(:), [2 3 1]), FR);
-% FR = FR.*exp(1i*delay*2*pi*freqMat);
+FR2 = OFDMchannelEstimation( filename, recSignal', coefMat, pulseLimits, freqs, sampleRate);
 
 ax = axes(figure);
 plot(ax, freqs, squeeze(abs(FR(1, 1:2, :))))
@@ -474,10 +535,10 @@ end
 % Each channel has associated a vector of frequencies and a vector of
 % frequency responses
 % We can complete missing frequencies by interpolating
-FRint = zeros(size(recSpec));
+FRint = zeros(size(FR));
 for m = 1:numMicros
     for c = 1:numChannels
-        nonZero = recSpec(m, c, :) ~= 0;
+        nonZero = FR(m, c, :) ~= 0; % recSpec(m, c, :) ~= 0;
         magn = interp1(freqs(nonZero), abs(squeeze(FR(m, c, nonZero))), freqs, 'linear');
         phase = interp1(freqs(nonZero), unwrap(angle(squeeze(FR(m, c, nonZero)))), freqs, 'linear');
         FRint(m, c, :) = magn.*exp(1i*phase);
@@ -494,7 +555,7 @@ w = 0.2;
 d = 0.184;
 L = 1.034;
 alpha = 45;
-x = 8*0.18 + w*sind(alpha) + d*cosd(alpha) + L*sind(alpha);
+x = (1 + cosd(alpha))*8*0.18 + w*sind(alpha) + d*cosd(alpha) + L*sind(alpha);
 y = 0 - w*cosd(alpha) + d*sind(alpha) - L*cosd(alpha);
 NSpositions = [x y 0]; % Assumed real position
 
@@ -539,11 +600,6 @@ if simulScriptFlag
     SetupParametersScript
     simulationScript
     
-    % recNScoef_freq
-    % recCoef_freq
-    % recWFScoef_freq
-    % WFScoef_freq
-        
     sSimul = s';
 
     [sExtTheo, corrFactInd, corrFactGlob, gainInd, gainGlob, corrFactAver, gainAver] =...
@@ -607,8 +663,9 @@ sel = freqs >= minFreq & freqs <= maxFreq;
 fieldWFSaux = recWFScoef(:, sel);
 fieldNSaux = recNScoef(:, sel);
 corrFact = -fieldWFSaux(:)\fieldNSaux(:);
+corrVol = real(corrFact);
 corrFactComp = -fieldNSaux./fieldWFSaux;
-plot(ax, freqs(sel), abs(corrFactComp))
+plot(freqs(sel), abs(corrFactComp))
 
 sSimulCorrVol = sSimul;
 for f = 1:numFreqs
@@ -633,7 +690,7 @@ durSign = 4; % Duration of tone for time processing
 t = (0:ceil(durSign*sampleRate)-1)/sampleRate;
 NSsignal = chirp(t, min(freqs), durSign, max(freqs) + 50);
 prefixDuration = 2;
-prefixNumSamples = floor(prefixDuration*sampleRate) + 1;
+prefixNumSamples = ceil(prefixDuration*sampleRate);
 NSsignal = [zeros(1, prefixNumSamples), NSsignal, zeros(1, prefixNumSamples )];
 t = (0:length(NSsignal)-1)/sampleRate;
 
@@ -654,6 +711,7 @@ obj.NScoef = NSsignal;
 obj.NSVcoef = -NSsignal;
 
 frequencyCorrection = true;
+obj.NSposition = NSpositions;
 obj.WFSToolObj.frequencyCorrection = true;
 obj.WFSToolObj.attenuationType = 'Ruben'; attenuationType = 'Ruben';
 obj.WFSToolObj.updateFiltersWFS();
@@ -670,6 +728,7 @@ if ~simulatedReproduction
     customSignal(:, nsIndDest) = NSsignal(:);
     customSignal(:, wfsIndDest) = obj.WFScoef(wfsIndOrig, :).';
     
+    % In case audioPlayerRecorder doesn't work, consult debuggingGTAC B)
 %     repRecObj = reproductorRecorder;
 %     repRecObj.setProps('mode', originType('custom'), 1);
 %     repRecObj.setProps('enableProc', false);
@@ -707,6 +766,17 @@ if ~simulatedReproduction
     end
     release(signProv)
     release(playRec)
+    
+    cor = xcorr(mean(aux, 2), recSignalNS(:, 1));
+    ax = axes(figure);
+    plot(ax, cor)
+    plot(ax, aux(:, 1))
+    hold on
+    plot(ax, recSignalNS(:, 1))
+    centerCor = (length(cor) + 1)/2;
+    [~, indMax] = max(cor);
+    numShiftFrames = round((indMax - centerCor)/samplesPerFrame); 
+    recSignalNS = shiftArray(recSignalNS, numShiftFrames*samplesPerFrame);
     recSignalNS = recSignalNS';
     
     % - Only WFS
@@ -725,7 +795,13 @@ if ~simulatedReproduction
     end
     release(signProv)
     release(playRec)
-    recSignalWFS = recSignalWFS';
+    
+    cor = xcorr(mean(aux, 2), mean(recSignalWFS, 2));
+    centerCor = (length(cor) + 1)/2;
+    [~, indMax] = max(cor);
+    numShiftFrames = round((indMax - centerCor)/samplesPerFrame); 
+    recSignalWFS = shiftArray(recSignalWFS, numShiftFrames*samplesPerFrame);
+    recSignalWFS = recSignalWFS';  
 
     % - All
 %     repRecObj.setProps('customSignal', customSignal);
@@ -741,7 +817,13 @@ if ~simulatedReproduction
     end
     release(signProv)
     release(playRec)
-    recSignal = recSignal';
+    
+    cor = xcorr(mean(aux, 2), mean(recSignal, 2));
+    centerCor = (length(cor) + 1)/2;
+    [~, indMax] = max(cor);
+    numShiftFrames = round((indMax - centerCor)/samplesPerFrame); 
+    recSignal = shiftArray(recSignal, numShiftFrames*samplesPerFrame);
+    recSignal = recSignal';  
     
 % ---- Optimized volume ----
     customSignal(:, wfsIndDest) = corrVol*obj.WFScoef(wfsIndOrig, :).';
@@ -855,11 +937,11 @@ else
     
 end
 
-save([dataPathName, 'recSignals_', ID, '.mat'], 'recSignalNS', 'recSignalWFS', 'recSignal')%, ...
+% save([dataPathName, 'recSignals_', ID, '.mat'], 'recSignalNS', 'recSignalWFS', 'recSignal')%, ...
     %'recSignalNScorrVol', 'recSignalWFScorrVol', 'recSignalCorrVol');
 
 %% Comparison of measures and estimations. They should be similar.
-% IDload = '2018-08-21_16-06-40';
+% IDload = 'Lab_29-08-2018_corregido';
 % load([dataPathName, 'recSignals_', ID, '.mat'])
 
 % Get the received signal frequency spectrum
@@ -903,6 +985,12 @@ plot(ax, freqs, 10*log10(gainAver))
 plot(ax, freqs, 10*log10(gainAverSimul))
 ax.XLabel.String = 'Frequency (Hz)';
 ax.YLabel.String = 'Average gain (dB)';
+
+ax = axes(figure, 'NextPlot', 'Add');
+plot(ax, freqs, abs(corrFactIndSimul(:, 1, 1)))
+plot(ax, freqs, abs(corrFactInd(:, 1, 1)))
+ax.XLabel.String = 'Frequency (Hz)';
+ax.YLabel.String = '|\Psi|';
 
 % ax = axes(figure, 'NextPlot', 'Add');
 % plot(ax, freqs, 10*log10(gainAverCorrVol))

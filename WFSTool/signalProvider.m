@@ -13,16 +13,13 @@ classdef signalProvider < matlab.System
         amplitude
         phase
         frequency
+        stopSample % Sample at which the signal provider should reach the end. Only for mode == sinusoidal
         
         % Variables that are exclusive for the mode == custom
         customSignal
         
         % Variables that are exclusive for the mode == func
         signalFunc
-    end
-
-    properties(SetAccess = private)
-        stopSample % Sample at which the signal provider should reach the end. Only for mode == sinusoidal
     end
     
     properties(Dependent)
@@ -120,8 +117,12 @@ classdef signalProvider < matlab.System
         
         function numChannels = get.numChannels(obj)
             if obj.mode == originType('file')
-                inf = audioinfo(obj.FileName);
-                numChannels = inf.NumChannels;
+                try
+                    inf = audioinfo(obj.FileName);
+                    numChannels = inf.NumChannels;
+                catch
+                    numChannels = [];
+                end
             elseif obj.mode == originType('custom')
                 numChannels = size(obj.customSignal, 2);
             elseif obj.mode == originType('func')
@@ -134,8 +135,12 @@ classdef signalProvider < matlab.System
         
         function numSamples = get.numSamples(obj)
             if obj.mode == originType('file')
-                inf = audioinfo(obj.FileName);
-                numSamples = inf.TotalSamples;
+                try
+                    inf = audioinfo(obj.FileName);
+                    numSamples = inf.TotalSamples;
+                catch
+                    numSamples = [];
+                end
             elseif obj.mode == originType('custom')
                 numSamples = size(obj.customSignal, 1);
             else

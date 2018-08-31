@@ -1,4 +1,5 @@
 function y = shiftAndCrop(x, shiftPos, newLength)
+% Outdated. Use shiftArray instead.
 
 N = size(x, 1);
 
