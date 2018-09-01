@@ -71,14 +71,14 @@ classdef audioPlayerRecorderExtended < matlab.System
         function playAndRecord(obj)
             setup(obj);
             reset(obj);
-            
-            step(obj.playerRecorder, zeros(obj.SamplesPerFrame, obj.numSignalChannels));
-            
+                        
             numFrames = ceil(obj.numSamples/obj.SamplesPerFrame);
             for fr = 1:numFrames
                 step(obj);
             end
-            
+            step(obj);
+            obj.recSignal = obj.recSignal(obj.SamplesPerFrame+1:end, :);
+
             release(obj);
         end
         
@@ -150,7 +150,6 @@ classdef audioPlayerRecorderExtended < matlab.System
         function resetImpl(obj)
             % Initialize / reset discrete-state properties
             obj.count = 0;
-            obj.recSignal = double.empty(0, obj.numRecorderChannels);
         end
 
         function releaseImpl(obj)

@@ -150,11 +150,12 @@ numTotalChan = 2;
 numSimultChan = 2; % Number of simultaneous channels reproducing
 freqRange = [20, 1200]; % Hz. It's a user preference, but it's not going to be exactly respectd
 freqStep = 1; % Hz
-pulseDurationInPeriods = 10;
+pulseDurationInPeriods = 60;
 silenceBetweenPulses = 3;
+sampleRate = 22050;
 
 filename = [dataPathName, 'signalStructTestOFDM'];
-OFDMchannelEstimationSignal(numTotalChan, numSimultChan, freqRange, freqStep, pulseDurationInPeriods, silenceBetweenPulses, 'filename', filename);
+OFDMchannelEstimationSignal(numTotalChan, numSimultChan, freqRange, freqStep, pulseDurationInPeriods, silenceBetweenPulses, sampleRate, 'filename', filename);
 
 % Load frequency response test signal parameters
 IDload = 'signalStructTestOFDM';
@@ -168,16 +169,12 @@ coefMat = signalStructLoaded.coefMat;
 
 % Reproduce and record
 samplesPerFrame = sampleRate*2;
-numRecChann = 2;
-numFrames = ceil(info.TotalSamples/samplesPerFrame);
-        
-signProv = signalProvider;
-signProv.FileName = filename;
-signProv.SamplesPerFrame = samplesPerFrame; % The maximum an audioDeviceWriter allows
-
-location = 'laboratory'; % laboratory/laptop
-
-playRec = audioPlayerRecorder;
+playRecExt = audioPlayerRecorderExtended;
+playRecExt.mode = originType('file');
+playRecExt.filename = filename;
+playRecExt.SampleRate = sampleRate;
+playRecExt.SamplesPerFrame = samplesPerFrame;
+location = 'laptop'; % laboratory/laptop
 switch location
     case 'laboratory'
         playRec.Device = 'MOTU PCI ASIO';
@@ -185,44 +182,36 @@ switch location
         playRec.Device = 'Default';
         numRecChann = 1;
 end
-playRec.SampleRate = sampleRate;
-playRec.RecorderChannelMapping = 1:numRecChann;
+playRecExt.RecorderChannelMapping = 1:numRecChann;
 playRec.PlayerChannelMapping = [1 2];
-        
-y = zeros(numFrames*samplesPerFrame, numRecChann);
-x = zeros(numFrames*samplesPerFrame, info.NumChannels);
-numUnderruns = zeros(numFrames, 1);
-numOverruns = zeros(numFrames, 1);
-ind = 1-samplesPerFrame:0;
-for fr = 1:numFrames
-    x_curr = step(signProv);
-    [y_curr, numUnderruns(fr), numOverruns(fr)] = step(playRec, x_curr);
-    ind = ind + samplesPerFrame;
-    x(ind, :) = x_curr;
-    y(ind, :) = y_curr;
-    fprintf('%d\n', fr)
-end
-release(playRec)
-release(signProv)
+playRecExt.playAndRecord();
+y = playRecExt.recSignal;  
+
+% ax = axes(figure, 'NextPlot', 'Add');
+% plot(ax, x)
+% plot(ax, y)
+% sound(y(44100*3+1:end), sampleRate)
 
 % Correct offset between the transmitted and received signals
-numSamp = numFrames*samplesPerFrame;
+numSamp = size(y, 1);
 t = (0:numSamp-1)/sampleRate;
-ind = t < pulseLimits(2,1); % Consider only the first pulse
-cor = xcorr(mean(x(ind, :), 2), y(ind, 1));
+ind = find(t < pulseLimits(1,2)); % Consider only the first pulse
+x = audioread(filename, [1, ind(end)], 'native');
+cor = xcorr(mean(x, 2), y(ind, 1));
 ax = axes(figure);
 plot(ax, cor)
 centerCor = (length(cor) + 1)/2;
 [~, indMax] = max(cor);
 numShiftFrames = round((indMax - centerCor)/samplesPerFrame);
 recSignal = shiftArray(y, numShiftFrames*samplesPerFrame);
-recSignal = recSignal';
 
 % Estimate channel
 Hofdm = OFDMchannelEstimation( filename, recSignal, coefMat, pulseLimits, freqs, sampleRate);
 
 % Interpolate
 FRint = zeros(size(Hofdm));
+numMicros = size(recSignal, 2);
+numChannels = size(x, 2);
 for m = 1:numMicros
     for c = 1:numChannels
         nonZero = Hofdm(m, c, :) ~= 0; % recSpec(m, c, :) ~= 0;
@@ -232,12 +221,16 @@ for m = 1:numMicros
     end
 end
 
+% ax = axes(figure);
+% plot(ax, freqs, abs(squeeze(FRint)))
+
+
 % ---- Chirp estimation ----
 
 % Generate chirp signal
-durSign = 4; % Duration of tone for time processing
+durSign = 30; % Duration of tone for time processing
 t = (0:ceil(durSign*sampleRate)-1)/sampleRate;
-chirpSignal = chirp(t, 20, durSign, 1000);
+chirpSignal = 0.15*chirp(t, freqRange(1), durSign, freqRange(2));
 prefixDuration = 2;
 prefixNumSamples = ceil(prefixDuration*sampleRate);
 chirpSignal = [zeros(1, prefixNumSamples), chirpSignal, zeros(1, prefixNumSamples )]';
@@ -245,6 +238,7 @@ t = (0:length(chirpSignal)-1)/sampleRate;
 
 samplesPerFrame = sampleRate*2;
 playRecExt = audioPlayerRecorderExtended;
+playRecExt.PlayerChannelMapping = 1;
 playRecExt.mode = originType('custom');
 playRecExt.customSignal = chirpSignal;
 playRecExt.SampleRate = sampleRate;
@@ -253,25 +247,48 @@ playRecExt.Device = 'Default';
 numRecChann = 1;
 playRecExt.RecorderChannelMapping = 1:numRecChann;
 playRecExt.playAndRecord();
-recSignal = playRecExt.recSignal;
+recSignal1 = playRecExt.recSignal;
 
-plot(ax, recSignal)
-sound(recSignal, sampleRate)
+playRecExt.PlayerChannelMapping = 2;
+playRecExt.playAndRecord();
+recSignal2 = playRecExt.recSignal;
 
 specTransChirp = freqz(chirpSignal, 1, freqs, sampleRate);
-specRecChirp = freqz(recSignal, 1, freqs, sampleRate);
+specRecChirp1 = freqz(recSignal1, 1, freqs, sampleRate);
+specRecChirp2 = freqz(recSignal2, 1, freqs, sampleRate);
 
-ax = axes(figure);
-plot(ax, freqs, abs(specRecChirp))
+% ax = axes(figure, 'NextPlot', 'Add');
+% plot(ax, freqs, abs(specRecChirp1))
+% plot(ax, freqs, abs(specTransChirp))
 
+Hchirp1 = specRecChirp1./specTransChirp;
+Hchirp2 = specRecChirp2./specTransChirp;
+Hchirp = [Hchirp1; Hchirp2];
 
-Hchirp = specRecChirp./specTransChirp;
+ax = axes(figure, 'NextPlot', 'Add');
+lchirp = plot(ax, freqs, abs(Hchirp));
+lofdm = plot(ax, freqs, abs(squeeze(FRint)));
 
-ax = axes(figure);
-plot(ax, freqs, abs(Hchirp))
+lchirp(1).LineStyle = ':';
+lchirp(2).LineStyle = ':';
 
-plot(ax, freqs, abs(specRecChirp))
+% Da lo mismo aproximadamente!! :D eso es que el método funciona
 
+% Different amplitude
+dur = 10;
+t = (0:1/sampleRate:dur)';
+amp = linspace(0, 1, length(t))';
+freq = 440;
+signal = amp.*cos(2*pi*freq*t);
+
+playRecExt.PlayerChannelMapping = 1;
+playRecExt.customSignal = signal;
+playRecExt.playAndRecord();
+recSignal = playRecExt.recSignal;
+
+ax = axes(figure, 'NextPlot', 'Add');
+plot(ax, signal)
+plot(ax, 15*recSignal)
 
 %% Generate frequency response signal
 

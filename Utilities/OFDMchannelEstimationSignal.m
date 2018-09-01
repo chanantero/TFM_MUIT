@@ -27,8 +27,29 @@ for chanBlock = 1:numChanBlocks
     inds = sub2ind([numChanBlocks, numTotalChan, numFreqs], chanBlock*ones(size(subindSimultChan)), subindSimultChan, freqInd(:, 1:length(simultChanInd)));
     coefMat(inds) = exp(1i*rand(size(inds))*2*pi);
 end
+% Adjust amplitude. The idea is not registered yet (01/09/2018), but it has
+% a sense, trust it.
+maxPossibleVal = zeros(numChanBlocks, numTotalChan);
+for p = 1:numChanBlocks
+    for ch = 1:numTotalChan
+        Tmin = 1/(freqStep*numFreqs); % Period of the maximum frequency relative to the lower frequency
+        timeStep = Tmin/100;
+        t = (0:Tmin/10:1/freqStep)';
+        activeFreqInd = find(coefMat(p, ch, :));
+        activeFreqs = freqs(activeFreqInd) - freqs(activeFreqInd(1));
+        aux = t*activeFreqs;
+        activeCoef = permute(coefMat(p, ch, activeFreqInd), [1 3 2]);
+        mag = repmat(abs(activeCoef), [length(t), 1]);
+        pha = repmat(angle(activeCoef), [length(t), 1]);
+        x = sum(mag.*cos(2*pi*aux + pha), 2);
+        maxVal = max(abs(x));
+        maxDeriv = abs(activeCoef)*2*pi*activeFreqs';
+        maxPossibleVal(p, ch) = maxVal + maxDeriv*timeStep;
+    end
+end
 
-maxPossible = repmat(sum(abs(coefMat), 3), [1, 1, numFreqs]);
+maxPossible = repmat(maxPossibleVal, [1, 1, numFreqs]);
+% maxPossible = repmat(sum(abs(coefMat), 3), [1, 1, numFreqs]);
 coefMat(maxPossible ~= 0) = 0.5*coefMat(maxPossible ~= 0)./maxPossible(maxPossible ~= 0);
 
 prefixSufixDuration = 1;
