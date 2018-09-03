@@ -619,6 +619,15 @@ for f = 1:numFreqs
     sSimulCorrVol(f).recCoef = sSimulCorrVol(f).recWFScoef + sSimulCorrVol(f).recNScoef;
 end
 
+% ---- Volume and noise source location optimization ----
+% Completar
+% selFreqs = find(sel);
+% for f = 1:length(selFreqs)
+%     obj.frequency = selFreqs(f);
+%     
+%     obj.findBestVirtualSourceParameters2;
+% end
+
 %% Reproduction and recording of different cases
 
 % Define chirp signal
@@ -665,7 +674,13 @@ if ~simulatedReproduction
     customSignal(:, nsIndDest) = NSsignal(:);
     customSignal(:, wfsIndDest) = obj.WFScoef(wfsIndOrig, :).';
     
-    % In case audioPlayerRecorder doesn't work, consult debuggingGTAC B)    
+    % In case audioPlayerRecorder doesn't work, consult debuggingGTAC B)
+%     repRecObj = reproductorRecorder;
+%     repRecObj.setProps('mode', originType('custom'), 1);
+%     repRecObj.setProps('enableProc', false);
+%     repRecObj.setProps('Fs_player', sampleRate, 1);
+%     repRecObj.setProps('Fs_recorder', sampleRate, 1);
+    
     samplesPerFrame = sampleRate*2;
     numFrames = ceil(numSamp/samplesPerFrame);
 
@@ -778,6 +793,8 @@ if ~simulatedReproduction
     repRecObj.executeOrder('play');
     recSignalCorrVol = repRecObj.recorded{1}.';
     
+% ---- Optimized volume and noise source location ----
+    % No completado
 else
     
     % Room characteristics and impulse response of chamber
@@ -814,7 +831,28 @@ else
     obj.WFSToolObj.simulate;
     recSignalWFS = obj.microCoef;
     obj.WFSToolObj.real = [true; false];
-        
+    
+    % Debug
+%     ax = axes(figure);
+%     plot(ax, t, NSsignal, t, obj.WFScoef(89, :))
+%     nsSignalFreq = freqz(NSsignal, 1, freqs, sampleRate);
+%     wfsSignalFreq = freqz(obj.WFScoef(89, :), 1, freqs, sampleRate);
+%     ax = axes(figure);
+%     dist = calcDistances(obj.NSRposition, obj.WFSposition(89,:));
+%     cosAlpha = dot((obj.WFSposition(89,:) - obj.NSRposition), [0 1 0]);
+%     plot(ax, freqs, abs(wfsSignalFreq./nsSignalFreq))
+%     plot(ax, freqs, rad2deg(wrapToPi(angle(wfsSignalFreq./nsSignalFreq) + dist/340*2*pi*freqs)))
+%     plot(ax, freqs, angle(wfsSignalFreq./nsSignalFreq) )
+%     
+%     % size(obj.filtersWFS_IR) (numWFS x numNS x numSamp)
+%     filt = squeeze(obj.WFSToolObj.filtersWFS_IR(89, 2, :));
+%     plot(ax, filt)
+%     filtSpec = freqz(filt, 1, freqs, sampleRate);
+%     plot(ax, freqs, angle(filtSpec))
+%     
+%     wfsSignalTheo = fftfilt(filt, NSsignal);
+%     plot(ax, t, NSsignal, t, wfsSignalTheo);
+    
     % - All
     obj.WFSToolObj.WFScalculation();
     obj.WFSToolObj.simulate;
@@ -852,7 +890,6 @@ end
 % IDload = 'Lab_29-08-2018_corregido';
 % load([dataPathName, 'recSignals_', ID, '.mat'])
 
-% Volume correction in the time domain
 numMicro = size(recSignal, 1);
 corrVolTime = zeros(numMicro, 1);
 for m = 1:numMicro
@@ -863,12 +900,6 @@ numSamp = size(recSignal, 2);
 recSignalNScorrVol = recSignalNS;
 recSignalWFScorrVol = recSignalWFS.*repmat(corrVolTime, [1, numSamp]);
 recSignalCorrVol = recSignalNScorrVol + recSignalWFScorrVol;
-
-recSignalEst = recSignalNS + recSignalWFS;
-ax = axes(figure, 'NextPlot', 'Add');
-plot(ax, recSignal(1,:)')
-plot(ax, recSignalEst(1,:)')
-
 
 % Get the received signal frequency spectrum
 oper = @(x) freqz(x, 1, freqs, sampleRate);
