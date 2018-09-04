@@ -9,7 +9,8 @@ deviceWriter.Device = 'Default';
 deviceWriter.ChannelMappingSource = 'Property';
 
 signProv = signalProvider;
-filename = 'C:\Users\Rubén\Music\Salsa\Flor Pálida - Marc Anthony.mp3';
+% filename = 'C:\Users\Rubén\Music\Salsa\Flor Pálida - Marc Anthony.mp3';
+filename = 'E:\Rubén TFM\Dangerous Woman.mp3';
 signProv.FileName = filename;
 signProv.SamplesPerFrame = sampleRate*2; % The maximum an audioDeviceWriter allows
 

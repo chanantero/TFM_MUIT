@@ -11,8 +11,8 @@ paths = genpath(globalPath);
 addpath(paths);
 
 dataPathName = [globalPath, 'Data\'];
-ID = datestr(now, 'yyyy-mm-dd_HH-MM-SS');
-
+% ID = datestr(now, 'yyyy-mm-dd_HH-MM-SS');
+ID = 'Lab_04-09-2018';
 %% System set up.
 obj = SimulationController;
 obj.ax.Parent.HandleVisibility = 'off';
@@ -43,7 +43,7 @@ obj.WFSToolObj.noiseSourceChannelMapping(1) = NSchan;
 % User change this
 pulseDur = 1.5; % seconds
 pulseSolap = 0.5; % seconds
-testLaptop = true; % testLaptop should be false when reproducing in the listening room
+testLaptop = false; % testLaptop should be false when reproducing in the listening room
 
 % % % Don't touch the rest of the section % % %
 
@@ -131,7 +131,9 @@ deviceWriter = audioDeviceWriter;
 deviceWriter.SampleRate = sampleRate;
 deviceWriter.Driver = 'ASIO';
 deviceWriter.Device = 'MOTU PCI ASIO';
+
 % deviceWriter.ChannelMappingSource = 'Property';
+% deviceWriter.ChannelMapping = [1 2];
 
 count = 0;
 while ~isDone(signProv)
@@ -301,23 +303,23 @@ plot(ax, 15*recSignal)
 % differenciate the signal from the different loudspeakers.
 
 % Generate signal and write it into a file
-numTotalChan = 96;
+numTotalChan = 17; %  96;
 numSimultChan = 4; % Number of simultaneous channels reproducing
 freqRange = [20, 1200]; % Hz. It's a user preference, but it's not going to be exactly respectd
 freqStep = 1; % Hz
-pulseDurationInPeriods = 20;
+pulseDurationInPeriods = 40;
 silenceBetweenPulses = 3;
 sampleRate = 44100;
 
-filename = [dataPathName, 'acousticPathReprodSignal_', ID, '.wav'];
+filename = [dataPathName, 'acousticPathReprodSignal_', ID];
 OFDMchannelEstimationSignal(numTotalChan, numSimultChan, freqRange, freqStep, pulseDurationInPeriods, silenceBetweenPulses, sampleRate, 'filename', filename);
 
 %% Reproduce and record frequency response test signal
 
 % Load frequency response test signal parameters
-IDload = 'Lab_29-08-2018';
-signalStructLoaded = load([dataPathName, 'signalStruct_', IDload, '.mat']);
-numChannels = 96;
+IDload = 'Lab_04-09-2018';
+signalStructLoaded = load([dataPathName, 'acousticPathReprodSignal_', IDload, '.mat']);
+numChannels = size(signalStructLoaded.coefMat, 2);
 pulseLimits = signalStructLoaded.pulseLimits;
 freqs = signalStructLoaded.freqs;
 numFreqs = length(freqs);
@@ -334,15 +336,16 @@ playRecExt.mode = originType('file');
 playRecExt.filename = filename;
 playRecExt.SampleRate = sampleRate;
 playRecExt.SamplesPerFrame = samplesPerFrame;
-location = 'laptop'; % laboratory/laptop
+location = 'laboratory'; % laboratory/laptop
 switch location
     case 'laboratory'
-        playRec.Device = 'MOTU PCI ASIO';
+        playRecExt.Device = 'MOTU PCI ASIO';
         numRecChann = 2;
+        playRecExt.PlayerChannelMapping = [1, 81:96];
     case 'laptop'
-        playRec.Device = 'Default';
+        playRecExt.Device = 'Default';
         numRecChann = 1;
-        playRec.PlayerChannelMapping = [1 2];
+        playRecExt.PlayerChannelMapping = [1, 2];
 end
 playRecExt.RecorderChannelMapping = 1:numRecChann;
 playRecExt.playAndRecord();
@@ -353,7 +356,8 @@ y = playRecExt.recSignal;
 numSamp = size(y, 1);
 t = (0:numSamp-1)/sampleRate;
 ind = t < pulseLimits(2,1); % Consider only the first pulse
-cor = xcorr(mean(x(ind, :), 2), y(ind, 1));
+x = audioread(filename, [1, find(ind, 1, 'last')]);
+cor = xcorr(mean(x, 2), y(ind, 1));
 ax = axes(figure);
 plot(ax, cor)
 centerCor = (length(cor) + 1)/2;
@@ -370,14 +374,13 @@ recSignal = recSignal';
 FR = OFDMchannelEstimation( filename, recSignal', coefMat, pulseLimits, freqs, sampleRate);
 
 ax = axes(figure);
-plot(ax, freqs, squeeze(abs(FR(1, 1:2, :))))
-plot(ax, freqs, squeeze(abs(recSpec(1, 1:2, :))))
-plot(ax, freqs, squeeze(abs(transSpec(1:2, :))))
+plot(ax, freqs, squeeze(abs(FR(1, 1:3, :))))
 
 % Each channel has associated a vector of frequencies and a vector of
 % frequency responses
 % We can complete missing frequencies by interpolating
 FRint = zeros(size(FR));
+numMicros = size(FR, 1);
 for m = 1:numMicros
     for c = 1:numChannels
         nonZero = FR(m, c, :) ~= 0; % recSpec(m, c, :) ~= 0;
@@ -387,6 +390,9 @@ for m = 1:numMicros
     end
 end
 
+ax = axes(figure);
+plot(ax, freqs, squeeze(abs(FRint(1, 1:3, :))))
+
 % save([dataPathName, 'acousticPathRecordSignal_', ID, '.mat'], 'IDload', 'recSignal', 'FR')
 %% Estimation of results based on measured acoustic path responses
 
@@ -394,22 +400,28 @@ end
 % Set parameters
 % Calculate noise source position based on distances measured in the lab
 w = 0.2;
-d = 0.184;
-L = 1.034;
+d = 0.16;
+L = 1.104;
 alpha = 45;
 x = (1 + cosd(alpha))*8*0.18 + w*sind(alpha) + d*cosd(alpha) + L*sind(alpha);
 y = 0 - w*cosd(alpha) + d*sind(alpha) - L*cosd(alpha);
 NSpositions = [x y 0]; % Assumed real position
 
-wfsChan = obj.WFSToolObj.loudspeakerMapping(1).destinationInd; % Not pretty sure
-nsChan = obj.WFSToolObj.loudspeakerMapping(2).destinationInd;
-WFS_FR = FRint;
-WFS_FR(:, nsChan, :) = 0;
-NS_FR = FRint(:, nsChan, :);
+% wfsChan = obj.WFSToolObj.loudspeakerMapping(1).destinationInd; % Not pretty sure
+% nsChan = obj.WFSToolObj.loudspeakerMapping(2).destinationInd;
+
+wfsChanDest = 2:17;
+wfsChanOrig = 81:96;
+nsChanDest = 1;
+nsChanOrig = 1;
+
+WFS_FR = FRint(:, wfsChanDest, :);
+NS_FR = FRint(:, nsChanDest, :);
 
 % WFS calculation of WFS coefficients and simulation
 obj.NSposition = NSpositions;
 obj.domain = 'frequency';
+obj.WFSToolObj.frequencyCorrection = true;
 fieldNS = zeros(numMicros, numFreqs);
 fieldWFS = zeros(numMicros, numFreqs);
 WFScoefs = zeros(obj.numWFS, numFreqs);
@@ -420,7 +432,7 @@ for f = 1:numFreqs
     WFScoef = obj.WFScoef;
     WFScoefs(:, f) = WFScoef;
     fieldNS(:, f) = NS_FR(:, :, f)*obj.NSRcoef;
-    fieldWFS(:, f) = WFS_FR(:,:,f)*WFScoef;
+    fieldWFS(:, f) = WFS_FR(:, :, f)*WFScoef(wfsChanOrig);
 end
 field = fieldNS + fieldWFS;
 
@@ -464,7 +476,7 @@ end
 %% Reproduction and recording of different cases
 
 % Define chirp signal
-durSign = 4; % Duration of tone for time processing
+durSign = 40; % Duration of tone for time processing
 sampleRate = 44100;
 t = (0:ceil(durSign*sampleRate)-1)/sampleRate;
 NSsignal = 0.5*chirp(t, min(freqs), durSign, max(freqs) + 50);
@@ -475,7 +487,7 @@ t = (0:length(NSsignal)-1)/sampleRate;
 
 % Frequency filters
 magnFiltOrder = 2^12;
-hilbertFiltOrder = 2^12;
+hilbertFiltOrder = 2^13;
 [freqFilter, freqFiltDelay] = getFrequencyFilter(magnFiltOrder, hilbertFiltOrder, sampleRate, 'analytical', true);
 obj.WFSToolObj.freqFilter = freqFilter;
 % % Debug
@@ -500,28 +512,32 @@ obj.WFSToolObj.WFScalculation();
 % Reproduce and record:
 numSamp = length(NSsignal);
 customSignal = zeros(numSamp, numChannels);
-wfsIndOrig = obj.WFSToolObj.loudspeakerMapping(1).originInd;
-wfsIndDest = obj.WFSToolObj.loudspeakerMapping(1).destinationInd;
-nsIndDest = obj.WFSToolObj.loudspeakerMapping(2).destinationInd;
-customSignal(:, nsIndDest) = NSsignal(:);
-customSignal(:, wfsIndDest) = obj.WFScoef(wfsIndOrig, :).';
+wfsChanDest = 2:17;
+wfsChanOrig = 81:96;
+nsChanDest = 1;
+nsChanOrig = 1;
+% wfsIndOrig = obj.WFSToolObj.loudspeakerMapping(1).originInd;
+% wfsIndDest = obj.WFSToolObj.loudspeakerMapping(1).destinationInd;
+% nsIndDest = obj.WFSToolObj.loudspeakerMapping(2).destinationInd;
+customSignal(:, nsChanDest) = NSsignal(:);
+customSignal(:, wfsChanDest) = obj.WFScoef(wfsChanOrig, :).';
     
 % In case audioPlayerRecorder doesn't work, consult debuggingGTAC B)
 samplesPerFrame = sampleRate*2;
 playRecExt = audioPlayerRecorderExtended;
 playRecExt.mode = originType('custom');
-playRecExt.filename = filename;
 playRecExt.SampleRate = sampleRate;
 playRecExt.SamplesPerFrame = samplesPerFrame;
-location = 'laptop'; % laboratory/laptop
+location = 'laboratory'; % laboratory/laptop
 switch location
     case 'laboratory'
-        playRec.Device = 'MOTU PCI ASIO';
+        playRecExt.Device = 'MOTU PCI ASIO';
         numRecChann = 2;
+        playRecExt.PlayerChannelMapping = [1, wfsChanOrig];
     case 'laptop'
-        playRec.Device = 'Default';
+        playRecExt.Device = 'Default';
         numRecChann = 1;
-        playRec.PlayerChannelMapping = [1 2];
+        playRecExt.PlayerChannelMapping = [1 2];
 end
 playRecExt.RecorderChannelMapping = 1:numRecChann;
     
@@ -529,7 +545,7 @@ playRecExt.RecorderChannelMapping = 1:numRecChann;
     
     % - Only noise source
     aux = customSignal;
-    aux(:, wfsIndDest) = 0;
+    aux(:, wfsChanDest) = 0;
     playRecExt.customSignal = aux;
     playRecExt.playAndRecord();
     y = playRecExt.recSignal;
@@ -543,7 +559,7 @@ playRecExt.RecorderChannelMapping = 1:numRecChann;
     
     % - Only WFS
     aux = customSignal;
-    aux(:, nsIndDest) = 0;
+    aux(:, nsChanDest) = 0;
     playRecExt.customSignal = aux;
     playRecExt.playAndRecord();
     y = playRecExt.recSignal;
@@ -557,7 +573,6 @@ playRecExt.RecorderChannelMapping = 1:numRecChann;
 
     % - All
     playRecExt.customSignal = customSignal;
-    playRecExt.customSignal = aux;
     playRecExt.playAndRecord();
     y = playRecExt.recSignal;
     
@@ -590,7 +605,7 @@ playRecExt.RecorderChannelMapping = 1:numRecChann;
     playRecExt.playAndRecord();
     recSignalCorrVol = playRecExt.recSignal';
         
-% save([dataPathName, 'recSignals_', ID, '.mat'], 'sampleRate', 'NSsignal', 'recSignalNS', 'recSignalWFS', 'recSignal')%, ...
+% save([dataPathName, 'recSignals_', ID, '.mat'], 'sampleRate', 'NSsignal', 'recSignalNS', 'recSignalWFS', 'recSignal', 'obj.NSposition')%, ...
     %'recSignalNScorrVol', 'recSignalWFScorrVol', 'recSignalCorrVol');
 
 %% Comparison of measures and estimations. They should be similar.
@@ -647,10 +662,17 @@ end
     
 % Compare it with the simulated one according to the measured acoustic
 % paths
-% [sExtSimul, corrFactIndSimul, corrFactGlobSimul, gainIndSimul, gainGlobSimul, corrFactAverSimul, gainAverSimul] =...
-%         SimulationController.addCancellationParametersToStructure(sSimul);
-% [sExtSimulCorrVol, corrFactIndSimulCorrVol, corrFactGlobSimulCorrVol, gainIndSimulCorrVol, gainGlobSimulCorrVol, corrFactAverSimulCorrVol, gainAverSimulCorrVol] =...
-%         SimulationController.addCancellationParametersToStructure(sSimulCorrVol);
+[sExtSimul, corrFactIndSimul, corrFactGlobSimul, gainIndSimul, gainGlobSimul, corrFactAverSimul, gainAverSimul] =...
+        SimulationController.addCancellationParametersToStructure(sSimul);
+[sExtSimulCorrVol, corrFactIndSimulCorrVol, corrFactGlobSimulCorrVol, gainIndSimulCorrVol, gainGlobSimulCorrVol, corrFactAverSimulCorrVol, gainAverSimulCorrVol] =...
+        SimulationController.addCancellationParametersToStructure(sSimulCorrVol);
+
+    
+H_NS_chirp = recNS./NSspec;
+H_NS_ofdm = squeeze(FRint(:, 1, :));
+ax = axes(figure, 'NextPlot', 'Add');
+plot(ax, freqs, abs(H_NS_chirp(1,:)))
+plot(ax, freqs, abs(H_NS_ofdm(1,:)))
 
 ax = axes(figure, 'NextPlot', 'Add');
 plot(ax, freqs, 10*log10(gainAver))
