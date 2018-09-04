@@ -467,7 +467,7 @@ end
 durSign = 4; % Duration of tone for time processing
 sampleRate = 44100;
 t = (0:ceil(durSign*sampleRate)-1)/sampleRate;
-NSsignal = chirp(t, min(freqs), durSign, max(freqs) + 50);
+NSsignal = 0.5*chirp(t, min(freqs), durSign, max(freqs) + 50);
 prefixDuration = 2;
 prefixNumSamples = ceil(prefixDuration*sampleRate);
 NSsignal = [zeros(1, prefixNumSamples), NSsignal, zeros(1, prefixNumSamples )];
@@ -689,16 +689,19 @@ options.TickLabels2Latex = false;
 % The received signals from the noise source in both microphones are:
     % Time representation
     ax = axes(figure);
-    plot(ax, tRec, recSignalNS.')
+    plot(ax, tNS, recSignalNS(:,1:length(tNS)).')
     ax.XLabel.String = 'Time (s)';
     ax.YLabel.String = '$\Field[ns][time]$'; ax.YLabel.Interpreter = 'latex';
-    Plot2LaTeX(ax.Parent, [imagesPath, 'Experiment16_recNSTime'], options)
+    legend(ax, 'Micro 1', 'Micro 2')
+    options.Legend2Latex = false;
+%     Plot2LaTeX(ax.Parent, [imagesPath, 'Experiment16_recNSTime'], options)
 
     % Frequency representation
     ax = axes(figure);
     plot(ax, freqs, abs(recNS).')
     ax.XLabel.String = 'Frequency (Hz)';
     ax.YLabel.String = '$\Field[ns][frequency]$'; ax.YLabel.Interpreter = 'latex';
+    legend(ax, 'Micro 1', 'Micro 2')
 %     Plot2LaTeX(ax.Parent, [imagesPath, 'Experiment16_recNSFreq'], options)
 
 % The received signals from the secondary array in both microphones are:
@@ -752,23 +755,24 @@ options.TickLabels2Latex = false;
     % ---- No optimization ----
         % Time representation
         ax = axes(figure);
-        plot(ax, tRec, recSignalNS(1,:).', tRec, recSignal(1,:).')
+        plot(ax, tNS, recSignalNS(1,1:length(tNS)).', tNS, recSignal(1,1:length(tNS)).')
         ax.XLabel.String = 'Time (s)';
         legend(ax, {'$\Field[ns][time]$', '$\Field[total][time]$'})
-%         Plot2LaTeX(ax.Parent, [imagesPath, 'Experiment16_recAndrecNStime_1'], options)
+        options.Legend2Latex = true;
+        Plot2LaTeX(ax.Parent, [imagesPath, 'Experiment16_recAndrecNStime_1'], options)
 
         ax = axes(figure);
-        plot(ax, tRec, recSignalNS(2,:).', tRec, recSignal(2,:).')
+        plot(ax, tNS, recSignalNS(2,1:length(tNS)).', tNS, recSignal(2,1:length(tNS)).')
         ax.XLabel.String = 'Time (s)';
         legend(ax, {'$\Field[ns][time]$', '$\Field[total][time]$'})
-%         Plot2LaTeX(ax.Parent, [imagesPath, 'Experiment16_recAndrecNStime_2'], options)
+        Plot2LaTeX(ax.Parent, [imagesPath, 'Experiment16_recAndrecNStime_2'], options)
 
         % Frequency representation
         ax = axes(figure);
         plot(ax, freqs, abs(recNS(1,:)).', freqs, abs(rec(1,:)).')
         ax.XLabel.String = 'Frequency (Hz)';
         legend(ax, {'$\Field[ns][frequency]$', '$\Field[total][frequency]$'})
-%         Plot2LaTeX(ax.Parent, [imagesPath, 'Experiment16_recAndrecNSfreq_1'], options)
+        Plot2LaTeX(ax.Parent, [imagesPath, 'Experiment16_recAndrecNSfreq_1'], options)
 
         ax = axes(figure);
         plot(ax, freqs, abs(recNS(2,:)).', freqs, abs(rec(2,:)).')

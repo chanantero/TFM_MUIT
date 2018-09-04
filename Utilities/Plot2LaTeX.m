@@ -143,8 +143,15 @@ if nargin > 2
     else
         TickLabelToLatex = true;
     end
+    
+    if isfield(options, 'Legend2Latex')
+        LegendToLatex = options.Legend2Latex;
+    else
+        LegendToLatex = true;
+    end
 else
     TickLabelToLatex = true;
+    LegendToLatex = true;
 end
 
 % TickLabelToLatex should always be true, as I checked. The reason for this
@@ -169,11 +176,25 @@ for k = 1:numel(TexObj)
     TexObj(k).String = [];
 end
 
+if LegendToLatex
 for k = 1:numel(LegObj)
     pos = LegObj(k).Position;
-    LegObj(k).String = {''};
+    N = length(LegObj(k).String);
+
+    for n = 1:N
+        LegObj(k).String{n} = '';
+    end
+    
+    while pos(3) >= LegObj(k).Position(3) % first label of legend should match box size
+        LegObj(k).String{1} = [LegObj(k).String{1},'.'];
+    end
+    LegObj(k).String{1} = LegObj(k).String{1}(1:end-1);
+    
+    LegObj(k).TextColor = [1 1 1];
+    
     drawnow
     LegObj(k).Position = pos;
+end    
 end
 
 for k = 1:numel(ColObj)
@@ -203,13 +224,13 @@ PosAnchSVG      = {'start','middle','end'};
 PosAligmentSVG  = {'start','center','end'};
 PosAligmentMAT  = {'left','center','right'};
 
+ChangeInterpreter(h,'Latex')
+h.PaperPositionMode = 'auto'; % Keep current size
+
 n_Axe = length(LegObj);
 for i = 1:n_Axe % scale text omit in next version
     LegPos(i,:) = LegObj(i).Position;
 end
-
-ChangeInterpreter(h,'Latex')
-h.PaperPositionMode = 'auto'; % Keep current size
 
 %% Replace text with a label
 Step = Step + 1;
@@ -245,6 +266,7 @@ for i = 1:n_TexObj % do for text, titles and axes labels
 end
 
 % do similar for legend objects
+if LegendToLatex
 n_LegObj = length(LegObj);
 iLegEntry = 0;
 for i = 1:n_LegObj
@@ -262,7 +284,9 @@ for i = 1:n_LegObj
     while LegPos(i,3) >= LegObj(i).Position(3) % first label of legend should match box size
         LegObj(i).String{1} = [LegObj(i).String{1},'.'];
     end
+    if length(LegObj(i).String{1}) > 1
     LegObj(i).String{1} = LegObj(i).String{1}(1:end-1);
+    end
     Labels(iLabel).LabelText = LegObj(i).String{1}; % write as label
     
     for j = 2:n_Str % do short as possible label for other entries
@@ -274,6 +298,7 @@ for i = 1:n_LegObj
         Labels(iLabel).LabelText = LegText(iLegEntry);
         LegObj(i).String{j} = LegText(iLegEntry);
     end
+end
 end
 
 % do similar for axes objects, XTick, YTick, ZTick
