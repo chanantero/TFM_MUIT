@@ -109,6 +109,7 @@ for m = 1:numMicrophones
     end
     
     acousticPath(m, :, :) = permute(dft, [3, 2 1]);
+    acousticPath = acousticPath*22; % Respones where decimated by 22 when measuring. Czy, K., Signal, C., Group, P., & Applications, M. (2011). Modeling of 2-D sound pressure distribution in laboratory enclosure.
 end 
 
 if nargout > 1

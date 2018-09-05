@@ -244,9 +244,10 @@ for f = 1:numRepFreqs
     [~, indFreq] = min(abs(repFreqs(f) - freqs));
     repArr = abs(acPath(:, indFreq));
     ax = axes(figure, 'NextPlot', 'Add');
-%     scatter(ax, distances, repArr, 1, '.')
-    histogram2D(repArr, 1, distances, distEdges, magEdges, 'axes', ax);
-    plot(ax, dVec, params{1}(indFreq).a./dVec, 'r', 'LineWidth', 3)
+    scatter(ax, distances, repArr, 1, '.')
+%     histogram2D(repArr, 1, distances, distEdges, magEdges, 'axes', ax);
+%     plot(ax, dVec, params{1}(indFreq).a./dVec, 'r', 'LineWidth', 3)
+    plot(ax, dVec, 1./dVec, 'r', 'LineWidth', 3)
     ax.XLim = [min(distances), max(distances)];
     ax.YLim = [0 max(abs(acPath(:)))];
     ax.XLabel.String = 'Distance (m)';
@@ -256,12 +257,12 @@ for f = 1:numRepFreqs
     axsA(f) = ax;
 end
 
-% ax.YLim = [0 0.25];
+% ax.YLim = [0 4];
 
 % % Print
-% for f = 1:numRepFreqs
-%     printfig(axsA(f).Parent, imagesPath, ['Experiment13_AmpByDist_', num2str(repFreqs(f)), 'Hz'], 'eps');
-% end
+for f = 1:numRepFreqs
+    printfig(axsA(f).Parent, imagesPath, ['Experiment13_AmpByDist_', num2str(repFreqs(f)), 'Hz'], 'eps');
+end
 
 
 % B) All frequencies, fixed distance (pair loudspeaker - measure point). Histogram/scatter/plot. x axis: distance. y axis: magnitude.
@@ -579,3 +580,27 @@ end
 
 % Print
 printfig(axGainAver.Parent, imagesPath, ['Experiment13_gainAverReflCoefSimil_', num2str(round(beta*100))], 'eps')
+
+%% Análisis respuestas GTAC
+
+path = 'C:\Users\Rubén\Downloads\ImpulseResponse\'; % Path to impulse responses
+name = ['imp_', '1'];
+s = load([path, name, '.mat'], 'e_ir');
+imp = s.e_ir; % (numLoudspeakers x numSamples);
+plot(imp')
+
+sampleRate = 44100;
+numSampIR = size(imp, 2);
+t = (0:numSampIR - 1)/sampleRate;
+
+ax = axes(figure);
+plot(ax, t, imp')
+
+a = freqz(imp(1, :), 1, 0:10:1000, sampleRate);
+plot(0:10:1000, abs(a)*22)
+
+x = cos(t*2*pi*450);
+y = conv(x, imp(1,:));
+tt = (0:length(y)-1)/sampleRate;
+plot(t, x, tt, y)
+

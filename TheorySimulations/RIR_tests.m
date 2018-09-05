@@ -22,20 +22,20 @@ s = [0 0 0] + offset;
 roomDim = [10 10 10];
 IR_rir = rir_generator(c, fs, r, s, roomDim, 0, numSamp);
 
-% % Plot both IR
-% ax = axes(figure);
-% plot(ax, t, IR_ideal, t, IR_rir)
+% Plot both IR
+ax = axes(figure);
+plot(ax, t, IR_ideal, t, IR_rir)
 
 % Peform spectral analysis
 f = (0:numSamp - 1)*(fs/numSamp);
 FR_ideal = fft(IR_ideal);
 FR_rir = fft(IR_rir);
 
-% axFR = axes(figure);
-% plot(axFR, f, abs(FR_ideal), f, abs(FR_rir))
-% yyaxis right
-% plot(axFR, f, rad2deg(angle(FR_ideal)), '--b', f, rad2deg(angle(FR_rir)), '--r')
-% axFR.YAxis(1).Limits = [0 1.5];
+axFR = axes(figure);
+plot(axFR, f, abs(FR_ideal), f, abs(FR_rir))
+yyaxis right
+plot(axFR, f, rad2deg(angle(FR_ideal)), '--b', f, rad2deg(angle(FR_rir)), '--r')
+axFR.YAxis(1).Limits = [0 1.5];
 
 axPhase = axes(figure);
 plot(axPhase, f, rad2deg(unwrap(angle(FR_ideal))), f, rad2deg(unwrap(angle(FR_rir))))
@@ -149,3 +149,38 @@ end
 
 ax = axes(figure);
 plot(ax, reverberationTime, meanReflectCoef)
+ax.XLabel.String = 'Reverberation time (s)';
+ax.YLabel.String = '\beta';
+
+
+%% Different fs
+
+fs = 44100*[0.25, 0.5, 1, 2];
+numFs = length(fs);
+
+hs = zeros(numFs, numSampIR);
+for k = 1:numFs
+    h = rir_generator(c, fs(k), recPos, sourcePos, roomDim, zeros(1,6), numSampIR);
+    hs(k, :) = h;
+end
+
+T = repmat(0:numSampIR-1, [numFs, 1])./repmat(fs', [1, numSampIR]);
+ax = axes(figure, 'NextPlot', 'Add');
+for k = 1:numFs
+    plot(ax, T(k, :), hs(k, :))
+end
+
+freqs = 0:1000;
+numFreqs = length(freqs);
+Hs = zeros(numFs, numFreqs);
+for k = 1:numFs
+    Hs(k, :) = freqz(hs(k,:), 1, freqs, fs(k));
+end
+
+ax = axes(figure, 'NextPlot', 'Add');
+plot(ax, freqs, abs(Hs))
+
+a = conv([1 0], hs(1,:));
+plot(a)
+hold on
+plot(hs(1,:))

@@ -346,7 +346,7 @@ switch location
         wfsChan = obj.WFSToolObj.loudspeakerMapping(1).destinationInd;
         wfsInd = obj.WFSToolObj.loudspeakerMapping(1).originInd;
         [flag, pointer] = ismember(activeWFSind, wfsInd);
-        assert(all(flag) && length(activeWFSind) == numChannels, 'Not valid activeWFSind')
+        assert(all(flag) && length(activeWFSind) == numChannels-1, 'Not valid activeWFSind')
         wfsActiveChan = wfsChan(pointer);
         nsChan = obj.WFSToolObj.loudspeakerMapping(2).destinationInd;
         PlayerChannelMapping = [nsChan; wfsActiveChan];
@@ -417,7 +417,7 @@ y = 0 - w*cosd(alpha) + d*sind(alpha) - L*cosd(alpha);
 NSpositions = [x y 0]; % Assumed real position
 
 WFS_FR = FRint(:, 2:end, :);
-NS_FR = FRind(:, 1, :);
+NS_FR = FRint(:, 1, :);
 
 % WFS calculation of WFS coefficients and simulation
 obj.NSposition = NSpositions;
@@ -446,8 +446,6 @@ for f = 1:numFreqs
     s(f).recWFScoef = fieldWFS(:, f);
     s(f).WFScoef = WFScoefs(:, f);
 end
-[sExt, corrFactInd, corrFactGlob, gainInd, gainGlob, corrFactAver, gainAver] =...
-    SimulationController.addCancellationParametersToStructure(s);
 
 sSimul = s;
 
@@ -463,6 +461,10 @@ sel = freqs >= minFreq & freqs <= maxFreq;
 fieldWFSaux = recWFScoef(:, sel);
 fieldNSaux = recNScoef(:, sel);
 corrFact = -fieldWFSaux(:)\fieldNSaux(:);
+corrVolInd = zeros(numMicro, 1);
+for m = 1:numMicro
+    corrVolInd(m) = real(fieldWFSaux(m,:).'\fieldNSaux(m,:).');
+end
 corrVol = real(corrFact);
 corrFactComp = -fieldNSaux./fieldWFSaux;
 plot(freqs(sel), abs(corrFactComp))
@@ -522,7 +524,7 @@ playRecExt = audioPlayerRecorderExtended;
 playRecExt.mode = originType('custom');
 playRecExt.SampleRate = sampleRate;
 playRecExt.SamplesPerFrame = samplesPerFrame;
-location = 'laptop'; % laboratory/laptop
+location = 'laboratory'; % laboratory/laptop
 switch location
     case 'laboratory'
         playRecExt.Device = 'MOTU PCI ASIO';
@@ -592,12 +594,12 @@ playRecExt.RecorderChannelMapping = 1:numRecChann;
     aux(:, nsIndDest) = 0;
     playRecExt.customSignal = aux;
     playRecExt.playAndRecord();
-    recSignalWFScorrVol = playRecExt.recSignal';
+    recSignalWFScorrVolTime = playRecExt.recSignal';
     
     % - All
     playRecExt.customSignal = customSignal;
     playRecExt.playAndRecord();
-    recSignalCorrVol = playRecExt.recSignal';
+    recSignalCorrVolTime = playRecExt.recSignal';
         
 % save([dataPathName, 'recSignals_', ID, '.mat'], 'sampleRate', 'NSsignal', 'recSignalNS', 'recSignalWFS', 'recSignal', 'obj.NSposition')%, ...
     %'recSignalNScorrVol', 'recSignalWFScorrVol', 'recSignalCorrVol');
@@ -614,9 +616,10 @@ for m = 1:numMicro
 end
 
 numSamp = size(recSignal, 2);
-recSignalNScorrVol = recSignalNS;
-recSignalWFScorrVol = recSignalWFS.*repmat(corrVolTime, [1, numSamp]);
-recSignalCorrVol = recSignalNScorrVol + recSignalWFScorrVol;
+recSignalWFScorrVolTime = recSignalWFS.*repmat(corrVolTime, [1, numSamp]);
+recSignalCorrVolTime = recSignalNS + recSignalWFScorrVolTime;
+recSignalWFScorrVol = recSignalWFS.*repmat(corrVolInd, [1, numSamp]);
+recSignalCorrVol = recSignalNS + recSignalWFScorrVol;
 
 recSignalEst = recSignalNS + recSignalWFS;
 ax = axes(figure, 'NextPlot', 'Add');
@@ -631,9 +634,10 @@ NSspec = freqz(NSsignal, 1, freqs, sampleRate);
 recNS = oneDimOperOverMultiDimArray(oper, recSignalNS, 2);
 recWFS = oneDimOperOverMultiDimArray(oper, recSignalWFS, 2);
 rec = oneDimOperOverMultiDimArray(oper, recSignal, 2);
-recNScorrVol = oneDimOperOverMultiDimArray(oper, recSignalNScorrVol , 2);
-recWFScorrVol = oneDimOperOverMultiDimArray(oper, recSignalWFScorrVol , 2);
-recCorrVol  = oneDimOperOverMultiDimArray(oper, recSignalCorrVol , 2);
+recWFScorrVolTime = recWFS.*repmat(corrVolTime, [1, numFreqs]);
+recCorrVolTime  = recNS + recWFScorrVolTime;
+recWFScorrVol = recWFS.*repmat(corrVolInd, [1, numFreqs]);
+recCorrVol  = recNS + recWFScorrVol;
 
 obj.domain = 'frequency';
 sExp = repmat(obj.generateBasicExportStructure, numFreqs, 1);
@@ -644,9 +648,9 @@ for f = 1:numFreqs
     sExp(f).recWFScoef = recWFS(:, f);
     sExp(f).Frequency = freqs(f);
     
-    sExpCorrVol(f).recCoef = recCorrVol(:, f);
-    sExpCorrVol(f).recNScoef = recNScorrVol(:, f);
-    sExpCorrVol(f).recWFScoef = recWFScorrVol(:, f);
+    sExpCorrVol(f).recCoef = recCorrVolTime(:, f);
+    sExpCorrVol(f).recNScoef = recNS(:, f);
+    sExpCorrVol(f).recWFScoef = recWFScorrVolTime(:, f);
     sExpCorrVol(f).Frequency = freqs(f);
 end
 [sExt, corrFactInd, corrFactGlob, gainInd, gainGlob, corrFactAver, gainAver] =...
@@ -656,28 +660,100 @@ end
     
 % Compare it with the simulated one according to the measured acoustic
 % paths
-% [sExtSimul, corrFactIndSimul, corrFactGlobSimul, gainIndSimul, gainGlobSimul, corrFactAverSimul, gainAverSimul] =...
-%         SimulationController.addCancellationParametersToStructure(sSimul);
-% [sExtSimulCorrVol, corrFactIndSimulCorrVol, corrFactGlobSimulCorrVol, gainIndSimulCorrVol, gainGlobSimulCorrVol, corrFactAverSimulCorrVol, gainAverSimulCorrVol] =...
-%         SimulationController.addCancellationParametersToStructure(sSimulCorrVol);
+[sExtSimul, corrFactIndSimul, corrFactGlobSimul, gainIndSimul, gainGlobSimul, corrFactAverSimul, gainAverSimul] =...
+        SimulationController.addCancellationParametersToStructure(sSimul);
+[sExtSimulCorrVol, corrFactIndSimulCorrVol, corrFactGlobSimulCorrVol, gainIndSimulCorrVol, gainGlobSimulCorrVol, corrFactAverSimulCorrVol, gainAverSimulCorrVol] =...
+        SimulationController.addCancellationParametersToStructure(sSimulCorrVol);
 
+%% Analysis of results. ¿Are they correct?
+
+% Compare acoustic paths with chirp and with OFDM
 H_NS_chirp = recNS./NSspec;
 H_NS_ofdm = squeeze(FRint(:, 1, :));
-ax = axes(figure, 'NextPlot', 'Add');
-plot(ax, freqs, abs(H_NS_chirp(1,:)))
-plot(ax, freqs, abs(H_NS_ofdm(1,:)))
 
+pha_chirp = unwrap(angle(H_NS_chirp), [], 2);
+pha_ofdm = unwrap(angle(H_NS_ofdm), [], 2);
+
+fig = figure;
+cmap = lines;
+
+ax1 = subplot(1, 2, 1, 'NextPlot', 'Add');
+plot(ax1, freqs, abs(H_NS_chirp(1,:)), '-', 'Color', cmap(1,:))
+plot(ax1, freqs, abs(H_NS_ofdm(1,:)), '--', 'Color', cmap(1,:))
+yyaxis(ax1, 'right')
+ax1.YColor = cmap(2,:);
+plot(ax1, freqs, pha_chirp(1,:), '-', 'Color', cmap(2,:))
+plot(ax1, freqs, pha_ofdm(1,:), '--', 'Color', cmap(2,:))
+yyaxis(ax1, 'left')
+ax1.YColor = cmap(1,:);
+
+ax2 = subplot(1, 2, 2, 'NextPlot', 'Add');
+plot(ax2, freqs, abs(H_NS_chirp(2,:)), '-', 'Color', cmap(1,:))
+plot(ax2, freqs, abs(H_NS_ofdm(2,:)), '--', 'Color', cmap(1,:))
+yyaxis(ax2, 'right')
+ax2.YColor = cmap(2,:);
+plot(ax2, freqs, pha_chirp(2,:), '-', 'Color', cmap(2,:))
+plot(ax2, freqs, pha_ofdm(2,:), '--', 'Color', cmap(2,:))
+yyaxis(ax2, 'left')
+ax2.YColor = cmap(1,:);
+
+phaseDelay_chirp = -pha_chirp./(2*pi*freqs);
+phaseDelay_ofdm = -pha_ofdm./(2*pi*freqs);
+
+ax = axes(figure, 'NextPlot', 'Add');
+plot(ax, freqs, phaseDelay_chirp*340)
+plot(ax, freqs, phaseDelay_ofdm*340)
+
+groupdDelay_chirp  = -diff(pha_chirp, 1, 2)./(2*pi*diff(freqs, 1));
+groupdDelay_ofdm  = -diff(pha_ofdm, 1, 2)./(2*pi*diff(freqs, 1));
+ax = axes(figure, 'NextPlot', 'Add');
+plot(ax, freqs(1:end-1), groupdDelay_chirp*340)
+plot(ax, freqs(1:end-1), groupdDelay_ofdm*340)
+
+% Conclussion: they are more or less similar
+
+% Comparison of correction factors
+ax = axes(figure, 'NextPlot', 'Add');
+plot(ax, freqs, abs(corrFactIndSimul(:, 1, 1)))
+plot(ax, freqs, abs(corrFactInd(:, 1, 1)))
+ax.XLabel.String = 'Frequency (Hz)';
+ax.YLabel.String = '|\Psi|';
+
+phaCorrFact = angle(corrFactInd(:,1,1));
+
+fig = figure;
+cmap = lines;
+
+ax1 = subplot(1, 2, 1, 'NextPlot', 'Add');
+plot(ax1, freqs, abs(corrFactInd(:,1,1)), '-', 'Color', cmap(1,:))
+plot(ax1, freqs, abs(corrFactIndSimul(:,1,1)), '--', 'Color', cmap(1,:))
+yyaxis(ax1, 'right')
+ax1.YColor = cmap(2,:);
+plot(ax1, freqs, -pi + (angle(corrFactInd(:,1,1))), '-', 'Color', cmap(2,:))
+plot(ax1, freqs, (angle(corrFactIndSimul(:,1,1))), '--', 'Color', cmap(2,:))
+yyaxis(ax1, 'left')
+ax1.YColor = cmap(1,:);
+
+ax2 = subplot(1, 2, 2, 'NextPlot', 'Add');
+plot(ax2, freqs, abs(corrFactInd(:,1,2)), '-', 'Color', cmap(1,:))
+plot(ax2, freqs, abs(corrFactIndSimul(:,1,2)), '--', 'Color', cmap(1,:))
+yyaxis(ax2, 'right')
+ax2.YColor = cmap(2,:);
+plot(ax2, freqs, (angle(corrFactInd(:,1,2))), '-', 'Color', cmap(2,:))
+plot(ax2, freqs, (angle(corrFactIndSimul(:,1,2))), '--', 'Color', cmap(2,:))
+yyaxis(ax2, 'left')
+ax2.YColor = cmap(1,:);
+
+% Conclussion: although results are a little confusing regarding the phase,
+% both correction factors are pretty similar.
+
+% 
 ax = axes(figure, 'NextPlot', 'Add');
 plot(ax, freqs, 10*log10(gainAver))
 plot(ax, freqs, 10*log10(gainAverSimul))
 ax.XLabel.String = 'Frequency (Hz)';
 ax.YLabel.String = 'Average gain (dB)';
 
-ax = axes(figure, 'NextPlot', 'Add');
-plot(ax, freqs, abs(corrFactIndSimul(:, 1, 1)))
-plot(ax, freqs, abs(corrFactInd(:, 1, 1)))
-ax.XLabel.String = 'Frequency (Hz)';
-ax.YLabel.String = '|\Psi|';
 
 %% View of results
 numSamp = size(NSsignal, 2);
@@ -692,7 +768,7 @@ options.TickLabels2Latex = false;
     plot(ax, tNS, NSsignal)
     ax.XLabel.String = 'Time (s)';
     ax.YLabel.String = '$\signal[ns][time]$'; ax.YLabel.Interpreter = 'latex';
-%     Plot2LaTeX(ax.Parent, [imagesPath, 'Experiment16_NSsignalTime'], options)
+    Plot2LaTeX(ax.Parent, [imagesPath, 'Experiment16_NSsignalTime'], options)
 
     % Frequency representation
     ax = axes(figure);
@@ -708,6 +784,7 @@ options.TickLabels2Latex = false;
     ax.XLabel.String = 'Time (s)';
     ax.YLabel.String = '$\Field[ns][time]$'; ax.YLabel.Interpreter = 'latex';
     legend(ax, 'Micro 1', 'Micro 2')
+    ax.Children = flip(ax.Children);
     options.Legend2Latex = false;
 %     Plot2LaTeX(ax.Parent, [imagesPath, 'Experiment16_recNSTime'], options)
 
@@ -754,14 +831,14 @@ options.TickLabels2Latex = false;
     % ---- Volume optimization ----    
         % Time representation
         ax = axes(figure);
-        plot(ax, tRec, recSignalCorrVol.')
+        plot(ax, tRec, recSignalCorrVolTime.')
         ax.XLabel.String = 'Time (s)';
         ax.YLabel.String = '$\Field[total][time]$'; ax.YLabel.Interpreter = 'latex';
 %         Plot2LaTeX(ax.Parent, [imagesPath, 'Experiment16_recCorrVolTime'], options)
 
         % Frequency representation
         ax = axes(figure);
-        plot(ax, freqs, abs(recCorrVol).')
+        plot(ax, freqs, abs(recCorrVolTime).')
         ax.XLabel.String = 'Frequency (Hz)';
         ax.YLabel.String = '$\Field[total][frequency]$'; ax.YLabel.Interpreter = 'latex';
 %         Plot2LaTeX(ax.Parent, [imagesPath, 'Experiment16_recCorrVolFreq'], options)
@@ -796,29 +873,56 @@ options.TickLabels2Latex = false;
         Plot2LaTeX(ax.Parent, [imagesPath, 'Experiment16_recAndrecNSfreq_2'], options)
 
        
-% ---- Volume optimization ----
+% ---- Volume optimization (time opt) ----
         % Time representation
         ax = axes(figure);
-        plot(ax, tRec, recSignalNScorrVol(1,:).', tRec, recSignalCorrVol(1,:).')
+        plot(ax, tRec, recSignalNS(1,:).', tRec, recSignalCorrVolTime(1,:).')
         ax.XLabel.String = 'Time (s)';
         legend(ax, {'$\Field[ns][time]$', '$\Field[total][time]$'})
-%         Plot2LaTeX(ax.Parent, [imagesPath, 'Experiment16_recAndrecNStimeCorrVol_1'], options)
+        Plot2LaTeX(ax.Parent, [imagesPath, 'Experiment16_recAndrecNStimeCorrVolTime_1'], options)
 
         ax = axes(figure);
-        plot(ax, tRec, recSignalNScorrVol(2,:).', tRec, recSignalCorrVol(2,:).')
+        plot(ax, tRec, recSignalNS(2,:).', tRec, recSignalCorrVolTime(2,:).')
+        ax.XLabel.String = 'Time (s)';
+        legend(ax, {'$\Field[ns][time]$', '$\Field[total][time]$'})
+%         Plot2LaTeX(ax.Parent, [imagesPath, 'Experiment16_recAndrecNStimeCorrVolTime_2'], options)
+
+        % Frequency representation
+        ax = axes(figure);
+        plot(ax, freqs, abs(recNS(1,:)).', freqs, abs(recCorrVolTime(1,:)).')
+        ax.XLabel.String = 'Frequency (Hz)';
+        legend(ax, {'$\Field[ns][frequency]$', '$\Field[total][frequency]$'})
+        Plot2LaTeX(ax.Parent, [imagesPath, 'Experiment16_recAndrecNSfreqCorrVolTime_1'], options)
+
+        ax = axes(figure);
+        plot(ax, freqs, abs(recNS(2,:)).', freqs, abs(recCorrVolTime(2,:)).')
+        ax.XLabel.String = 'Frequency (Hz)';
+        legend(ax, {'$\Field[ns][frequency]$', '$\Field[total][frequency]$'})
+%         Plot2LaTeX(ax.Parent, [imagesPath, 'Experiment16_recAndrecNSfreqCorrVolTime_2'], options)
+
+% ---- Volume optimization (freq opt) ----
+        % Time representation
+        ax = axes(figure);
+        plot(ax, tRec, recSignalNS(1,:).', tRec, recSignalCorrVol(1,:).')
+        ax.XLabel.String = 'Time (s)';
+        legend(ax, {'$\Field[ns][time]$', '$\Field[total][time]$'})
+        Plot2LaTeX(ax.Parent, [imagesPath, 'Experiment16_recAndrecNStimeCorrVol_1'], options)
+
+        ax = axes(figure);
+        plot(ax, tRec, recSignalNS(2,:).', tRec, recSignalCorrVol(2,:).')
         ax.XLabel.String = 'Time (s)';
         legend(ax, {'$\Field[ns][time]$', '$\Field[total][time]$'})
 %         Plot2LaTeX(ax.Parent, [imagesPath, 'Experiment16_recAndrecNStimeCorrVol_2'], options)
 
         % Frequency representation
         ax = axes(figure);
-        plot(ax, freqs, abs(recNScorrVol(1,:)).', freqs, abs(recCorrVol(1,:)).')
+        plot(ax, freqs, abs(recNS(1,:)).', freqs, abs(recCorrVol(1,:)).')
         ax.XLabel.String = 'Frequency (Hz)';
         legend(ax, {'$\Field[ns][frequency]$', '$\Field[total][frequency]$'})
         Plot2LaTeX(ax.Parent, [imagesPath, 'Experiment16_recAndrecNSfreqCorrVol_1'], options)
 
         ax = axes(figure);
-        plot(ax, freqs, abs(recNScorrVol(2,:)).', freqs, abs(recCorrVol(2,:)).')
+        plot(ax, freqs, abs(recNS(2,:)).', freqs, abs(recCorrVol(2,:)).')
         ax.XLabel.String = 'Frequency (Hz)';
         legend(ax, {'$\Field[ns][frequency]$', '$\Field[total][frequency]$'})
 %         Plot2LaTeX(ax.Parent, [imagesPath, 'Experiment16_recAndrecNSfreqCorrVol_2'], options)
@@ -838,6 +942,12 @@ ax.YLabel.String = '|\correctionFactor|';
 legend(ax, 'No optimization', 'Volume correction')
 
 corrcoef([recSignalNS(1,:)', recSignalWFS(1,:)'])
+a = [1 i 1].'; b = [1 -i -1].';
+corrcoef([a, b])
+
+corrVolIndComplex = 
+sum(a.*conj(b))
+
 
 % Average gain for no optimization and for optimization of volume
 ax = axes(figure, 'NextPlot', 'Add');
