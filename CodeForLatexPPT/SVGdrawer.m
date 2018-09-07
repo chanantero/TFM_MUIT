@@ -44,6 +44,7 @@ classdef SVGdrawer
         microColorUnique
         WFScolorUnique
         NScolorUnique
+        WFSsymbolUnique
     end
     
     % Getters and setters
@@ -74,6 +75,10 @@ classdef SVGdrawer
         
         function NScolorUnique = get.NScolorUnique(obj)
             NScolorUnique = numel(obj.NScolor) ~= obj.numNS;
+        end
+        
+        function WFSsymbolUnique = get.WFSsymbolUnique(obj)
+            WFSsymbolUnique = numel(obj.WFSsymbol) ~= obj.numWFS;
         end
     end
     
@@ -166,16 +171,21 @@ classdef SVGdrawer
                 strBackground = '';
             end
             
+            if ~obj.WFScolorUnique
+                wfsColor = obj.WFScolor;
+            else
+                wfsColor = repmat(obj.WFScolor, [obj.numWFS, 1]);
+            end
+            if ~obj.WFSsymbolUnique
+                wfsSymbol = obj.WFSsymbol;
+            else
+                wfsSymbol = repmat(obj.WFSsymbol, [obj.numWFS, 1]);
+            end
             strLoud = cell(obj.numWFS, 1);
             for k = 1:obj.numWFS
                 id = ['WFSloudspeaker_', num2str(k)];
-                if ~obj.WFScolorUnique
-                    strLoud{k} = sprintf(drawLoudspeakerStr, id, obj.WFSsymbol, obj.WFSpositions(k, 1), obj.WFSpositions(k, 2), obj.WFSangles(k), obj.WFSpositions(k, 1), obj.WFSpositions(k, 2),...
-                        obj.WFScolor{k});
-                else
-                    strLoud{k} = sprintf(drawLoudspeakerStr, id, obj.WFSsymbol, obj.WFSpositions(k, 1), obj.WFSpositions(k, 2), obj.WFSangles(k), obj.WFSpositions(k, 1), obj.WFSpositions(k, 2),...
-                    obj.WFScolor{1});
-                end
+                strLoud{k} = sprintf(drawLoudspeakerStr, id, wfsSymbol{k}, obj.WFSpositions(k, 1), obj.WFSpositions(k, 2), obj.WFSangles(k), obj.WFSpositions(k, 1), obj.WFSpositions(k, 2),...
+                    wfsColor{k});
             end
             strLoud = strjoin(strLoud);
             strLoud = [sprintf('<g id="WFSarray">\n'), strLoud, sprintf('</g>\n')];

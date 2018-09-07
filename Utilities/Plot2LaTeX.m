@@ -149,6 +149,13 @@ if nargin > 2
     else
         LegendToLatex = true;
     end
+    
+    if isfield(options, 'legendWidth') % In Data Units
+        customLegendWidth = true;
+        legendWidth = options.legendWidth;
+    else
+        customLegendWidth = false;
+    end
 else
     TickLabelToLatex = true;
     LegendToLatex = true;
@@ -178,17 +185,28 @@ end
 
 if LegendToLatex
 for k = 1:numel(LegObj)
-    pos = LegObj(k).Position;
+    if customLegendWidth
+        pos = LegObj(k).Position;
+        rightSide = pos(1) + pos(3);
+        pos(3) = legendWidth;
+        pos(1) = rightSide - legendWidth;
+    else
+        pos = LegObj(k).Position;
+    end
+    
     N = length(LegObj(k).String);
 
     for n = 1:N
         LegObj(k).String{n} = '';
     end
     
+    LegObj(k).String{1} = [LegObj(k).String{1},'.'];
     while pos(3) >= LegObj(k).Position(3) % first label of legend should match box size
         LegObj(k).String{1} = [LegObj(k).String{1},'.'];
     end
-    LegObj(k).String{1} = LegObj(k).String{1}(1:end-1);
+    if length(LegObj(k).String{1}) > 1
+        LegObj(k).String{1} = LegObj(k).String{1}(1:end-1);
+    end
     
     LegObj(k).TextColor = [1 1 1];
     
@@ -226,10 +244,18 @@ PosAligmentMAT  = {'left','center','right'};
 
 ChangeInterpreter(h,'Latex')
 h.PaperPositionMode = 'auto'; % Keep current size
-
+    
 n_Axe = length(LegObj);
 for i = 1:n_Axe % scale text omit in next version
-    LegPos(i,:) = LegObj(i).Position;
+    if customLegendWidth
+        pos = LegObj(i).Position;
+        rightSide = pos(1) + pos(3);
+        pos(3) = legendWidth;
+        pos(1) = rightSide - legendWidth;
+        LegPos(i, :) = pos;
+    else
+        LegPos(i,:) = LegObj(i).Position;
+    end
 end
 
 %% Replace text with a label
@@ -272,24 +298,9 @@ iLegEntry = 0;
 for i = 1:n_LegObj
     n_Str = length(LegObj(i).String);
     
-    iLegEntry = iLegEntry + 1;
-    iLabel = iLabel + 1;
+    % generate legend label padded with dots to fill text box    
     
-    Labels(iLabel).TrueText = LegObj(i).String{1};
-    Labels(iLabel).Alignment = PosAligmentSVG(1); % legends are always left aligned
-    Labels(iLabel).Anchor = PosAnchSVG(1);
-    
-    % generate legend label padded with dots to fill text box
-    LegObj(i).String{1} = LegText(iLegEntry);
-    while LegPos(i,3) >= LegObj(i).Position(3) % first label of legend should match box size
-        LegObj(i).String{1} = [LegObj(i).String{1},'.'];
-    end
-    if length(LegObj(i).String{1}) > 1
-    LegObj(i).String{1} = LegObj(i).String{1}(1:end-1);
-    end
-    Labels(iLabel).LabelText = LegObj(i).String{1}; % write as label
-    
-    for j = 2:n_Str % do short as possible label for other entries
+    for j = 1:n_Str % do short as possible label for other entries
         iLegEntry = iLegEntry + 1;
         iLabel = iLabel + 1;
         Labels(iLabel).TrueText = LegObj(i).String{j};
@@ -298,6 +309,17 @@ for i = 1:n_LegObj
         Labels(iLabel).LabelText = LegText(iLegEntry);
         LegObj(i).String{j} = LegText(iLegEntry);
     end
+    drawnow;
+    
+    while LegPos(i,3) >= LegObj(i).Position(3) % first label of legend should match box size
+        LegObj(i).String{1} = [LegObj(i).String{1},'.'];
+    end
+    if length(LegObj(i).String{1}) > 1
+        LegObj(i).String{1} = LegObj(i).String{1}(1:end-1);
+    end
+    LegObj(i).Position = LegPos(i,:);
+    Labels(iLabel - (n_Str - 1)).LabelText = LegObj(i).String{1}; % write as label
+
 end
 end
 
@@ -564,7 +586,7 @@ end
 
 function Str = LegText(iLedEntry)
 % LEGTEXT generates legend labels based on legend entry number
-Str = num2str(iLedEntry);
+Str = ['Leg', num2str(iLedEntry)];
 end
 
 function ChangeInterpreter(h,Interpreter)
