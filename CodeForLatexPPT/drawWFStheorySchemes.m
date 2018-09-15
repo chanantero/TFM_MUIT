@@ -340,11 +340,11 @@ h = 0.5;
 s = surf(ax, [xSect; xSect], [ySect; ySect], [h h; -h, -h]);
 s.LineStyle = 'none';
 
-% Lighting properties
-s.FaceLighting = 'gouraud';
-s.BackFaceLighting = 'lit';
-s.FaceNormals = -s.FaceNormals;
-l = light(ax, 'Position', [-1 0 0], 'Style', 'local');
+% % Lighting properties
+% s.FaceLighting = 'gouraud';
+% s.BackFaceLighting = 'lit';
+% s.FaceNormals = -s.FaceNormals;
+% l = light(ax, 'Position', [-1 0 0], 'Style', 'local');
 
 % Create primary source
 PSpos = [0.1 0.3 0];
@@ -420,3 +420,217 @@ s.AlphaData(1:2, visibleFaces) = 0;
 % % doesn't work.
 
 % Plot2LaTeX( ax.Parent, [imagesPath, 'Rayleigh2_5DTheoScheme']); % 'pruebaTheoScheme'
+
+%% Rayleigh 2.5D for PowerPoint presentation
+
+% First approach
+ax = axes(figure, 'NextPlot', 'Add', 'DataAspectRatio', [1 1 1]);
+ax.Visible = 'off';
+
+% Create WFS plane
+x = [0 1 1 0 0];
+y = [0 0 1 1 0];
+z = zeros(size(x));
+plot3(ax, x, y, z, 'k')
+
+% Create section of the plane S as an line
+xSectPos = 0.5;
+xSect = [xSectPos xSectPos];
+ySect = [0, 1];
+plot3(ax, xSect, ySect, [0 0], 'k')
+
+% Extend the tube
+h = 0.5;
+s = surf(ax, [xSect; xSect], [ySect; ySect], [h h; -h, -h]);
+s.LineStyle = 'none';
+
+% % Lighting properties
+% s.FaceLighting = 'gouraud';
+% s.BackFaceLighting = 'lit';
+% s.FaceNormals = -s.FaceNormals;
+% l = light(ax, 'Position', [-1 0 0], 'Style', 'local');
+
+% Create receiving point
+RecPos = [0.9 0.7 0];
+recP = scatter3(ax, RecPos(1), RecPos(2), RecPos(3), 25, [0 0 0], 'filled');
+
+% Create the vertical line of integration
+refPointY = 0.5;
+plot3(ax, [xSectPos, xSectPos], [refPointY, refPointY], [-0.5 0.5], '--k')
+
+% Create surface points, one on the section, and other on the surface as
+% sum of the point at the section plus an orthogonal vector
+sectionP = scatter3(ax, xSectPos, refPointY, 0, 25, [0 0 0], 'filled');
+surfP = scatter3(ax, xSectPos, refPointY, 0.45, 25, [0 0 0], 'filled');
+
+% Create arrow for the vector orthonormal to the WFS plane
+longArrow = 0.15;
+arrowRub([xSectPos, refPointY, 0], [xSectPos, refPointY, longArrow],...
+    'headNormal', [1 0 0], 'axes', ax, 'lineWidth', 0.005, 'headLength', longArrow/4)
+
+% Create normal vector to the surface
+arrowRub([xSectPos, refPointY, 0], [xSectPos + longArrow, refPointY, 0],...
+    'headNormal', [0 0 1], 'axes', ax, 'lineWidth', 0.005, 'headLength', longArrow/4)
+
+% Add latex labels
+t = gobjects(1);
+offsetX = 0.02; offsetY = -0.02;
+t(1) = text(ax, RecPos(1) + offsetX, RecPos(2) + offsetY, '$\PosTheo$');
+t(2) = text(ax, 0.1, 0.8, '$\wfsPlane$');
+t(3) = text(ax, 0.8, 0.1, '$\sectionTheo$');
+t(4) = text(ax, xSectPos + offsetX, refPointY + offsetY, '$\PosTheo[section]$');
+t(5) = text(ax, xSectPos + offsetX, refPointY + offsetY,...
+    '$\PosTheo[section] + h \wfsPlaneNormal$');
+t(6) = text(ax, xSectPos, refPointY, '$\wfsPlaneNormal$');
+t(7) = text(ax, xSectPos + longArrow, refPointY, '$\surfaceNormal$');
+
+
+ax.View = [40, 25];
+
+% Transparency
+s.AlphaDataMapping = 'none';
+s.FaceAlpha = 'flat';
+s.AlphaData = 0.4*ones(2, length(xSect));
+faceNorm = permute(s.FaceNormals, [2 3 1]);
+[camPos] = pointWiseExtend(ax.CameraPosition, faceNorm);
+visibleFaces = dot(faceNorm, camPos, 2) > 1;
+s.AlphaData(1:2, ~visibleFaces) = 0.4;
+s.AlphaData(1:2, visibleFaces) = 0;
+% 
+% % Adjust positions manually with the GUI
+% s.Visible = 'off';
+% % % Move labels
+% % % ...
+% s.Visible = 'on';
+
+% % Then, reset the z position to 0
+% camPos = ax.CameraPosition;
+% for k = 1:numel(t)
+%     r = t(k).Position - camPos;
+%     % Find intersection of r with the z = 0 plane, and move the tag there
+%     t(k).Position = camPos - r*camPos(3)/r(3);
+% end
+
+% Hard copy the positions for future versions
+% pos = cell2mat({t.Position}');
+% ax.View = [30, 30];
+
+% % In the GUI, edit the text but without modify it just to "remind" matlab
+% % that they are text boxes. I don't know why, but if you don't do it, it
+% % doesn't work.
+
+% ax = axes(figure);
+% plot(ax, linspace(0,2*pi,100), cos(linspace(0,2*pi,100)))
+
+% Plot2LaTeX( ax.Parent, [imagesPath, 'Rayleigh2_5DTheoScheme_ppt']); % 'pruebaTheoScheme'
+
+% Create primary source
+PSpos = [0.1 0.3 0];
+ps = scatter3(ax, PSpos(1), PSpos(2), PSpos(3), 50, [0 0 0], 'filled');
+
+% Create braces for r_0 and \Delta r_0
+drawbrace([PSpos(1), PSpos(2)], [xSectPos, refPointY], 10); % Add curly brace
+drawbrace([RecPos(1), RecPos(2)], [xSectPos, refPointY], 10); % Add curly brace
+text(ax, 0, 0, '$\distLinePrimSource$');
+text(ax, 0, 0, '$\distLinePoint$');
+
+% Plot2LaTeX( ax.Parent, [imagesPath, 'Rayleigh2_5DTheoScheme_ppt2']); % 'pruebaTheoScheme'
+
+%%
+
+% Create vector to mark the distance between the source position and the
+% section line
+plot3(ax, [PSpos(1), xSectPos], [PSpos(2), PSpos(2)], [0, 0], 'k');
+drawbrace([xSectPos, PSpos(2)], [PSpos(1), PSpos(2)], 10); % Add curly brace
+
+% Create vector to mark the distance between the section line and the
+% receiver point
+plot3(ax, [RecPos(1), xSectPos], [RecPos(2), RecPos(2)], [0, 0], 'k');
+drawbrace([xSectPos, RecPos(2)], [RecPos(1), RecPos(2)], 10); % Add curly brace
+
+% Create the line or correct amplitude synthesis
+plot3(ax, [RecPos(1), RecPos(1)], ySect, [0 0], '--k')
+
+% Create the line between source and receiver
+plot3(ax, [RecPos(1), PSpos(1)], [RecPos(2), PSpos(2)], [RecPos(3), PSpos(3)], 'k');
+
+% Highlight the intersection point
+intersectPointY = PSpos(2) + (RecPos(2) - PSpos(2))*(xSectPos - PSpos(1))/(RecPos(1) - PSpos(1));
+scatter3(ax, xSectPos, intersectPointY, 0)
+% Plot2LaTeX( ax.Parent, [imagesPath, 'Rayleigh2_5DTheoScheme_ppt3']); % 'pruebaTheoScheme'
+
+%% Discretización
+% First approach
+ax = axes(figure, 'NextPlot', 'Add', 'DataAspectRatio', [1 1 1]);
+ax.Visible = 'off';
+
+% Create WFS plane
+x = [0 1 1 0 0];
+y = [0 0 1 1 0];
+z = zeros(size(x));
+plot3(ax, x, y, z, 'k')
+
+% Create section of the plane S as an line
+xSectPos = 0.5;
+xSect = [xSectPos xSectPos];
+ySect = [0, 1];
+% Don't plot because we want a dicretized version
+% plot3(ax, xSect, ySect, [0 0], 'k')
+
+% Extend the tube
+h = 0.5;
+s = surf(ax, [xSect; xSect], [ySect; ySect], [h h; -h, -h]);
+s.LineStyle = 'none';
+
+% % Lighting properties
+% s.FaceLighting = 'gouraud';
+% s.BackFaceLighting = 'lit';
+% s.FaceNormals = -s.FaceNormals;
+% l = light(ax, 'Position', [-1 0 0], 'Style', 'local');
+
+% Create dicretized array
+separation = 0.2;
+longSect = sqrt((xSect(2) - xSect(1))^2 + (ySect(2) - ySect(1))^2);
+normalizedSectionVector = [xSect(2) - xSect(1), ySect(2) - ySect(1)]/longSect;
+discretCoord = (0:separation:longSect)'*normalizedSectionVector + [xSect(1), ySect(1)]; % Add repmat([xSect(1), ySect(1)], length(0:separation:longSect), 1) for versions lower than Matlab2018a
+sectionP = scatter3(ax, discretCoord(:, 1), discretCoord(:, 2), zeros(size(discretCoord, 1), 1), 25, [0 0 0], 'filled');
+
+ax.View = [40, 25];
+
+% Add separation brace
+drawbrace(discretCoord(4, :) + [0.03, 0], discretCoord(3, :)+ [0.03, 0], 10);
+
+% Transparency
+s.AlphaDataMapping = 'none';
+s.FaceAlpha = 'flat';
+s.AlphaData = 0.4*ones(2, length(xSect));
+faceNorm = permute(s.FaceNormals, [2 3 1]);
+[camPos] = pointWiseExtend(ax.CameraPosition, faceNorm);
+visibleFaces = dot(faceNorm, camPos, 2) > 1;
+s.AlphaData(1:2, ~visibleFaces) = 0.4;
+s.AlphaData(1:2, visibleFaces) = 0;
+% 
+% % Adjust positions manually with the GUI
+% s.Visible = 'off';
+% % % Move labels
+% % % ...
+% s.Visible = 'on';
+
+% % Then, reset the z position to 0
+% camPos = ax.CameraPosition;
+% for k = 1:numel(t)
+%     r = t(k).Position - camPos;
+%     % Find intersection of r with the z = 0 plane, and move the tag there
+%     t(k).Position = camPos - r*camPos(3)/r(3);
+% end
+
+% Hard copy the positions for future versions
+% pos = cell2mat({t.Position}');
+% ax.View = [30, 30];
+
+% % In the GUI, edit the text but without modify it just to "remind" matlab
+% % that they are text boxes. I don't know why, but if you don't do it, it
+% % doesn't work.
+
+% Plot2LaTeX( ax.Parent, [imagesPath, 'Rayleigh2_5DTheoSchemeDiscret_ppt']); % 'pruebaTheoScheme'
+

@@ -656,6 +656,7 @@ end
 % Volume correction in the frequency domain post recording (there is one
 % volume correction pre-recording a lines above, but I have preffered this
 % one since it is more direct).
+numSamp = length(NSsignal);
 f_fft = sampleRate*(0:numSamp - 1)/numSamp;
 sel = f_fft <= fMax & f_fft >= fMin;
 corrVolFreq = zeros(numMicro, 1);
@@ -832,7 +833,7 @@ options.TickLabels2Latex = false;
     ax = axes(figure);
     plot(ax, tNS, recSignalNS(:,1:length(tNS)).')
     ax.XLabel.String = 'Time (s)';
-    ax.YLabel.String = '$\Field[ns][time]$'; ax.YLabel.Interpreter = 'latex';
+    ax.YLabel.String = '$\Field[ns][time]$ (arbitrary units)'; ax.YLabel.Interpreter = 'latex';
     legend(ax, 'Micro 1', 'Micro 2')
     ax.Children = flip(ax.Children);
     options.Legend2Latex = false;
@@ -844,7 +845,7 @@ options.TickLabels2Latex = false;
     ax.XLim = [0 1500];
     ax.YLim = [0 200];
     ax.XLabel.String = 'Frequency (Hz)';
-    ax.YLabel.String = '$\abs{\Field[ns][frequency]}$'; ax.YLabel.Interpreter = 'latex';
+    ax.YLabel.String = '$\abs{\Field[ns][frequency]}$ (arbitrary units)'; ax.YLabel.Interpreter = 'latex';
     legend(ax, 'Micro 1', 'Micro 2')
     options.Legend2Latex = false;
 %     Plot2LaTeX(ax.Parent, [imagesPath, 'Experiment16_recNSFreq'], options)

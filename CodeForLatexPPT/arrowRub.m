@@ -7,7 +7,7 @@ addParameter(p, 'baseAngle', 90) % Degrees
 addParameter(p, 'tipAngle', 16) % Degrees
 addParameter(p, 'lineWidth', 0)
 addParameter(p, 'headNormal', []) % Vector. Normal direction to the head. At least, it should be different from the arrow direction
-addParameter(p, 'axes', []) % Vector. Normal direction to the head
+addParameter(p, 'axes', []);
 
 parse(p, varargin{:})
 
