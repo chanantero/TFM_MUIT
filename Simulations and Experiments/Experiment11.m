@@ -15,6 +15,8 @@ ID = datestr(now, 'yyyy-mm-dd_HH-MM-SS');
 %% System set up.
 if ~exist('obj', 'var') || ~isvalid(obj)
     obj = SimulationController;
+    obj.ax.HandleVisibility = 'off';
+    obj.ax.Parent.HandleVisibility = 'off';
 end
 
 % Constants
@@ -154,9 +156,12 @@ objVis.scenInd = 2;
 
 fig = figure;
 newax = copyobj(objVis.ax2Dmap, fig);
-colorbar(newax)
+c = colorbar(newax);
 
 % printfig(fig, imagesPath, 'Experiment11_multipleReceiverAtten2Dmap', 'eps')
+
+newax.Children(2).CData = -newax.Children(2).CData;
+newax.CLim = flip(-newax.CLim);
 
 cancGlob = -10*log10(attenGlob(2));
 
@@ -192,10 +197,12 @@ ax.XLabel.String = 'Global Gain (dB)';
 % printfig(ax.Parent, imagesPath, 'Experiment11_attenGlobDifNSNoFreqCor', 'eps')
 
 ax = axes(figure);
-h = histogram(ax, 10*log10(averGain(1, 1, :)), 5, 'Normalization', 'probability');
+h = histogram(ax, 10*log10(averGain440(1, 1, :)), 5, 'Normalization', 'probability');
 ax.XLim = [-5, 0];
 ax.XLabel.String = 'Average Gain (dB)';
 % printfig(ax.Parent, imagesPath, 'Experiment11_gainAverDifNSNoFreqCor', 'eps')
+ax.XLabel.String = '';
+saveas(ax.Parent, [imagesPath, 'Experiment11_gainAverDifNSNoFreqCor'], 'svg')
 
 %% SVG scenario for multiple measure points and noise sources
 viewBox = [-WFSarrayOffset(1), -WFSarrayOffset(2), max(NSpositions(:, 1))+WFSarrayOffset(1)+0.5, max(NSpositions(:, 2))+WFSarrayOffset(2)+0.5];
@@ -348,3 +355,88 @@ ax.YLabel.String = '|\Psi|';
 colorbar(ax);
 ax.NextPlot = 'Add';
 % printfig(ax.Parent, imagesPath, 'Experiment11_DifNSchirpGlobCorrFactPhase', 'eps')
+
+%% Animation for Powerpoint to explain the concatenation of histograms
+counts = [0.0625    0.4375    0.1250    0.1875    0.1875];
+edges = [-4.8000   -4.3000   -3.8000   -3.3000   -2.8000   -2.3000];
+
+[counts, edges] = histcounts(repData, 5, 'Normalization', 'probability');
+ax = axes(figure);
+bar3cRub(counts', edges, [0 1], ax);
+ax.DataAspectRatio(2) = ax.DataAspectRatio(1);
+rel = ax.DataAspectRatio(3)/ax.DataAspectRatio(1);
+ax.DataAspectRatio(3) = ax.DataAspectRatio(1);
+ax.Children.ZData = ax.Children.ZData/rel;
+ax.XLim = [-5, 0];
+ax.YTick = [];
+ax.OuterPosition = [0.1 0.1 0.9 0.9];
+
+ax.View = [0 0];
+ax.CameraTarget = [-3.5, 0.5, max(ax.Children.ZData(:))/2];
+ax.CameraPosition = [-3.5, -20.5, max(ax.Children.ZData(:))/2];
+ax.Visible = 'off';
+
+% sphCoordPosts = [-90, 0; -120, 20; -180, 90]; % [azimuth, elevation]
+% sphCoordPostsNormalizedTime = [0 3 5];
+sphCoordPosts = [-90, 0; -180, 90]; % [azimuth, elevation]
+sphCoordPostsNormalizedTime = [0 5];
+
+% Interpolate those points
+duration = 5; % seconds
+normalizedDuration = sphCoordPostsNormalizedTime(end) - sphCoordPostsNormalizedTime(1);
+framesPerSecond = 30;
+numFrames = floor(duration*framesPerSecond) + 1;
+t = (0:numFrames - 1)/framesPerSecond;
+sphCoordPoints = interp1(sphCoordPostsNormalizedTime, sphCoordPosts, t/duration*normalizedDuration);
+[x,y,z] = sph2cart(deg2rad(sphCoordPoints(:, 1)), deg2rad(sphCoordPoints(:, 2)), 20);
+cameraPosition = [x, y, z] + ax.CameraTarget;
+
+ax.CameraPositionMode = 'manual';
+ax.CameraTargetMode = 'manual';
+ax.CameraViewAngleMode = 'manual';
+ax.Visible = 'off';
+
+camPosReg = zeros(numFrames, 3);
+camTarReg = zeros(numFrames, 3);
+camViewAngReg = zeros(numFrames, 1);
+
+F = getframe(ax.Parent);
+[height, width, numColours] = size(F.cdata);
+[X,map] = rgb2ind(F.cdata, 128);
+
+name = 'PPT_histogramConcatenationAnim';
+first = true;
+for fr = 1:numFrames
+%     ax.View = viewPoints(fr, :);
+    ax.CameraPosition = cameraPosition(fr, :);
+    drawnow
+    F = getframe(ax.Parent);
+    combInd = rgb2ind(F.cdata, map);
+    
+    camPosReg(fr, :) = ax.CameraPosition;
+    camTarReg(fr, :) = ax.CameraTarget;
+    camViewAngReg(fr, :) = ax.CameraViewAngle;
+    
+%     if first
+%         saveas(ax.Parent, [imagesPath, 'PPT_histogramColor'], 'svg');
+%         imwrite(combInd, map, [imagesPath, name, '.gif'], ...
+%         'LoopCount', 1, 'DelayTime', 1/framesPerSecond);
+%         first = false;
+%     else
+%         imwrite(combInd, map, [imagesPath, name, '.gif'], ...
+%         'WriteMode', 'append', 'DelayTime', 1/framesPerSecond);
+%     end
+    
+end
+imwrite(combInd, map, [imagesPath, name, 'end', '.gif'], ...
+        'LoopCount', 1, 'DelayTime', 1/framesPerSecond);
+saveas(ax.Parent, [imagesPath, 'PPT_histogramColorAbove'], 'svg');
+
+% imagGIF = zeros(height, width, 1, numFrames);
+% imwrite(combInd, map, [imagesPath, name, '.gif'], ...
+%     'LoopCount', 100, 'DelayTime', 1/framesPerSecond);
+    
+% axAux = axes(figure);
+% plot(axAux, t, vecnorm(camPosReg - camTarReg, 2, 2));
+% plot(axAux, t, camViewAngReg);
+

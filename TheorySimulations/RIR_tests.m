@@ -111,12 +111,12 @@ ax4.XLim = [0 1000];
 
 %% Understanding the reverberation time and the reflexion coefficient
 
-h = 1; d = 2;
+h = 1.65; d = 2;
 sourcePos = [1 1 h];
-recPos = [sourcePos(1) + d 1 h];
+recPos = [sourcePos(1) + d, 1, h];
 c = 340;
 fs = 44100;
-roomDim = [300 200 2*h];
+roomDim = [4.48 9.13 2.64];
 Beta = [0 0 0 0 1 1];
 numSampIR = 4*1024;
 t = (0:numSampIR-1)/fs;
@@ -135,7 +135,7 @@ distReb/c
 h = rir_generator(c, fs, recPos, sourcePos, roomDim, zeros(1,6), numSampIR);
 plot(ax, t, h)
 
-[h, betaHat] = rir_generator(c, fs, recPos, sourcePos, roomDim, 0.1, numSampIR);
+[h, betaHat] = rir_generator(c, fs, recPos, sourcePos, roomDim, 0.15, numSampIR);
 h2 = rir_generator(c, fs, recPos, sourcePos, roomDim, betaHat*ones(1,6), numSampIR);
 ax = axes(figure);
 plot(ax, t, h, t, h2)
@@ -144,7 +144,7 @@ numRevTime = 100;
 reverberationTime = logspace(log10(0.16), log10(10), numRevTime);
 meanReflectCoef = zeros(size(reverberationTime));
 for k = 1:numRevTime
-    [~, meanReflectCoef(k)] = rir_generator(c, fs, recPos, sourcePos, roomDim, reverberationTime(k), numSampIR);
+    [h, meanReflectCoef(k)] = rir_generator(c, fs, recPos, sourcePos, roomDim, reverberationTime(k), numSampIR);
 end
 
 ax = axes(figure);
@@ -152,6 +152,21 @@ plot(ax, reverberationTime, meanReflectCoef)
 ax.XLabel.String = 'Reverberation time (s)';
 ax.YLabel.String = '\beta';
 
+RT60interp = interp1(meanReflectCoef, reverberationTime, [0 0.1 0.2 0.5]);
+
+aux = roomDim'*roomDim;
+S1 = aux(1, 2); S2 = aux(1, 3); S3 = aux(3, 2);
+S4 = S1; S5 = S2; S6 = S3;
+RT60fun = @(beta) 24*log(10)*prod(roomDim)./(340*(1 - beta.^2)*(S1+S2+S3+S4+S5+S6));
+
+RT60 = RT60fun(meanReflectCoef);
+
+ax = axes(figure);
+plot(ax, RT60, meanReflectCoef)
+hold on
+plot(ax, reverberationTime, meanReflectCoef)
+
+RT60 = RT60fun([0, 0.1, 0.2, 0.5])
 
 %% Different fs
 

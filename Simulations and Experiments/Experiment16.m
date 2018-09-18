@@ -1005,12 +1005,29 @@ options.TickLabels2Latex = false;
         options.legendWidth = 0.3;
         Plot2LaTeX(ax.Parent, [imagesPath, 'Experiment16_recAndrecNSfreqCorrVolTime_1'], options)
 
+        
         ax = axes(figure);
-        plot(ax, fVec, abs(recNS(2,:)).', fVec, abs(recCorrVolTime(2,:)).')
+        plot(ax, fVec(1:10:end), abs(recNS(2,1:10:end)).',...
+            fVec(1:10:end), abs(recWFScorrVolTime(2,1:10:end)).',...
+            fVec(1:10:end), abs(recCorrVolTime(2,1:10:end)).')
         ax.XLabel.String = 'Frequency (Hz)';
         ax.YLabel.String = 'Acoustic Pressure (arbitrary units)';
-        legend(ax, {'$\Field[ns][frequency]$', '$\Field[ns][frequency] + \Field[wfs][frequency]$'})
-%         Plot2LaTeX(ax.Parent, [imagesPath, 'Experiment16_recAndrecNSfreqCorrVolTime_2'], options)
+        ax.XLim = [0 1500];
+        ax.YLim = [0 100];
+        l = legend(ax, {'$\Field[ns][frequency]$', '$\Field[wfs][frequency]$', '$\Field[ns][frequency] + \Field[wfs][frequency]$'});
+        l.Position(4) = l.Position(4)*1.8;
+        l.Position(2) = l.Position(2) - 0.08;
+        options.Legend2Latex = true;
+        options.legendWidth = 0.3;
+        Plot2LaTeX(ax.Parent, [imagesPath, 'Experiment16_recAndrecNSfreqCorrVolTime_2'], options)
+
+        
+%         ax = axes(figure);
+%         plot(ax, fVec, abs(recNS(2,:)).', fVec, abs(recCorrVolTime(2,:)).')
+%         ax.XLabel.String = 'Frequency (Hz)';
+%         ax.YLabel.String = 'Acoustic Pressure (arbitrary units)';
+%         legend(ax, {'$\Field[ns][frequency]$', '$\Field[ns][frequency] + \Field[wfs][frequency]$'})
+% %         Plot2LaTeX(ax.Parent, [imagesPath, 'Experiment16_recAndrecNSfreqCorrVolTime_2'], options)
 
 % ---- Volume optimization (freq opt) ----
         % Time representation
